@@ -28,7 +28,7 @@ Starts with `swimlane-beta`, optionally followed by a direction: `TB` (default),
 
 `subgraph` at the top level becomes a lane; it ends with `end`. Give it a stable id plus a display label with `subgraph id [Label]` — useful when the label has spaces or you want to style/reference the lane later.
 
-```
+```text
 subgraph sales [Sales team]
   lead[Qualify lead]
 end

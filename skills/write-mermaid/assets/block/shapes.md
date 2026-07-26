@@ -41,13 +41,13 @@ block
 
 ## Columns and spans
 
-```
+```text
 columns {n}
 ```
 
 Sets the grid width for the current scope (top level or inside a composite block). Blocks are placed left to right, top to bottom, wrapping after `n` per row.
 
-```
+```text
 id:{n}
 ```
 
@@ -55,7 +55,7 @@ Makes a single block span `n` columns. Column width is dynamic — it auto-sizes
 
 ## Space blocks
 
-```
+```text
 space          %% one empty column
 space:{n}      %% n empty columns
 ```
@@ -64,7 +64,7 @@ Use to hold a layout gap where no block or edge belongs — required whenever tw
 
 ## Composite (nested) blocks
 
-```
+```text
 block:groupId
   columns 1
   child1

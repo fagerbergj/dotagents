@@ -16,7 +16,7 @@ Custom icons: register an iconify.design pack, then reference `packname:icon-nam
 
 ## Groups
 
-```
+```text
 group {id}({icon})[{title}] (in {parentId})?
 ```
 
@@ -24,13 +24,13 @@ Groups nest via `in`. A group is itself referenced in edges only through the `{g
 
 ## Services
 
-```
+```text
 service {id}({icon})[{title}] (in {parentId})?
 ```
 
 ## Junctions
 
-```
+```text
 junction {id} (in {parentId})?
 ```
 
@@ -49,7 +49,7 @@ Each edge end names the side of the service/junction it leaves from:
 
 Full edge grammar:
 
-```
+```text
 {id}{group}?:{T|B|L|R} {<}?--{>}? {T|B|L|R}:{id}{group}?
 ```
 
@@ -57,7 +57,7 @@ Full edge grammar:
 
 ## Align
 
-```
+```text
 align row {id} {id} ...
 align column {id} {id} ...
 ```

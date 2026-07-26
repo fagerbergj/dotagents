@@ -17,7 +17,7 @@ packet
 
 Each line after the (optional) title defines one field:
 
-```
+```text
 packet
 start-end: "Field name"     %% multi-bit field, explicit range
 bit: "Field name"           %% single-bit field
@@ -27,7 +27,7 @@ bit: "Field name"           %% single-bit field
 
 Instead of tracking start/end by hand, use `+<count>` — it starts immediately after the previous field:
 
-```
+```text
 packet
 +8: "Message Type"
 +16: "Sequence Number"
@@ -38,7 +38,7 @@ packet
 
 Either frontmatter or an inline `title` statement:
 
-```
+```text
 ---
 title: "TCP Packet"
 ---
@@ -46,7 +46,7 @@ packet
 0-15: "Source Port"
 ```
 
-```
+```text
 packet
 title UDP Packet
 +16: "Source Port"

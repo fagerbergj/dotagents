@@ -20,7 +20,7 @@ mindmap
 
 Structure comes entirely from **indentation** relative to the previous line — no explicit edges. One root, children indented under it, grandchildren indented further.
 
-```
+```text
 mindmap
     Root
         A
@@ -42,12 +42,12 @@ mindmap
 
 ### Icons and classes
 
-```
+```text
 A
 ::icon(fa fa-book)
 ```
 
-```
+```text
 A[A]
 :::urgent large
 ```
@@ -58,7 +58,7 @@ Icons (`::icon(...)`) need the icon font registered by the embedding site/integr
 
 Quoted, backtick-wrapped labels support `**bold**`, `*italics*`, and auto-wrap instead of requiring `<br>`:
 
-```
+```text
 id1["`**Root** with
 a second line`"]
 ```

@@ -39,7 +39,7 @@ Used in `{source} - <type> -> {destination}`:
 
 `element` blocks take two freeform (not enumerated) fields:
 
-```
+```text
 element user_defined_name {
     type: user_defined_type
     docref: user_defined_ref

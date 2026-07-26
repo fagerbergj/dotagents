@@ -16,7 +16,7 @@ erDiagram
 
 ## Core syntax
 
-```
+```text
 <first-entity> [<relationship> <second-entity> : <relationship-label>]
 ```
 

@@ -15,7 +15,7 @@ kanban
 
 ## Core syntax
 
-```
+```text
 columnId[Column Title]
   taskId[Task Description]
 ```
@@ -34,7 +34,7 @@ Attach `@{ ... }` after a task for extra fields, rendered inline on the card:
 | `ticket` | an external ticket/issue id |
 | `priority` | one of `Very High`, `High`, `Low`, `Very Low` |
 
-```
+```text
 id4[Create parsing tests]@{ ticket: MC-2038, assigned: 'K.Sveidqvist', priority: 'High' }
 ```
 
@@ -42,7 +42,7 @@ id4[Create parsing tests]@{ ticket: MC-2038, assigned: 'K.Sveidqvist', priority:
 
 When a task has a `ticket`, set `ticketBaseUrl` in frontmatter to turn it into a link — `#TICKET#` is replaced with the ticket value:
 
-```
+```text
 ---
 config:
   kanban:

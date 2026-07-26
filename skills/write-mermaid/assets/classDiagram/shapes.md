@@ -2,7 +2,7 @@
 
 ## Relationship types
 
-```
+```text
 [classA][Arrow][ClassB]
 ```
 
@@ -21,7 +21,7 @@ Add a label after a colon: `classA <|-- classB : implements`. Arrowheads can poi
 
 ## Two-way relations
 
-```
+```text
 [Relation Type][Link][Relation Type]
 ```
 

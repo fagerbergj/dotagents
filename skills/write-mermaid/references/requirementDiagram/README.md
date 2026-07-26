@@ -28,7 +28,7 @@ test_entity - satisfies -> test_req
 
 Three component kinds: `requirement`, `element`, and a relationship line between them.
 
-```
+```text
 <type> user_defined_name {
     id: user_defined_id
     text: user_defined text
@@ -37,14 +37,14 @@ Three component kinds: `requirement`, `element`, and a relationship line between
 }
 ```
 
-```
+```text
 element user_defined_name {
     type: user_defined_type
     docref: user_defined_ref
 }
 ```
 
-```
+```text
 {source} - <relType> -> {destination}
 {destination} <- <relType> - {source}
 ```
@@ -53,7 +53,7 @@ Requirement `<type>`, `risk`, `verifymethod`, and relationship type are all enum
 
 ### Direction
 
-```
+```text
 direction LR
 ```
 

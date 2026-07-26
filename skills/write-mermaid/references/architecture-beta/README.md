@@ -30,14 +30,14 @@ Three building blocks: `groups`, `services`, `edges`, plus optional `junctions`.
 
 Edges declare which side of each service they leave from (`T`op/`B`ottom/`L`eft/`R`ight). Arrowheads are added with `<` before or `>` after the `--`:
 
-```
+```text
 db:R -- L:server        (undirected)
 subnet:R --> L:gateway  (arrow into gateway)
 ```
 
 To route an edge from a group boundary itself (not a specific service), append `{group}` to a service id that lives in that group:
 
-```
+```text
 server{group}:B --> T:subnet{group}
 ```
 
@@ -47,7 +47,7 @@ server{group}:B --> T:subnet{group}
 
 The fcose layout heuristic can collapse siblings with identical edge topology onto the same coordinate. `align row {id} {id} ...` or `align column {id} {id} ...` (2+ members, each already declared) forces them to spread along that axis:
 
-```
+```text
 db1:R --> L:mcp
 db2:R --> L:mcp
 align column db1 db2

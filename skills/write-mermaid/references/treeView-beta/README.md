@@ -39,7 +39,7 @@ treeView-beta
 | Icon override | `label icon(name)` | explicit per-node icon, always renders even if `showIcons` is off |
 | Description | `label ## text` | italic inline description next to the label |
 
-```
+```text
 App.tsx :::highlight icon(logos:react) ## main component
 ```
 
