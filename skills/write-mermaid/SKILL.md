@@ -35,7 +35,7 @@ With version handled, the failures that remain are syntax and escaping — see G
 
 ## Procedure
 
-1. **Pick the diagram type.** Use the index below. If two fit, prefer the one that is older in mermaid — it renders in more places.
+1. **Pick the diagram type** from the Stable index below. If two fit, prefer the older one — it renders in more places. Only drop to the beta table when nothing stable expresses what you need.
 2. **Check the target's version tolerance.** On GitHub, skip this — it is current. Anywhere else, compare the type's **Introduced** version against that renderer's version and pick a different type if it is older; do not ship a diagram that renders as a broken box. Beta types (`-beta` suffix) stay risky everywhere: their syntax changes between releases regardless of how new the renderer is.
 3. **Read `references/<diagramId>/README.md`** for the type you picked, before writing. It carries the core syntax and the per-type gotchas.
 4. **Load deeper material only if you need it:**
@@ -168,38 +168,49 @@ Load on demand — never read the whole tree.
 
 ## Diagram index
 
+### Stable
+
+Safe to reach for. `core` types render on effectively any mermaid; a version is the release that introduced the type.
+
 | Diagram | Min version | Files | What it draws | Use when |
 |---|---|---|---|---|
-| **Architecture**<br>`architecture-beta` | v11.1.0+ | `architecture-beta/` · shapes+examples | Cloud/infra service topology | showing how cloud/infra services (servers, DBs, storage, network) relate |
 | **Block**<br>`block` | core | `block/` · shapes+examples | Fixed-grid blocks you place by hand | full manual control over node placement (grid/columns), unlike a… |
 | **C4**<br>`C4Context` | core | `C4Context/` · shapes+examples | C4 architecture views (context/container/component) | the C4 model's four levels (context/container/component/deployment) and… |
 | **Class Diagram**<br>`classDiagram` | core | `classDiagram/` · shapes+examples | Classes, members, and their relationships | model object-oriented structure |
-| **Cynefin Framework Diagram**<br>`cynefin-beta` | v11.16.0+ | `cynefin-beta/` · examples | Items sorted into Cynefin domains | categorizing problems/items into the five Cynefin sense-making domains… |
 | **Entity Relationship Diagram**<br>`erDiagram` | core | `erDiagram/` · shapes+examples | Entities and relationship cardinality | model data entities and the cardinality of relationships between them… |
 | **Event Modeling Diagram**<br>`eventmodeling` | v11.15.0+ | `eventmodeling/` · examples | Event-modeling timeline of one flow | documenting an Event Modeling timeline (UI/trigger -> command -> event ->… |
 | **Flowchart**<br>`flowchart` (aliases: `graph`) | core | `flowchart/` · shapes+examples | Nodes joined by directed edges | show a process, decision tree, or dependency graph as nodes and… |
 | **Gantt Chart**<br>`gantt` | core | `gantt/` · shapes+examples | Dated schedule of tasks and dependencies | a project schedule with dated, sequential or dependent tasks across sections |
 | **GitGraph Diagram**<br>`gitGraph` | core | `gitGraph/` · examples | Branch, merge, and cherry-pick history | document or visualize a branching/merge strategy (git flow, release… |
-| **Ishikawa (Fishbone) Diagram**<br>`ishikawa-beta` | v11.12.3+ | `ishikawa-beta/` · examples | Fishbone of candidate causes | doing root-cause analysis, showing candidate causes of one problem grouped… |
 | **User Journey Diagram**<br>`journey` | core | `journey/` · examples | UX steps scored by satisfaction | showing a user's satisfaction/effort across the sequential steps of a… |
 | **Kanban**<br>`kanban` | 11.x | `kanban/` · examples | Board columns of work items | showing tasks moving through workflow stages (columns) |
 | **Mindmap**<br>`mindmap` | v9.4.0+ | `mindmap/` · examples | Hierarchy radiating from one centre | brainstorming or outlining a hierarchy radiating from one central concept |
 | **Packet**<br>`packet` | v11.0.0+ | `packet/` · examples | Bit/byte layout of a wire format | documenting the bit/byte layout of a network packet, binary header, or… |
 | **Pie Chart**<br>`pie` | core | `pie/` · examples | Proportional slices of a whole | showing proportional share of a whole across a small number of categories |
 | **Quadrant Chart**<br>`quadrantChart` | core | `quadrantChart/` · examples | Items plotted into four quadrants | plotting items on two independent axes |
-| **Radar Diagram**<br>`radar-beta` | v11.6.0+ | `radar-beta/` · examples | Entities compared across shared axes | comparing multiple entities across 3+ shared dimensions on the same scale… |
-| **Railroad Diagrams**<br>`railroad-ebnf-beta` (EBNF) | v11.16.0+ | `railroad/` · shapes+examples | Grammar as a syntax/railroad diagram | documenting a context-free grammar (a language, a config format, a… |
 | **Requirement Diagram**<br>`requirementDiagram` | core | `requirementDiagram/` · shapes+examples | SysML requirements and what satisfies them | tracing formal requirements (SysML-style) to the elements that satisfy,… |
 | **Sankey Diagram**<br>`sankey` | v10.3.0+ | `sankey/` · examples | Weighted flow between stages | visualizing flow/quantity moving between named stages (energy flows,… |
 | **Sequence Diagram**<br>`sequenceDiagram` | core | `sequenceDiagram/` · shapes+examples | Time-ordered messages between participants | show time-ordered messages between participants (API calls, protocol… |
 | **State Diagram**<br>`stateDiagram-v2` | core | `stateDiagram/` · examples | States and the transitions between them | model the finite states of a single system/entity and the transitions… |
-| **Swimlanes**<br>`swimlane-beta` | v11.16.0+ | `swimlane-beta/` · examples | Process split into owner lanes | a process where "who owns this step?" matters as much as "what happens next?" |
 | **Timeline Diagram**<br>`timeline` | core | `timeline/` · examples | Events in chronological order | showing a chronological sequence of events/eras, optionally grouped into… |
+| **XY Chart**<br>`xychart` | core | `xychart/` · examples | Bar/line series on x/y axes | plotting numeric or categorical series on a real x/y axis |
+
+
+### Beta and experimental
+
+**Prefer a stable type above.** A `-beta` keyword means mermaid can change the syntax in any release, so a diagram that renders today can break on a later renderer with no warning and no error. Reach for these only when nothing stable expresses the thing, and expect to revisit them. `zenuml` is not beta but is an external diagram: the host must register a separate package, so by default it renders nowhere.
+
+| Diagram | Min version | Files | What it draws | Use when |
+|---|---|---|---|---|
+| **Architecture**<br>`architecture-beta` | v11.1.0+ | `architecture-beta/` · shapes+examples | Cloud/infra service topology | showing how cloud/infra services (servers, DBs, storage, network) relate |
+| **Cynefin Framework Diagram**<br>`cynefin-beta` | v11.16.0+ | `cynefin-beta/` · examples | Items sorted into Cynefin domains | categorizing problems/items into the five Cynefin sense-making domains… |
+| **Ishikawa (Fishbone) Diagram**<br>`ishikawa-beta` | v11.12.3+ | `ishikawa-beta/` · examples | Fishbone of candidate causes | doing root-cause analysis, showing candidate causes of one problem grouped… |
+| **Radar Diagram**<br>`radar-beta` | v11.6.0+ | `radar-beta/` · examples | Entities compared across shared axes | comparing multiple entities across 3+ shared dimensions on the same scale… |
+| **Railroad Diagrams**<br>`railroad-ebnf-beta` (EBNF) | v11.16.0+ | `railroad/` · shapes+examples | Grammar as a syntax/railroad diagram | documenting a context-free grammar (a language, a config format, a… |
+| **Swimlanes**<br>`swimlane-beta` | v11.16.0+ | `swimlane-beta/` · examples | Process split into owner lanes | a process where "who owns this step?" matters as much as "what happens next?" |
 | **Treemap Diagram**<br>`treemap-beta` | 11.x | `treemap-beta/` · examples | Nested rectangles sized by value | showing hierarchical part-of-whole data where both nesting AND relative… |
 | **TreeView**<br>`treeView-beta` | v11.14.0+ | `treeView-beta/` · examples | Directory/file tree | showing a directory/file structure |
 | **Venn Diagram**<br>`venn-beta` | v11.12.3+ | `venn-beta/` · examples | Overlap between sets | showing set overlap |
 | **Wardley Map**<br>`wardley-beta` | v11.14.0+ | `wardley-beta/` · shapes+examples | Components by visibility vs evolution | doing Wardley Mapping |
-| **XY Chart**<br>`xychart` | core | `xychart/` · examples | Bar/line series on x/y axes | plotting numeric or categorical series on a real x/y axis |
 | **ZenUML**<br>`zenuml` | external | `zenuml/` · examples | Sequence diagram in code-like syntax | a sequence diagram written in a code-like, nestable syntax (method calls,… |
-
 Paths are relative to the skill root: `references/<id>/README.md` and `assets/<id>/{shapes,examples}.md`. **core** = present in the mermaid 10.9.6 diagram registry or earlier, so it renders on effectively anything. A version means the release that introduced the type; **11.x** means it postdates 10.9.6 but its doc gives no exact release. A `-beta` keyword means the syntax itself can change between releases — avoid for anything long-lived. **external** = not in mermaid's core registry at any version; the host must register a separate package.
