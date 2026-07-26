@@ -5,6 +5,9 @@ set -eu
 
 AGENTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Vendored skill libraries (ponytail) live in submodules.
+git -C "$AGENTS_DIR" submodule update --init 2>/dev/null || true
+
 link() {
   src="$1" dst="$2"
   mkdir -p "$(dirname "$dst")"

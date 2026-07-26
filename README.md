@@ -5,7 +5,7 @@ My portable agent home: the writing ruleset (`AGENTS.md`) and the general-purpos
 ## Use as ~/.agents
 
 ```sh
-git clone https://github.com/fagerbergj/dotagents ~/.agents
+git clone --recursive https://github.com/fagerbergj/dotagents ~/.agents
 ~/.agents/setup-symlinks.sh
 ```
 
@@ -32,3 +32,4 @@ Point the project's skill loader at `.agents/vendor/dotagents/skills`, or symlin
 
 - `AGENTS.md` - writing ruleset, applied to prose the agent writes for me.
 - `skills/<name>/SKILL.md` - one skill per directory, with optional `references/` and `assets/`.
+- `vendor/ponytail` - [ponytail](https://github.com/DietrichGebert/ponytail) as a submodule; its skills are symlinked into `skills/`. On machines where ponytail is also installed as a Claude Code plugin, the plugin copies show alongside these (`ponytail:ponytail` vs `ponytail`) - disable one if the duplication bothers you.
