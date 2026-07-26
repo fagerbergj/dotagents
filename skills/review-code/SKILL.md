@@ -66,7 +66,7 @@ Label each finding so the author isn't overwhelmed (Conventional Comments):
 - **`suggestion:`** - an improvement; state *why* it's better. Non-blocking unless you give a compelling reason.
 - **`nit:`** - trivial, preference-based; NEVER blocks.
 - **`question:`** - you suspect a problem but aren't sure; asking resolves it faster than demanding a change.
-- **`praise:`** - something genuinely well done. Leave at least one sincere one.
+- **`praise:`** - something genuinely well done. Keep it in the summary, at most two sentences, and NEVER as an inline comment - inline praise litters the diff the author has to read past to find what actually needs doing.
 
 Add a decoration when it sharpens the point: `blocking (security):`, `suggestion (performance):`. Explain the *why* on every non-trivial finding - the principle or risk - so it's actionable and the author learns.
 
@@ -75,12 +75,12 @@ Add a decoration when it sharpens the point: `blocking (security):`, `suggestion
 Don't scatter line-by-line comments. Deliver:
 
 1. **Summary** - a high-level, constructive takeaway that sets the tone and states your verdict (e.g. "Solid approach overall; two correctness issues to resolve before merge").
-2. **Blocking issues** first, then **suggestions**, then **nits**, then **praise** - grouped by severity so the author fixes what matters first.
+2. **Blocking issues** first, then **suggestions**, then **nits** - grouped by severity so the author fixes what matters first. Praise stays in the summary, not in this list.
 3. **Verdict** - *request changes* if any blocking issue stands; *approve* once they're resolved. Favor approving a change that clearly improves code health over holding it hostage to nits - and if you approve with non-blocking comments, say explicitly that they're non-blocking.
 
 Cite findings by `path:line` so the author can jump straight to them. Write the summary and each finding following the shared style ruleset at `~/.agents/AGENTS.md` - concrete, no ceremony, no canned "great work!" filler.
 
-On a GitHub PR, deliver this as one native review: record each finding as an inline comment (`github_add_review_comment`, path+line) the moment you spot it - the draft is your durable memory against context compaction - then `github_submit_review` once with the summary body and the event matching your verdict. Reply in-thread (`github_reply_to_review_comment`) when you're responding to an existing comment rather than opening a new thread.
+On a GitHub PR, deliver this as one native review: record each ACTIONABLE finding (never praise) as an inline comment (`github_add_review_comment`, path+line) the moment you spot it - the draft is your durable memory against context compaction - then `github_submit_review` once with the summary body and the event matching your verdict. Reply in-thread (`github_reply_to_review_comment`) when you're responding to an existing comment rather than opening a new thread.
 
 **Close loops with a reaction, not a comment.** To acknowledge a point, signal agreement, or say "seen / handled", add an emoji reaction (`github_react_to_comment` - 👍 / 👀 / 🚀) instead of writing another comment. It closes the loop with near-zero words and low reader load. Reserve comment text for substantive findings.
 
