@@ -1,22 +1,22 @@
 #!/bin/sh
-# Install the Claude Code plugins this setup expects. Safe to re-run.
+# Install the plugins this setup expects. Safe to re-run.
+# Fault tolerant: a missing harness CLI or a failed install warns and moves on.
 set -eu
 
-install() {
+claude_install() {
   plugin="$1" marketplace="$2"
   if claude plugin list 2>/dev/null | grep -q "$plugin"; then
     echo "$plugin already installed"
-    return
+    return 0
   fi
-  claude plugin marketplace add "$marketplace"
-  claude plugin install "$plugin"
+  claude plugin marketplace add "$marketplace" && claude plugin install "$plugin"
 }
 
-if ! command -v claude >/dev/null 2>&1; then
-  echo "claude CLI not found; inside Claude Code run:" >&2
-  echo "  /plugin marketplace add https://github.com/DietrichGebert/ponytail.git" >&2
-  echo "  /plugin install ponytail@ponytail" >&2
-  exit 1
+# Claude Code
+if command -v claude >/dev/null 2>&1; then
+  if ! claude_install ponytail@ponytail https://github.com/DietrichGebert/ponytail.git; then
+    echo "warn: ponytail@ponytail install failed; inside Claude Code run: /plugin install ponytail@ponytail" >&2
+  fi
+else
+  echo "warn: claude CLI not found; skipping Claude Code plugins" >&2
 fi
-
-install ponytail@ponytail https://github.com/DietrichGebert/ponytail.git
