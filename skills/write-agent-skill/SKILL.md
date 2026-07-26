@@ -49,13 +49,14 @@ If the capability requires **deterministic execution, external system access, or
 ```
 skill-name/
 ├── SKILL.md              # Required - YAML frontmatter + lean instructions (<500 lines)
-├── references/           # On-demand docs; one level deep only
+├── references/           # On-demand docs; subdirectories fine (see below)
 ├── assets/               # Static resources: schemas, images, lookup tables, templates
-├── scripts/              # Executable code - agent runs without loading source into context
-└── assets/               # Static resources: schemas, images, lookup tables, sample data
+└── scripts/              # Executable code - agent runs without loading source into context
 ```
 
-Only `SKILL.md` is mandatory. Reference files must stay **one level deep** from `SKILL.md` - agents get lost in nested documentation trees.
+Only `SKILL.md` is mandatory. The spec permits additional top-level directories, but **runtimes vary in what they will actually serve** - several expose only `references/`, `assets/`, and `scripts/`, and silently refuse to list or read anything else. A skill using `resources/` or `docs/` can therefore be unloadable through no fault of its content. Stick to the three unless you control every consumer.
+
+**Nesting inside them is fine.** The spec's "keep file references one level deep" targets reference *chains* - SKILL.md → A → B → C, where the agent has to follow a trail to reach the thing it needs. A predictable path pattern is not a chain: if SKILL.md states `references/<topic>/README.md` and the topic is known, the agent jumps straight there in one hop. Depth is not what strands an agent; indirection and unpredictability are. Thirty topics flattened into one directory is the worse outcome. Organize by what the reader is looking for, and state the path pattern in the Resources section so nothing has to be found by exploration.
 
 ### Progressive Disclosure Plan
 
@@ -151,7 +152,9 @@ Verified in: `internal/promptbuilder/promptbuilder.go` (lines 26–53, `Agent` f
 |---|---|---|
 | **Kitchen-skill** | Agent loads irrelevant content every time | One coherent unit of work; use progressive disclosure |
 | **Vague description** | Skill never activates | Write as if telling a colleague exactly when to consult this reference |
-| **Nested references** | Agents get lost in documentation trees | One level deep: SKILL.md → reference file only |
+| **Off-spec directory name** | Many runtimes serve only `references/`, `assets/`, `scripts/` - anything else may be unreadable | Use one of the three; nest topics *inside* them |
+| **Reference chains** | SKILL.md → A → B → C; the agent follows a trail instead of loading what it needs | One hop from SKILL.md to the file, via a stated path pattern |
+| **Unpredictable layout** | Agent cannot guess where a resource lives, so it explores or gives up | Derivable paths (`references/<topic>/README.md`) + state the pattern in Resources |
 | **Scripts inline** | Full source loads into context every time | Put scripts in `scripts/`; agent executes without reading source |
 | **Duplicate rules** | Maintenance debt and contradiction risk | Single source of truth per rule |
 

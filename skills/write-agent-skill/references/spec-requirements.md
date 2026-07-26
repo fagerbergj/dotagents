@@ -16,7 +16,9 @@ skill-name/
 └── assets/           # Optional: templates, diagrams, data files, schemas
 ```
 
-Reference files must be **one level deep** from `SKILL.md`. Never point a reference file to another reference file.
+The spec says: *"Keep file references one level deep from `SKILL.md`. Avoid deeply nested reference chains."* The target is **chains of indirection**, not directory depth - never point a reference file at another reference file, so every resource is one hop from `SKILL.md`. A nested but predictable path (`references/<topic>/README.md`, with the pattern stated in `SKILL.md`) is still one hop and is fine.
+
+The spec's layout ends with `... # Any additional files or directories`, so extra top-level directories are permitted. Portability is the catch: some runtimes serve only `references/`, `assets/`, and `scripts/`, refusing to list or read anything else. Prefer the three.
 
 ---
 

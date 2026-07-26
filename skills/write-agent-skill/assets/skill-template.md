@@ -75,7 +75,8 @@ Run every item before delivering. Iterate until all pass.
 - [ ] `metadata` (if present): flat string key-value map with unique keys.
 - [ ] `allowed-tools` (if present): space-separated tool names; noted as experimental.
 - [ ] Body is ≤500 lines / ~5,000 tokens.
-- [ ] File references use relative paths, one level deep max.
+- [ ] File references use relative paths from the skill root, reachable in one hop (no reference chains).
+- [ ] Resource directories are `references/`, `assets/`, or `scripts/` (portable across runtimes).
 - [ ] Every file reference has a specific trigger condition (not a generic pointer).
 - [ ] Skill covers one coherent unit of work.
 - [ ] Provides one default per decision point; alternatives mentioned briefly.
