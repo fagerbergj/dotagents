@@ -6,10 +6,10 @@ My portable agent home: the writing ruleset (`AGENTS.md`) and the general-purpos
 
 ```sh
 git clone https://github.com/fagerbergj/dotagents ~/.agents
-~/.agents/setup-symlinks.sh
+~/.agents/setup.sh
 ```
 
-The script symlinks `AGENTS.md` and `skills/` into each harness's expected location:
+`setup.sh` runs `setup-symlinks.sh` then `install-plugins.sh` (Claude Code plugins, currently just ponytail); both work standalone. The symlinks put `AGENTS.md` and `skills/` in each harness's expected location:
 
 | Harness | Instructions | Skills |
 | --- | --- | --- |
@@ -33,4 +33,4 @@ Point the project's skill loader at `.agents/vendor/dotagents/skills`, or symlin
 - `AGENTS.md` - writing ruleset, applied to prose the agent writes for me.
 - `skills/<name>/SKILL.md` - one skill per directory, with optional `references/` and `assets/`.
 
-[ponytail](https://github.com/DietrichGebert/ponytail) is deliberately NOT vendored here - install it as a Claude Code plugin (`/plugin install ponytail`) so it updates through the plugin system. Projects that need its skills on disk for other harnesses (e.g. quack's opencode agents) vendor it themselves.
+[ponytail](https://github.com/DietrichGebert/ponytail) is deliberately NOT vendored here - install it as a Claude Code plugin (`install-plugins.sh` does this) so it updates through the plugin system. Projects that need its skills on disk for other harnesses (e.g. quack's opencode agents) vendor it themselves.
