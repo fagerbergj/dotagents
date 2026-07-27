@@ -121,11 +121,11 @@ These are renderer-level traps that hold across diagram types. Per-type traps li
 **Quotes inside bracket labels break GitHub even when validators pass.** A bare double-quote inside a `[]`/`()`/`{}` label that is not the whole-label quote form breaks GitHub's real mermaid.js parser, while strict validators parse it clean. This is verified, not theoretical:
 
 ```text
-A[bundle name<br/>e.g. "code-reviewer"]     ← breaks on GitHub
+A[bundle name<br/>e.g. "code-reviewer"]     ← breaks: the bare quotes, NOT the <br/>
 A["label with \"quotes\""]                   ← mermaid's actual escape form
 ```
 
-If a label needs quotes, quote the whole label and escape the inner ones. If it does not need them, drop them.
+If a label needs quotes, quote the whole label and escape the inner ones. If it does not need them, drop them. The `<br/>` in the broken line above is fine and is the correct way to break a line — it is the unescaped `"` around `code-reviewer` that ends the label early.
 
 **A validator passing is not proof it renders.** Validators implement the mermaid grammar; GitHub runs a specific, older mermaid build with its own behaviour. Passing a local check narrows the failure set — it does not empty it.
 
@@ -138,6 +138,15 @@ If a label needs quotes, quote the whole label and escape the inner ones. If it 
 ### Parser traps that cross diagram types
 
 **`end` as a node id or bare label breaks flowcharts and sequence diagrams.** Mermaid's own syntax reference calls this out. It is the single most common "why won't this render" cause, because `end` is a natural word to put in a diagram. Quote it (`A["end"]`) or rename it. `class`, `subgraph`, `link`, `default`, `note`, `style` are worth quoting for the same reason. Misspelling a keyword also breaks the diagram rather than degrading.
+
+**A line break in a label is `<br/>`, not `\n`.** Mermaid source is line-based: a newline ends a statement, and a literal backslash-n is just two characters. Both of these are wrong in different ways:
+
+```text
+A[first line\nsecond line]              ← parses, but renders the literal text "\n"
+B[one]\nsetContent{x}\n B --> C[two]     ← \n as a statement separator: syntax error
+```
+
+The second is the one that bites, because a model reaching for `\n` to mean "new line" tends to use it between statements too, and that is not valid anywhere. Write `A[first line<br/>second line]`, and put real newlines between statements.
 
 **Special characters in labels need quoting.** `(`, `)`, `[`, `]`, `{`, `}`, `:`, `#`, `|`, `&`, `"` inside a label will end it early or confuse the shape parser. Quote the whole label: `A["Order (paid)"]`, `A["milk & eggs"]`. See the quote-escaping trap above for the case where quoting is itself the problem.
 
