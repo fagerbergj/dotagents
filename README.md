@@ -23,7 +23,7 @@ Existing real files are backed up to `<path>.bak` before linking; existing symli
 ## Use in a project
 
 ```sh
-git submodule add https://github.com/fagerbergj/dotagents .agents/vendor/dotagents
+git clone https://github.com/fagerbergj/dotagents .agents/vendor/dotagents
 ```
 
 Point the project's skill loader at `.agents/vendor/dotagents/skills`, or symlink individual skills into the project's own skills directory.
