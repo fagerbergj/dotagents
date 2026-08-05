@@ -20,14 +20,6 @@ git clone https://github.com/fagerbergj/dotagents ~/.agents
 
 Existing real files are backed up to `<path>.bak` before linking; existing symlinks are replaced.
 
-## Use in a project
-
-```sh
-git clone https://github.com/fagerbergj/dotagents .agents/vendor/dotagents
-```
-
-Point the project's skill loader at `.agents/vendor/dotagents/skills`, or symlink individual skills into the project's own skills directory.
-
 ## Layout
 
 - `AGENTS.md` - writing ruleset, applied to prose the agent writes for me.
