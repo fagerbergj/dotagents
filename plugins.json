@@ -1,0 +1,11 @@
+{
+  "claude": [
+    { "id": "ponytail@ponytail", "marketplace_url": "https://github.com/DietrichGebert/ponytail.git" }
+  ],
+  "opencode": [
+    { "id": "@dietrichgebert/ponytail", "source": "npm" }
+  ],
+  "pi": [
+    { "id": "git:github.com/DietrichGebert/ponytail" }
+  ]
+}
