@@ -7,6 +7,10 @@ description: >
   by severity, and structure the written review. Load whenever the task is to
   review a pull request, diff, branch, or proposed code change - before you
   start reading the diff.
+metadata:
+  author: fagerbergj
+  author_url: https://github.com/fagerbergj
+  repository: https://github.com/fagerbergj/dotagents
 ---
 
 # Review code: understand → verify → categorize → structure

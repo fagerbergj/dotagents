@@ -6,6 +6,10 @@ description: >
   github.com pages over the web. Load when a task involves understanding a
   codebase, a repo's layout, its conventions, how a feature is implemented, or
   anything answerable from the repository's own files.
+metadata:
+  author: fagerbergj
+  author_url: https://github.com/fagerbergj
+  repository: https://github.com/fagerbergj/dotagents
 ---
 
 Researching a repository through web_fetch of github.com pages is the wrong tool: each page fetch burns tokens on HTML chrome for a fraction of one file, directory listings paginate, and rendered blobs truncate. The repository itself is cheaper and complete.

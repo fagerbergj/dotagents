@@ -1,6 +1,6 @@
 ---
-name: write-mermaid
-description: Write mermaid diagrams that actually render on the target platform. Covers all 31 diagram types in mermaid 11.16.0 — flowchart, sequence, class, state, ER, gantt, gitGraph, C4, architecture, mindmap, and the long tail — with per-diagram syntax, node shapes, and worked examples. Use when writing or fixing any ```mermaid block, choosing which diagram type fits, debugging a diagram that renders as a broken box on GitHub, or deciding whether a diagram type is supported by the renderer you are targeting.
+name: mermaid-authoring
+description: Authors mermaid diagrams that actually render on the target platform. Covers all 31 diagram types in mermaid 11.16.0 — flowchart, sequence, class, state, ER, gantt, gitGraph, C4, architecture, mindmap, and the long tail — with per-diagram syntax, node shapes, and worked examples. Use when writing or fixing any ```mermaid block, choosing which diagram type fits, debugging a diagram that renders as a broken box on GitHub, or deciding whether a diagram type is supported by the renderer you are targeting.
 license: MIT
 metadata:
   author: fagerbergj
@@ -8,9 +8,11 @@ metadata:
   mermaid_docs_version: "11.16.0"
   github_mermaid_version: "11.16.0"
   github_version_verified: "2026-07-26 via the info probe"
+  author_url: https://github.com/fagerbergj
+  repository: https://github.com/fagerbergj/dotagents
 ---
 
-# Write mermaid
+# Mermaid Authoring
 
 Mermaid diagrams fail in two ways, and they look identical from the author's side: the syntax is wrong, or the syntax is fine but the target renderer is too old to know that diagram type. This skill covers both — per-diagram syntax under `references/`, and a version-support model so a diagram is chosen for the platform it has to render on.
 

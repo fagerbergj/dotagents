@@ -6,6 +6,10 @@ description: >
   until that test goes green and the wider suite stays green. Load whenever the
   task is to fix a bug, defect, regression, crash, wrong output, or "it should
   do X but does Y" in existing code - before you start editing.
+metadata:
+  author: fagerbergj
+  author_url: https://github.com/fagerbergj
+  repository: https://github.com/fagerbergj/dotagents
 ---
 
 # Fix a bug: theory → failing test → green
