@@ -66,6 +66,34 @@ A finding about code you never read is fabrication, whatever label you put on it
 - None → **approve**, even with suggestions and nits outstanding; say explicitly that they're non-blocking
 - **comment** only when you genuinely have neither a block nor a green light, such as verification you could not finish. Say what you couldn't verify.
 
+### request changes
+
+At least one issue must be resolved before merge, and the summary **names which one**, so the author doesn't have to guess which of your comments is the gate.
+
+The threshold is Google's: nothing justifies merging a change that *definitely worsens* the overall code health of the system.
+Anything short of that is a comment, not a gate.
+
+The anti-pattern, stated plainly by Konishi: requesting changes to express taste rather than identify a defect.
+If the issue is taste, mark it a nit and approve.
+
+### approve
+
+You have nothing that requires the author to act.
+Not "the change is perfect" — Google: favour approving once it *definitely improves* code health, even if it isn't perfect.
+GitLab frames the same test as net profit: weigh the value of the change and of future maintainability against the cost of holding it.
+
+Approving with non-blocking comments attached is a normal outcome, not a compromise.
+Say the comments are non-blocking so the author knows they can merge.
+
+### comment
+
+Reserved. Use it when you have neither a block nor a green light — verification you could not finish, or a gap you need a human to weigh.
+State what you couldn't verify.
+
+Industry guidance treats `comment` as the ordinary vehicle for non-blocking feedback, on the assumption a human merges anyway.
+**That assumption does not hold here.** Where an automated merge path requires an explicit approval, a `comment` verdict silently withholds it — it reads as neutral and behaves as a soft block, with no stated reason anyone can act on.
+So: approve with non-blocking comments, and keep `comment` for the case it's named for.
+
 A `comment` verdict with no blocking findings and no stated gap carries no signal: it neither stops a merge nor endorses one.
 
 ## Worked calls
@@ -97,3 +125,6 @@ With two routes today nothing breaks, but say so — it's a latent defect rather
 - [Conventional Comments](https://conventionalcomments.org/) — the label vocabulary; `nitpick` as non-blocking by nature.
 - [How we review PRs](https://posthog.com/handbook/engineering/how-we-review) — PostHog. Approve / Comment / Request Changes semantics.
 - [Use prefixes to improve code review communication](https://www.ssw.com.au/rules/use-prefixes-to-improve-code-review-communication) — SSW. Prefix-to-blocking mapping.
+- [Code Review Checklist and Anti-Pattern Catalog](https://hidekazu-konishi.com/entry/code_review_checklist_and_antipatterns.html) — Konishi. Name the specific blocker; request-changes-as-taste is an anti-pattern; approve-with-comments as the middle ground.
+- [Code Review Guidelines](https://docs.gitlab.com/development/code_review/) — GitLab. Mark non-mandatory suggestions non-blocking and move forward rather than waiting.
+- [When (and When Not) to Use "Request Changes"](https://gustavoaraujo.dev/code-review-best-practices-when-and-when-not-to-use-request-changes) — build breakage, security, and architectural violations as the blocking set.
