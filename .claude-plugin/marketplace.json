@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "dotagents",
+  "description": "General-purpose agent skills for Claude Code.",
+  "owner": {
+    "name": "Jason Fagerberg",
+    "url": "https://github.com/fagerbergj"
+  },
+  "plugins": [
+    {
+      "name": "dotagents",
+      "description": "Commit/PR authoring, feature development, bug fixing, code review, markdown/mermaid formatting, agent-card and skill authoring, git repo research skills.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "dotagents",
+  "version": "0.1.0",
+  "description": "General-purpose agent skills, packaged as a pi package.",
+  "keywords": ["pi-package"],
+  "pi": {
+    "skills": ["./skills"]
+  }
+}
