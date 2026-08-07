@@ -7,6 +7,10 @@ description: >
   implement to green. Load whenever the task is to add a feature, capability,
   command, endpoint, or non-trivial new behavior to a codebase - before you
   start designing or writing code.
+metadata:
+  author: fagerbergj
+  author_url: https://github.com/fagerbergj
+  repository: https://github.com/fagerbergj/dotagents
 ---
 
 # Develop a feature: understand → reuse → tests-as-gate → green

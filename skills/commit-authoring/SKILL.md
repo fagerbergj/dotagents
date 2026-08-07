@@ -4,6 +4,10 @@ description: >
   How to write one atomic commit for a code change - Conventional Commits format,
   imperative subject, why-not-how body. Use whenever you commit code (git_commit):
   one node's work is exactly one reviewable, testable commit.
+metadata:
+  author: fagerbergj
+  author_url: https://github.com/fagerbergj
+  repository: https://github.com/fagerbergj/dotagents
 ---
 
 # Commit Authoring

@@ -4,6 +4,10 @@ description: >
   How to write a pull request - a title and a description that tell the reviewer
   what changed, why, and how to verify it, scaled to the size of the change. Use
   when composing a PR for delivery.
+metadata:
+  author: fagerbergj
+  author_url: https://github.com/fagerbergj
+  repository: https://github.com/fagerbergj/dotagents
 ---
 
 # PR Authoring

@@ -5,6 +5,10 @@ description: >
   heading hierarchy, scannability, and formatting consistency. Preserves all content
   and links exactly. Use before returning any Markdown document to the user, or when
   asked to clean up, format, or tidy Markdown output.
+metadata:
+  author: fagerbergj
+  author_url: https://github.com/fagerbergj
+  repository: https://github.com/fagerbergj/dotagents
 ---
 
 # Format Markdown Skill
