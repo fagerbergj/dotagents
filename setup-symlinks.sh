@@ -19,17 +19,15 @@ link() {
   echo "linked $dst -> $src"
 }
 
-# Claude Code
+# Claude Code (skills arrive via the dotagents plugin, not a symlink - see README)
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.claude/CLAUDE.md"
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.claude/AGENTS.md"
-link "$AGENTS_DIR/skills" "$HOME/.claude/skills"
 
 # opencode (global rules; skills are read from ~/.agents/skills natively)
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
 
-# pi
+# pi (skills arrive via the dotagents plugin, not a symlink - see README)
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
-link "$AGENTS_DIR/skills" "$HOME/.pi/agent/skills"
 
 # codex
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.codex/AGENTS.md"
