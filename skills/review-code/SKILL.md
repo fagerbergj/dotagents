@@ -60,7 +60,7 @@ Tests are not self-validating - a human must confirm they check for meaningful f
 
 ### 6. Categorize every finding by severity
 
-Label each finding so the author isn't overwhelmed (Conventional Comments):
+Label each finding so the author isn't overwhelmed (Conventional Comments). The line is whether you can point at something objective, not how strongly you feel: a finding supported only by your preference is a `nit:`, however sure you are. `references/severity.md` carries the anchors a `blocking:` finding must name (defect, security, design, scope, tests), the hard rules - style guide is the authority, out-of-scope belongs in its own issue, forward progress beats polish - and worked calls in both directions. Read it whenever a label isn't obvious.
 
 - **`blocking:`** - a definite bug, security hole, or major design flaw; must be fixed before merge.
 - **`suggestion:`** - an improvement; state *why* it's better. Non-blocking unless you give a compelling reason.
