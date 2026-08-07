@@ -1,16 +1,20 @@
 ---
-name: write-agent-skill
+name: agent-skill-authoring
 description: |
-  Extracts user workflows into self-contained agent skills by interviewing for intent and edge cases, designing modular packages
+  Authors self-contained agent skills by extracting user workflows, interviewing for intent and edge cases, and designing modular packages
   with progressive disclosure (lean SKILL.md body, on-demand references/), writing step-by-step instructions with gotchas and validation
   loops, structuring directory trees (references/, assets/, scripts/), and enforcing the full spec checklist before deployment.
   Use whenever the user asks to create a new agent skill, extract expertise into a skill package, build a reusable workflow,
   audit an existing skill for compliance, or convert rough notes into a structured SKILL.md.
 license: MIT
 allowed-tools: [Bash, Read, Write, Edit, Glob]
+metadata:
+  author: fagerbergj
+  author_url: https://github.com/fagerbergj
+  repository: https://github.com/fagerbergj/dotagents
 ---
 
-# Agent Skill Engineer - Create Reusable, Modular AI Agent Skills
+# Agent Skill Authoring - Reusable, Modular AI Agent Skills
 
 ## How This Skill Works
 
@@ -18,7 +22,7 @@ allowed-tools: [Bash, Read, Write, Edit, Glob]
 2. **Design** the directory layout and progressive disclosure plan.
 3. **Draft** the SKILL.md body: concise instructions, gotchas, validation loop.
 4. **Populate** `references/`, `assets/`, `scripts/` - never cram detail into SKILL.md.
-5. **Validate** against the checklist embedded in `templates/skill-template.md` before delivering.
+5. **Validate** against the checklist embedded in `assets/skill-template.md` before delivering.
 
 > **Progressive disclosure is non-negotiable.** Metadata (~100 tokens) → Body (<5,000 tokens / <500 lines) → On-demand resources loaded only when referenced with a trigger condition.
 

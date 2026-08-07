@@ -1,6 +1,6 @@
 # Agent Skills Specification - Detailed Requirements
 
-Load this file when auditing a skill for spec compliance or when the validation checklist in `templates/skill-template.md` raises a question about a specific field constraint.
+Load this file when auditing a skill for spec compliance or when the validation checklist in `assets/skill-template.md` raises a question about a specific field constraint.
 
 ---
 
@@ -38,7 +38,7 @@ The spec's layout ends with `... # Any additional files or directories`, so extr
 ```yaml
 # Valid
 name: pdf-processing
-name: write-agent-skill
+name: agent-skill-authoring
 
 # Invalid - uppercase
 name: PDF-Processing

@@ -1,16 +1,20 @@
 ---
-name: write-agent-card
+name: agent-card-authoring
 description: |
-  Writes and audits A2A-compliant agent-card.json files: the machine-readable discovery metadata
+  Authors and audits A2A-compliant agent-card.json files: the machine-readable discovery metadata
   that lets other agents find, route to, and invoke an agent's skills. Covers all required and
   optional JSON fields, skill declaration quality (description, examples, tags), capability flags,
   security schemes, and alignment between the card and the agent's runtime SKILL.md.
   Use when creating a new agent, auditing an existing agent-card.json, or adding/modifying skills
   declared in a card.
 license: MIT
+metadata:
+  author: fagerbergj
+  author_url: https://github.com/fagerbergj
+  repository: https://github.com/fagerbergj/dotagents
 ---
 
-# Write Agent Card - A2A Agent Discovery Metadata
+# Agent Card Authoring - A2A Agent Discovery Metadata
 
 ## Checklist (validate before shipping)
 
@@ -121,7 +125,7 @@ Each card field has a direct counterpart in the agent's runtime SKILL.md. Misali
 | `securitySchemes` | Constraints & Rules | Define credential handling and unauthorized-access behavior |
 | `defaultInputModes`/`outputModes` | Input/Output section | Enforce MIME type adherence in output constraints |
 
-For writing the SKILL.md itself, use the `write-agent-skill` skill.
+For writing the SKILL.md itself, use the `agent-skill-authoring` skill.
 
 ---
 
