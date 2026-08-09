@@ -75,6 +75,6 @@ This machine's setup:
 - `setup-symlinks.sh` - symlinks `AGENTS.md` and personal machine config (`.pi/`) into each harness's expected location.
 - `install-plugins.sh` + `plugins.json` - installs dotagents itself and third-party harness plugins.
 - `install-pi-packages.sh` + `pi-packages.json` - merges my pi package list into `~/.pi/agent/settings.json`.
-- `machine/` - personal/machine-specific config that isn't a skill (e.g. `.pi/extensions/llm-swap.ts`, my pi custom-provider extension), symlinked into place by `setup-symlinks.sh`.
+- `.pi/` - personal pi config that isn't a skill (`extensions/llm-swap.ts`, my custom-provider extension), symlinked into place by `setup-symlinks.sh`.
 
 [ponytail](https://github.com/DietrichGebert/ponytail) is deliberately NOT vendored here - install it as a Claude Code plugin (`install-plugins.sh` does this) so it updates through the plugin system. Projects that need its skills on disk for other harnesses (e.g. quack's opencode agents) vendor it themselves.
