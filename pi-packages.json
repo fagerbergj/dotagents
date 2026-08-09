@@ -1,0 +1,11 @@
+{
+  "packages": [
+    "npm:pi-mcp-adapter",
+    "npm:pi-web-access",
+    "npm:pi-subagents",
+    "npm:@dietrichgebert/ponytail",
+    "npm:@mjasnikovs/pi-task",
+    "npm:pi-markdown-preview",
+    "npm:pi-ask-user"
+  ]
+}
