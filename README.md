@@ -2,7 +2,7 @@
 
 My portable agent home: the writing ruleset (`AGENTS.md`) and the general-purpose skills I want on every machine and in every harness (Claude Code, opencode, pi, codex). Single source, symlinked everywhere, or installed as a plugin where the harness supports it - see [Install as a plugin](#install-as-a-plugin).
 
-This repo plays two roles, kept structurally separate: `skills/` (plus `plugin.json`, `package.json`, `.claude-plugin/`) is the **plugin surface** other harnesses and quack fetch - nothing personal or machine-specific belongs there. `bootstrap.sh` and everything it calls is **this machine's setup** - symlinks, harness plugins, pi packages, personal config under `machine/`.
+This repo plays two roles, kept structurally separate: `skills/` (plus `plugin.json`, `package.json`, `.claude-plugin/`) is the **plugin surface** other harnesses and quack fetch - nothing personal or machine-specific belongs there. `bootstrap.sh` and everything it calls is **this machine's setup** - symlinks, harness plugins, pi packages, personal machine config under dotted dirs like `.pi/`.
 
 ## Use as ~/.agents
 
@@ -22,7 +22,7 @@ git clone https://github.com/fagerbergj/dotagents ~/.agents
 | pi | `~/.pi/agent/AGENTS.md` |
 | codex | `~/.codex/AGENTS.md` |
 
-Existing real files are backed up to `<path>.bak` before linking; existing symlinks are replaced. It also symlinks personal machine config from `machine/` (e.g. the pi `llm-swap` provider extension) to where each harness expects it.
+Existing real files are backed up to `<path>.bak` before linking; existing symlinks are replaced. It also symlinks personal machine config, e.g. from `.pi/` (e.g. the pi `llm-swap` provider extension) to where each harness expects it.
 
 `install-plugins.sh` installs dotagents itself as a plugin (see [Install as a plugin](#install-as-a-plugin) - this is how the skills reach Claude Code and pi now), then the third-party plugins listed in `plugins.json`, currently just ponytail.
 
@@ -72,7 +72,7 @@ This machine's setup:
 
 - `AGENTS.md` - writing ruleset, applied to prose the agent writes for me.
 - `bootstrap.sh` - entry point; runs the three scripts below in order.
-- `setup-symlinks.sh` - symlinks `AGENTS.md` and `machine/` config into each harness's expected location.
+- `setup-symlinks.sh` - symlinks `AGENTS.md` and personal machine config (`.pi/`) into each harness's expected location.
 - `install-plugins.sh` + `plugins.json` - installs dotagents itself and third-party harness plugins.
 - `install-pi-packages.sh` + `pi-packages.json` - merges my pi package list into `~/.pi/agent/settings.json`.
 - `machine/` - personal/machine-specific config that isn't a skill (e.g. `.pi/extensions/llm-swap.ts`, my pi custom-provider extension), symlinked into place by `setup-symlinks.sh`.
