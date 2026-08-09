@@ -49,7 +49,7 @@ Now translate the model into OpenAPI. Follow this checklist:
 - **Place `requestBody` separate from `parameters`**: body data goes in `requestBody`; path/query/header/cookie inputs go in `parameters`
 - **Write `summary` (≤50 chars) and `description`** for every operation
 
-Read `references/openapi-authoring.md` for composition patterns (`allOf`, `oneOf`, discriminator), `$ref` resolution pitfalls, examples structure, and common errors.
+Read `references/openapi-authoring.md` for composition patterns (`allOf`, `oneOf`, discriminator), `$ref` resolution pitfalls, examples structure, and common errors. Read `references/migrating-to-openapi-3.1.md` if migrating an existing OAS 3.0 spec.
 
 ### 4. Decide versioning and deprecation strategy
 
