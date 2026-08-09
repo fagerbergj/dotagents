@@ -28,6 +28,8 @@ link "$AGENTS_DIR/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
 
 # pi (skills arrive via the dotagents plugin, not a symlink - see README)
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
+# pi custom-provider extension (personal, not part of the plugin surface - see machine/)
+link "$AGENTS_DIR/machine/pi/extensions/llm-swap.ts" "$HOME/.pi/agent/extensions/llm-swap.ts"
 
 # codex
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.codex/AGENTS.md"
