@@ -30,13 +30,7 @@ Fielding's dissertation (*"Architectural Styles and the Design of Network-based 
 
 Fielding's 2008 blog post defines hypertext as *"the simultaneous presentation of information and controls such that the information becomes the affordance through which the user (or automaton) obtains choices and selects actions"* [roy.gbiv.com/untangled/2008/rest-apis-must-be-hypertext-driven](https://roy.gbiv.com/untangled/2008/rest-apis-must-be-hypertext-driven).
 
-## Hypermedia Media Types
-
-Notable hypermedia types for Level 3 APIs:
-
-- **Collection+JSON** (Mike Amundsen, 2011): JSON-based read/write type for CRUD with embedded links and query templates [github.com/collection-json/spec](https://github.com/collection-json/spec).
-- **HAL** (Hypertext Application Language, 2011): Simple format using `_links` and `_embedded` properties [stateless.co/hal_specification](https://stateless.co/hal_specification.html).
-- **AtomPub**: Early Level 3 example where entries contain links to related resources and actions [crummy.com/2008/12/7](https://www.crummy.com/2008/12/7).
+For the practical HATEOAS decision, media formats, runtime-discovery trade-offs, and adoption checklist, read `references/hateoas.md`.
 
 ## Web Linking (RFC 8288)
 

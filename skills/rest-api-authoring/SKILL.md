@@ -28,7 +28,7 @@ Do not use the full workflow for a documentation-only edit or a narrow implement
 ## Procedure
 
 1. **Discover the house contract.** Find existing OpenAPI files, published API guidance, gateway routing, generated-client constraints, authentication conventions, supported OAS versions, and CDN/proxy cache-key settings. Reuse these choices unless the task explicitly changes them.
-2. **Model resources and operations.** Identify resources as nouns, their representations, client roles, and state transitions. Map each operation to a path, HTTP method, success code, error code, and authorization rule. Read `references/richardson-model.md` when deciding the REST/hypermedia target; read `references/http-methods.md` for method, status, error, and link semantics.
+2. **Model resources and operations.** Identify resources as nouns, their representations, client roles, and state transitions. Map each operation to a path, HTTP method, success code, error code, and authorization rule. Read `references/richardson-model.md` when deciding the REST target; read `references/hateoas.md` when deciding whether runtime hypermedia controls are worth their cost; read `references/http-methods.md` for method, status, error, and link semantics.
 3. **Write the OpenAPI contract.** Use shared components where reuse or local generator conventions justify them; inline one-off simple schemas when clearer. Keep request bodies separate from path/query/header/cookie parameters. Define security schemes centrally and apply concrete requirements per operation. Read `references/openapi-authoring.md` for OAS 3.1 schema, `$ref`, composition, example, and operation guidance. Read `references/migrating-to-openapi-3.1.md` only when migrating an OAS 3.0 document.
 4. **Choose evolution policy.** Select versioning from the established contract; otherwise URI-path versioning is a practical default, subject to the real gateway and cache policy. Declare the migration path before shipping a breaking change. Read `references/api-versioning.md` for selection criteria, `references/api-deprecation.md` for RFC 9745/RFC 8594 signaling, and `references/schema-evolution.md` before changing a published contract.
 5. **Review security per operation.** Record the required identity, scopes/roles, object/tenant checks, writable fields, resource limits, and external-call controls. A declared OpenAPI security scheme is not proof of authorization. Read `references/security.md` for the OWASP API Security Top 10 checklist.
@@ -47,7 +47,8 @@ Before delivery, confirm that the resource model, operation-level security rules
 
 ## Resources
 
-- Read `references/richardson-model.md` when choosing a REST maturity or hypermedia approach.
+- Read `references/richardson-model.md` when choosing a REST maturity target or applying Fielding's constraints.
+- Read `references/hateoas.md` when choosing hypermedia, a media type, or runtime discovery versus GraphQL introspection.
 - Read `references/http-methods.md` when choosing methods, status codes, Problem Details, or link relations.
 - Read `references/openapi-authoring.md` when authoring or reviewing an OAS 3.0/3.1 document, especially `$ref`, schemas, composition, or examples.
 - Read `references/migrating-to-openapi-3.1.md` when upgrading an OAS 3.0 document.
