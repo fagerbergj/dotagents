@@ -2,14 +2,16 @@
 
 My portable agent home: the writing ruleset (`AGENTS.md`) and the general-purpose skills I want on every machine and in every harness (Claude Code, opencode, pi, codex). Single source, symlinked everywhere, or installed as a plugin where the harness supports it - see [Install as a plugin](#install-as-a-plugin).
 
+This repo plays two roles, kept structurally separate: `skills/` (plus `plugin.json`, `package.json`, `.claude-plugin/`) is the **plugin surface** other harnesses and quack fetch - nothing personal or machine-specific belongs there. `bootstrap.sh` and everything it calls is **this machine's setup** - symlinks, harness plugins, pi packages, personal config under `machine/`.
+
 ## Use as ~/.agents
 
 ```sh
 git clone https://github.com/fagerbergj/dotagents ~/.agents
-~/.agents/setup.sh
+~/.agents/bootstrap.sh
 ```
 
-`setup.sh` runs `setup-symlinks.sh` then `install-plugins.sh`; both work standalone.
+`bootstrap.sh` runs `setup-symlinks.sh`, `install-plugins.sh`, then `install-pi-packages.sh`; all three work standalone.
 
 `setup-symlinks.sh` puts `AGENTS.md` in each harness's expected location:
 
@@ -20,9 +22,11 @@ git clone https://github.com/fagerbergj/dotagents ~/.agents
 | pi | `~/.pi/agent/AGENTS.md` |
 | codex | `~/.codex/AGENTS.md` |
 
-Existing real files are backed up to `<path>.bak` before linking; existing symlinks are replaced.
+Existing real files are backed up to `<path>.bak` before linking; existing symlinks are replaced. It also symlinks personal machine config from `machine/` (e.g. the pi `llm-swap` provider extension) to where each harness expects it.
 
 `install-plugins.sh` installs dotagents itself as a plugin (see [Install as a plugin](#install-as-a-plugin) - this is how the skills reach Claude Code and pi now), then the third-party plugins listed in `plugins.json`, currently just ponytail.
+
+`install-pi-packages.sh` merges the package list in `pi-packages.json` into `~/.pi/agent/settings.json`'s `packages` array - a union, so packages added outside this repo and other settings keys (`theme`, `defaultModel`, ...) are left alone.
 
 ## Install as a plugin
 
@@ -57,10 +61,20 @@ pi install git:github.com/fagerbergj/dotagents
 
 ## Layout
 
-- `AGENTS.md` - writing ruleset, applied to prose the agent writes for me.
+Plugin surface (what consumers fetch):
+
 - `skills/<name>/SKILL.md` - one skill per directory, with optional `references/` and `assets/`.
 - `plugin.json` - [Agent Plugins](https://agent-plugins.org) manifest; skills are discovered by convention, not declared here.
 - `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` - Claude Code plugin manifest and self-hosted marketplace.
 - `package.json` - pi package manifest; declares `skills/` for pi's installer.
+
+This machine's setup:
+
+- `AGENTS.md` - writing ruleset, applied to prose the agent writes for me.
+- `bootstrap.sh` - entry point; runs the three scripts below in order.
+- `setup-symlinks.sh` - symlinks `AGENTS.md` and `machine/` config into each harness's expected location.
+- `install-plugins.sh` + `plugins.json` - installs dotagents itself and third-party harness plugins.
+- `install-pi-packages.sh` + `pi-packages.json` - merges my pi package list into `~/.pi/agent/settings.json`.
+- `machine/` - personal/machine-specific config that isn't a skill (e.g. `machine/pi/extensions/llm-swap.ts`, my pi custom-provider extension), symlinked into place by `setup-symlinks.sh`.
 
 [ponytail](https://github.com/DietrichGebert/ponytail) is deliberately NOT vendored here - install it as a Claude Code plugin (`install-plugins.sh` does this) so it updates through the plugin system. Projects that need its skills on disk for other harnesses (e.g. quack's opencode agents) vendor it themselves.
