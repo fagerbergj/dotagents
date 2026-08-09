@@ -38,6 +38,6 @@ Notable hypermedia types for Level 3 APIs:
 - **HAL** (Hypertext Application Language, 2011): Simple format using `_links` and `_embedded` properties [stateless.co/hal_specification](https://stateless.co/hal_specification.html).
 - **AtomPub**: Early Level 3 example where entries contain links to related resources and actions [crummy.com/2008/12/7](https://www.crummy.com/2008/12/7).
 
-## Web Linking (RFC 5988)
+## Web Linking (RFC 8288)
 
-RFC 5988 defines a generic framework for URI relationships usable in HTTP headers via the `Link` field, with a registry of link relation types including `self`, `alternate`, `collection`, `item`, `next`, `prev`, `first`, `last`, and `describedby` [datatracker.ietf.org/rfc5988](https://www.rfc-editor.org/rfc/rfc5988.html).
+RFC 8288 obsoletes RFC 5988 and defines a generic framework for URI relationships usable in HTTP headers via the `Link` field. Registered relation types include `self`, `alternate`, `collection`, `item`, `next`, `prev`, `first`, `last`, and `describedby` [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288.html).

@@ -46,5 +46,5 @@ This generates diverse inputs targeting edge cases like `{"number": "\n\uudbcd."
 ## Typical Validation Pipeline
 
 1. **Pre-commit**: `spectral lint` — catches spec syntax errors early.
-2. **CI on PR**: `oasdiff breaking old.yaml new.yaml` — blocks merging if there are unintended breaking changes.
+2. **CI on PR**: `oasdiff breaking old.yaml new.yaml --exit-code 1` — fails the job when there are unintended breaking changes.
 3. **Before publishing**: `schemathesis run <mock-server-url>` — validates the deployed implementation matches the spec.

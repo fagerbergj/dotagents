@@ -2,7 +2,7 @@
 
 ## HTTP Methods
 
-The primary specification is **RFC 9110** (*HTTP Semantics*), which obsoleted RFC 7231 in 2023 [datatracker.ietf.org/rfc9110](https://datatracker.ietf.org/doc/html/rfc9110). Method definitions remain at Sections 9.3.1–9.3.5 with the same semantics.
+The primary specification is **RFC 9110** (*HTTP Semantics*), published in 2022 and obsoleting RFC 7231 [datatracker.ietf.org/rfc9110](https://datatracker.ietf.org/doc/html/rfc9110). Method definitions remain at Sections 9.3.1–9.3.5 with the same semantics.
 
 | Method | Safe? | Idempotent? | Description |
 |--------|-------|-------------|-------------|
@@ -28,4 +28,4 @@ Defined in RFC 9110 Section 15 (obsoletes RFC 7231 Section 6), with additions fr
 
 RFC 7807 defines a standard machine-readable format for error details in HTTP responses, avoiding per-API error format definition [datatracker.ietf.org/rfc7807](https://datatracker.ietf.org/doc/html/rfc7807). The `ProblemDetails` JSON object supports `type` (URI reference), `title`, `status` (HTTP status code), `detail`, and `instance`.
 
-RFC 9457 obsoletes it in July 2023, adding `extensionsMap` support [datatracker.ietf.org/rfc9457](https://datatracker.ietf.org/doc/html/rfc9457). Use this format for API error responses to give clients predictable error structures across endpoints.
+RFC 9457 obsoletes RFC 7807 (July 2023). It permits problem-type definitions to add extension members directly to the object; there is no `extensionsMap` field. Clients must ignore extensions they do not recognize [RFC 9457 §3.2](https://datatracker.ietf.org/doc/html/rfc9457#section-3.2). Use this format for API error responses to give clients predictable error structures across endpoints.

@@ -1,6 +1,6 @@
-# OWASP API Security Top 10 (2023)
+# OWASP API Security Review
 
-The authoritative source is **owasp.org/API-Security**, not api-security.tech [owasp.org/www-project-api-security](https://owasp.org/www-project-api-security/) → [github.com/OWASP/API-Security](https://github.com/OWASP/API-Security). The OWASP API Security Top 10 2023 is the current edition:
+The authoritative source is the [OWASP API Security Project](https://owasp.org/www-project-api-security/) and its [2023 Top 10](https://owasp.org/API-Security/editions/2023/en/0x11-t10/).
 
 | # | Category |
 |---|----------|
@@ -15,13 +15,27 @@ The authoritative source is **owasp.org/API-Security**, not api-security.tech [o
 | API9:2023 | Improper Inventory Management |
 | API10:2023 | Unsafe Consumption of APIs |
 
-Authorization vulnerabilities dominate — three of the top five relate to access control (API1, API3, API5). The project is maintained in the [OWASP/API-Security GitHub repo](https://github.com/OWASP/API-Security) with 2,300+ stars.
+## Per-operation review record
 
-## What to Check at Each Endpoint Type
+For every published operation, record the following before approval:
 
-- **CRUD endpoints**: BOLA (API1), BFIA (API5) — verify object-level and function-level authorization on every read/write/delete.
-- **Auth flows**: Broken Authentication (API2) — check token issuance, rotation, revocation, and refresh logic.
-- **Property-write endpoints**: BOPALA (API3) — ensure mass assignment protection; client-provided properties must be validated against the expected schema.
-- **Public search/list endpoints**: Unrestricted Resource Consumption (API4) — enforce pagination, rate limits, and query complexity limits.
-- **Admin/internal endpoints**: Improper Inventory Management (API9) — undocumented or test endpoints are a common attack surface.
-- **Outbound calls / webhooks**: SSRF (API7), Unsafe Consumption (API10) — validate upstream data before trusting it; verify signatures on callbacks.
+- **Identity and authorization:** authentication method, required scope/role, tenant boundary, and an object-level authorization test for an ID owned by another subject.
+- **Input and output fields:** an allowlist of writable properties, any field-level authorization, and confirmation that sensitive response fields are omitted or masked for each role.
+- **Resource limits:** pagination limits, request-size limit, rate-limit policy, and any expensive filter, sort, upload, or asynchronous-work limit.
+- **Business flow:** abuse controls for high-value actions such as signup, checkout, password recovery, invitation, or bulk export.
+- **Outbound calls:** URL allowlist or egress policy, DNS/IP validation, redirect policy, callback/webhook signature verification, timeout, and response-data validation.
+- **Errors and observability:** Problem Details fields that are safe to expose, audit events, correlation IDs, and no tokens, secrets, stack traces, or authorization decisions in responses.
+- **Inventory:** owner, audience, environment, published version, deprecation/sunset status, and retirement date where relevant.
+
+## Evidence to require
+
+An OpenAPI `security` requirement documents authentication expectations; it does not prove object-, property-, or function-level authorization. Require implementation tests or policy evidence for those controls. Record exceptions with an owner, risk acceptance, and expiry date.
+
+## Endpoint prompts
+
+- **Read/write/delete by ID:** test the same operation against another tenant or user (API1) and an unauthorized role (API5).
+- **Create or update:** attempt forbidden properties such as `role`, `ownerId`, price, state, and internal flags (API3).
+- **List/search/export:** test large pages, broad filters, repeated requests, and expensive sorts (API4).
+- **Authentication and recovery:** test token rotation, expiry, revocation, audience, and rate limits (API2, API6).
+- **Webhook, URL, or import endpoints:** test private-address, redirect, malformed, and untrusted-upstream inputs (API7, API10).
+- **Administrative or legacy routes:** verify they are inventoried, authenticated, and retired when unused (API8, API9).
