@@ -6,6 +6,7 @@
     "npm:@dietrichgebert/ponytail",
     "npm:@mjasnikovs/pi-task",
     "npm:pi-markdown-preview",
-    "npm:pi-ask-user"
+    "npm:pi-ask-user",
+    "npm:pi-lsp"
   ]
 }

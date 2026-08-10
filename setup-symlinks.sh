@@ -30,6 +30,8 @@ link "$AGENTS_DIR/AGENTS.md" "$HOME/.claude/AGENTS.md"
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
 # pi custom-provider extension (personal, not part of the plugin surface - see .pi/)
 link "$AGENTS_DIR/.pi/extensions/llm-swap.ts" "$HOME/.pi/agent/extensions/llm-swap.ts"
+# pi-lsp server declarations (bins installed by install-lsp-servers.sh)
+link "$AGENTS_DIR/.pi/lsp.json" "$HOME/.pi/agent/lsp.json"
 
 # codex
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.codex/AGENTS.md"

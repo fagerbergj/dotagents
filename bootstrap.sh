@@ -10,3 +10,4 @@ AGENTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 "$AGENTS_DIR/install-as-plugin.sh" claude
 "$AGENTS_DIR/install-plugins.sh"
 "$AGENTS_DIR/install-pi-packages.sh"
+"$AGENTS_DIR/install-lsp-servers.sh"
