@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "dotagents",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Writing-style ruleset (AGENTS.md) and general-purpose agent skills for Claude Code, opencode, pi, and codex.",
   "author": {
     "name": "Jason Fagerberg",
