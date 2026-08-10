@@ -18,6 +18,18 @@ if [ ! -f "$CONFIG" ]; then
   exit 1
 fi
 
+# ask "question": yes only on an interactive y - pi and opencode load skills
+# straight from ~/.agents, so their plugin installs are optional duplicates.
+ask() {
+  if [ ! -t 0 ]; then
+    echo "non-interactive: skipping - $1 (run install-plugins.sh directly to be asked)"
+    return 1
+  fi
+  printf '%s [y/N] ' "$1"
+  read -r answer
+  case "$answer" in y | Y | yes) return 0 ;; *) return 1 ;; esac
+}
+
 # === dotagents itself (this is how skills reach the harness now - see README) ===
 
 # --- Claude Code ---
@@ -43,9 +55,11 @@ echo "OpenCode: skills load natively from ~/.agents/skills, no plugin install ne
 
 # --- Pi ---
 if command -v pi >/dev/null 2>&1; then
-  echo "Pi: installing dotagents ..."
-  if ! pi install git:github.com/fagerbergj/dotagents; then
-    echo "warn: dotagents install failed for pi" >&2
+  if ask "Pi: install dotagents as a pi package? (pi already loads ~/.agents skills natively)"; then
+    echo "Pi: installing dotagents ..."
+    if ! pi install git:github.com/fagerbergj/dotagents; then
+      echo "warn: dotagents install failed for pi" >&2
+    fi
   fi
 else
   echo "warn: pi CLI not found; skipping dotagents for pi" >&2
@@ -87,7 +101,7 @@ else
 fi
 
 # --- OpenCode ---
-if command -v opencode >/dev/null 2>&1; then
+if command -v opencode >/dev/null 2>&1 && ask "OpenCode: install plugins.json's opencode plugins?"; then
   count=$(jq '.opencode | length' "$CONFIG")
   for i in $(seq 0 $((count - 1))); do
     id=$(jq -r ".opencode[$i].id" "$CONFIG")
@@ -97,11 +111,11 @@ if command -v opencode >/dev/null 2>&1; then
     fi
   done
 else
-  echo "warn: opencode CLI not found; skipping OpenCode plugins" >&2
+  echo "OpenCode: plugins skipped"
 fi
 
 # --- Pi ---
-if command -v pi >/dev/null 2>&1; then
+if command -v pi >/dev/null 2>&1 && ask "Pi: install plugins.json's pi plugins?"; then
   count=$(jq '.pi | length' "$CONFIG")
   for i in $(seq 0 $((count - 1))); do
     id=$(jq -r ".pi[$i].id" "$CONFIG")
@@ -111,7 +125,7 @@ if command -v pi >/dev/null 2>&1; then
     fi
   done
 else
-  echo "warn: pi CLI not found; skipping Pi plugins" >&2
+  echo "Pi: plugins skipped"
 fi
 
 echo "Done."
