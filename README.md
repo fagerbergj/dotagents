@@ -11,7 +11,7 @@ git clone https://github.com/fagerbergj/dotagents ~/.agents
 ~/.agents/bootstrap.sh
 ```
 
-`bootstrap.sh` runs `setup-symlinks.sh`, `install-plugins.sh`, then `install-pi-packages.sh`; all three work standalone.
+`bootstrap.sh` runs `setup-symlinks.sh`, `install-as-plugin.sh claude`, `install-plugins.sh`, then `install-pi-packages.sh`; each works standalone.
 
 `setup-symlinks.sh` puts `AGENTS.md` in each harness's expected location:
 
@@ -24,7 +24,7 @@ git clone https://github.com/fagerbergj/dotagents ~/.agents
 
 Existing real files are backed up to `<path>.bak` before linking; existing symlinks are replaced. It also symlinks personal machine config, e.g. from `.pi/` (e.g. the pi `llm-swap` provider extension) to where each harness expects it.
 
-`install-plugins.sh` installs dotagents itself as a plugin (see [Install as a plugin](#install-as-a-plugin) - this is how the skills reach Claude Code and pi now), then the third-party plugins listed in `plugins.json`, currently just ponytail.
+`install-as-plugin.sh` installs dotagents itself as a plugin (see [Install as a plugin](#install-as-a-plugin) - this is how the skills and MCPs reach Claude Code); `install-plugins.sh` installs the third-party plugins listed in `plugins.json`, currently just ponytail.
 
 `install-pi-packages.sh` merges the package list in `pi-packages.json` into `~/.pi/agent/settings.json`'s `packages` array - a union, so packages added outside this repo and other settings keys (`theme`, `defaultModel`, ...) are left alone.
 
@@ -32,7 +32,7 @@ Existing real files are backed up to `<path>.bak` before linking; existing symli
 
 The symlink flow above is still the intended way to use this as `~/.agents`. These are the alternate, per-harness install paths for pulling just the skills into a project or another machine without cloning to `~/.agents`.
 
-Claude Code and pi get a real plugin install below. opencode doesn't - it auto-discovers the skills instead, so there's nothing to install. None of the three can ship `AGENTS.md` from inside an installed package: pi and opencode both read instructions from the project/global filesystem, never from package contents, and the Agent Plugins spec has no instructions field at all. The `~/.claude/CLAUDE.md` / `~/.pi/agent/AGENTS.md` / `~/.config/opencode/AGENTS.md` symlinks from `setup-symlinks.sh` are the only way `AGENTS.md` reaches any of them - not a legacy leftover, the actual mechanism.
+Claude Code and pi get a real plugin install below. opencode doesn't - it auto-discovers the skills instead, so there's nothing to install. None of the three can ship `AGENTS.md` from inside an installed package: pi and opencode both read instructions from the project/global filesystem, never from package contents, and the Agent Plugins spec has no instructions field at all. The `~/.claude/CLAUDE.md` and `~/.pi/agent/AGENTS.md` symlinks from `setup-symlinks.sh` are the only way `AGENTS.md` reaches any of them (opencode rides the `~/.claude/CLAUDE.md` fallback) - not a legacy leftover, the actual mechanism.
 
 ### Agent Plugins standard
 
