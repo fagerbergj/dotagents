@@ -1,8 +1,8 @@
 # dotagents
 
-My portable agent home: the writing ruleset (`AGENTS.md`) and the general-purpose skills I want on every machine and in every harness (Claude Code, opencode, pi, codex). Single source, symlinked everywhere, or installed as a plugin where the harness supports it - see [Install as a plugin](#install-as-a-plugin).
+My portable agent home, two things in one repo: my personal writing ruleset (`AGENTS.md`) and a collection of skills and MCP servers I find generally useful (`skills/`, `mcp.json`).
 
-This repo plays two roles, kept structurally separate: `skills/` (plus `plugin.json`, `package.json`, `.claude-plugin/`) is the **plugin surface** other harnesses and quack fetch - nothing personal or machine-specific belongs there. `bootstrap.sh` and everything it calls is **this machine's setup** - symlinks, harness plugins, pi packages, personal machine config under dotted dirs like `.pi/`.
+Distribution is clone-first: this repo lives at `~/.agents`, and harnesses that look there (opencode, pi) pull skills automatically. For harnesses that don't, the repo doubles as an [agent plugin](https://github.com/agentplugins/agent-plugins-spec) and as harness-specific plugins (Claude Code, pi, opencode) bundling the same skills and MCPs - see [Install as a plugin](#install-as-a-plugin). `bootstrap.sh` and everything it calls is machine setup only - symlinks, plugin installs, pi packages, harness config under dotted dirs like `.pi/`.
 
 ## Use as ~/.agents
 
