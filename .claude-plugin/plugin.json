@@ -1,6 +1,6 @@
 {
   "name": "dotagents",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "General-purpose agent skills: commit/PR authoring, feature development, bug fixing, code review, markdown/mermaid formatting, agent-card and skill authoring, git repo research.",
   "author": {
     "name": "Jason Fagerberg",
