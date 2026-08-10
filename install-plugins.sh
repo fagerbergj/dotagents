@@ -1,12 +1,11 @@
 #!/bin/sh
-# Install dotagents itself as a plugin, then the third-party plugins listed in
-# plugins.json. Safe to re-run.
+# Install the third-party plugins I like (plugins.json) into each harness.
+# Safe to re-run. dotagents itself is install-as-plugin.sh's job.
 # Fault tolerant: a missing harness CLI or failed install warns and moves on.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="$SCRIPT_DIR/plugins.json"
-DOTAGENTS_REPO="https://github.com/fagerbergj/dotagents.git"
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "error: jq not found; install it to run this script" >&2
@@ -29,43 +28,6 @@ ask() {
   read -r answer
   case "$answer" in y | Y | yes) return 0 ;; *) return 1 ;; esac
 }
-
-# === dotagents itself (this is how skills reach the harness now - see README) ===
-
-# --- Claude Code ---
-if command -v claude >/dev/null 2>&1; then
-  if ! claude plugin list 2>/dev/null | grep -q "dotagents@dotagents"; then
-    echo "Claude Code: adding dotagents marketplace ..."
-    claude plugin marketplace add "$DOTAGENTS_REPO" >/dev/null 2>&1 || true
-    echo "Claude Code: installing dotagents ..."
-    if ! claude plugin install dotagents@dotagents; then
-      echo "warn: dotagents install failed; inside Claude Code run: /plugin install dotagents@dotagents" >&2
-    fi
-  else
-    echo "Claude Code: dotagents already installed"
-  fi
-else
-  echo "warn: claude CLI not found; skipping dotagents for Claude Code" >&2
-fi
-
-# --- OpenCode: no install step. opencode auto-discovers skills upward from
-# .agents/skills (global and project) - see README. Its `plugin` command only
-# takes npm modules with a JS entrypoint, which dotagents has none of.
-echo "OpenCode: skills load natively from ~/.agents/skills, no plugin install needed"
-
-# --- Pi ---
-if command -v pi >/dev/null 2>&1; then
-  if ask "Pi: install dotagents as a pi package? (pi already loads ~/.agents skills natively)"; then
-    echo "Pi: installing dotagents ..."
-    if ! pi install git:github.com/fagerbergj/dotagents; then
-      echo "warn: dotagents install failed for pi" >&2
-    fi
-  fi
-else
-  echo "warn: pi CLI not found; skipping dotagents for pi" >&2
-fi
-
-echo "Done with dotagents."
 
 # === Third-party plugins from plugins.json ===
 

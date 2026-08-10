@@ -71,10 +71,12 @@ Plugin surface (what consumers fetch):
 This machine's setup:
 
 - `AGENTS.md` - writing ruleset, applied to prose the agent writes for me.
-- `bootstrap.sh` - entry point; runs the three scripts below in order.
-- `setup-symlinks.sh` - symlinks `AGENTS.md` and personal machine config (`.pi/`) into each harness's expected location.
-- `install-plugins.sh` + `plugins.json` - installs dotagents itself and third-party harness plugins.
+- `bootstrap.sh` - entry point; runs the scripts below in order.
+- `setup-symlinks.sh` - symlinks `AGENTS.md` (e.g. to `~/.claude/CLAUDE.md`) and dotted-dir harness config (`.pi/`) into place.
+- `install-as-plugin.sh` - ask-gated: installs dotagents itself as a plugin, for harnesses that don't read `~/.agents` natively (Claude Code; optional duplicate elsewhere).
+- `install-plugins.sh` + `plugins.json` - ask-gated: installs the third-party plugins I like (e.g. ponytail).
 - `install-pi-packages.sh` + `pi-packages.json` - merges my pi package list into `~/.pi/agent/settings.json`.
+- `compile-mcp.sh` - authoring-time, not bootstrap: compiles the canonical `mcp.json` into harness-native MCP configs (today just Claude Code's `.mcp.json`, which ships in the plugin). Edit `mcp.json`, run it, commit both.
 - `.pi/` - personal pi config that isn't a skill (`extensions/llm-swap.ts`, my custom-provider extension), symlinked into place by `setup-symlinks.sh`.
 
 [ponytail](https://github.com/DietrichGebert/ponytail) is deliberately NOT vendored here - install it as a Claude Code plugin (`install-plugins.sh` does this) so it updates through the plugin system. Projects that need its skills on disk for other harnesses (e.g. quack's opencode agents) vendor it themselves.
