@@ -65,6 +65,7 @@ Plugin surface (what consumers fetch):
 
 - `skills/<name>/SKILL.md` - one skill per directory, with optional `references/` and `assets/`.
 - `plugin.json` - [Agent Plugins](https://agent-plugins.org) manifest; skills are discovered by convention, not declared here.
+- `mcp.json` - MCP servers, spec format. pi reads it natively from `~/.agents`; `.mcp.json` is a committed symlink to it because Claude Code's plugin loader only reads its own filename (it accepts the spec syntax - verified). opencode reads neither: its MCPs live in `opencode.json` only.
 - `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` - Claude Code plugin manifest and self-hosted marketplace.
 - `package.json` - pi package manifest; declares `skills/` for pi's installer.
 
@@ -76,7 +77,6 @@ This machine's setup:
 - `install-as-plugin.sh` - ask-gated: installs dotagents itself as a plugin. Bootstrap runs it for Claude Code only (the one harness that does not read `~/.agents`); run it with no argument to be offered the other harnesses.
 - `install-plugins.sh` + `plugins.json` - ask-gated: installs the third-party plugins I like (e.g. ponytail).
 - `install-pi-packages.sh` + `pi-packages.json` - merges my pi package list into `~/.pi/agent/settings.json`.
-- `compile-mcp.sh` - authoring-time, not bootstrap: compiles the canonical `mcp.json` into harness-native MCP configs (today just Claude Code's `.mcp.json`, which ships in the plugin). Edit `mcp.json`, run it, commit both.
 - `.pi/` - personal pi config that isn't a skill (`extensions/llm-swap.ts`, my custom-provider extension), symlinked into place by `setup-symlinks.sh`.
 
 [ponytail](https://github.com/DietrichGebert/ponytail) is deliberately NOT vendored here - install it as a Claude Code plugin (`install-plugins.sh` does this) so it updates through the plugin system. Projects that need its skills on disk for other harnesses (e.g. quack's opencode agents) vendor it themselves.
