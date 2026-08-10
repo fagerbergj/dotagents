@@ -6,6 +6,11 @@ set -eu
 
 DOTAGENTS_REPO="https://github.com/fagerbergj/dotagents.git"
 
+# Optional arg limits to one harness. bootstrap passes "claude" - the only
+# harness that needs the plugin; run with no arg to be offered the rest.
+only="${1:-}"
+want() { [ -z "$only" ] || [ "$only" = "$1" ]; }
+
 ask() {
   if [ ! -t 0 ]; then
     echo "non-interactive: skipping - $1 (run install-as-plugin.sh directly to be asked)"
@@ -17,7 +22,7 @@ ask() {
 }
 
 # --- Claude Code (does NOT read ~/.agents: the plugin is how skills + mcp.json arrive) ---
-if command -v claude >/dev/null 2>&1; then
+if want claude && command -v claude >/dev/null 2>&1; then
   if claude plugin list 2>/dev/null | grep -q "dotagents@dotagents"; then
     echo "Claude Code: dotagents already installed"
   elif ask "Claude Code: install dotagents as a plugin? (Claude doesn't read ~/.agents natively)"; then
@@ -35,10 +40,10 @@ fi
 # --- OpenCode: no install step. opencode auto-discovers skills upward from
 # .agents/skills (global and project). Its `plugin` command only takes npm
 # modules with a JS entrypoint, which dotagents has none of.
-echo "OpenCode: skills load natively from ~/.agents/skills, no plugin install needed"
+want opencode && echo "OpenCode: skills load natively from ~/.agents/skills, no plugin install needed"
 
 # --- Pi (reads ~/.agents natively; installing as a package is an optional duplicate) ---
-if command -v pi >/dev/null 2>&1; then
+if want pi && command -v pi >/dev/null 2>&1; then
   if ask "Pi: install dotagents as a pi package? (pi already loads ~/.agents skills natively)"; then
     echo "Pi: installing dotagents ..."
     if ! pi install git:github.com/fagerbergj/dotagents; then

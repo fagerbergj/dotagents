@@ -7,6 +7,6 @@
 set -eu
 AGENTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 "$AGENTS_DIR/setup-symlinks.sh"
-"$AGENTS_DIR/install-as-plugin.sh"
+"$AGENTS_DIR/install-as-plugin.sh" claude
 "$AGENTS_DIR/install-plugins.sh"
 "$AGENTS_DIR/install-pi-packages.sh"

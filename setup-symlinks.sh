@@ -23,8 +23,8 @@ link() {
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.claude/CLAUDE.md"
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.claude/AGENTS.md"
 
-# opencode (global rules; skills are read from ~/.agents/skills natively)
-link "$AGENTS_DIR/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
+# opencode needs no link: it falls back to ~/.claude/CLAUDE.md (linked above)
+# for global rules, and reads skills from ~/.agents/skills natively.
 
 # pi (skills arrive via the dotagents plugin, not a symlink - see README)
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"

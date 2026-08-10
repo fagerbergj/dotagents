@@ -18,8 +18,8 @@ git clone https://github.com/fagerbergj/dotagents ~/.agents
 | Harness | Instructions |
 | --- | --- |
 | Claude Code | `~/.claude/CLAUDE.md` |
-| opencode | `~/.config/opencode/AGENTS.md` |
-| pi | `~/.pi/agent/AGENTS.md` |
+| opencode | none - falls back to `~/.claude/CLAUDE.md` natively |
+| pi | `~/.pi/agent/AGENTS.md` (pi reads `~/.agents/mcp.json` natively, but NOT `~/.agents/AGENTS.md`) |
 | codex | `~/.codex/AGENTS.md` |
 
 Existing real files are backed up to `<path>.bak` before linking; existing symlinks are replaced. It also symlinks personal machine config, e.g. from `.pi/` (e.g. the pi `llm-swap` provider extension) to where each harness expects it.
@@ -73,7 +73,7 @@ This machine's setup:
 - `AGENTS.md` - writing ruleset, applied to prose the agent writes for me.
 - `bootstrap.sh` - entry point; runs the scripts below in order.
 - `setup-symlinks.sh` - symlinks `AGENTS.md` (e.g. to `~/.claude/CLAUDE.md`) and dotted-dir harness config (`.pi/`) into place.
-- `install-as-plugin.sh` - ask-gated: installs dotagents itself as a plugin, for harnesses that don't read `~/.agents` natively (Claude Code; optional duplicate elsewhere).
+- `install-as-plugin.sh` - ask-gated: installs dotagents itself as a plugin. Bootstrap runs it for Claude Code only (the one harness that does not read `~/.agents`); run it with no argument to be offered the other harnesses.
 - `install-plugins.sh` + `plugins.json` - ask-gated: installs the third-party plugins I like (e.g. ponytail).
 - `install-pi-packages.sh` + `pi-packages.json` - merges my pi package list into `~/.pi/agent/settings.json`.
 - `compile-mcp.sh` - authoring-time, not bootstrap: compiles the canonical `mcp.json` into harness-native MCP configs (today just Claude Code's `.mcp.json`, which ships in the plugin). Edit `mcp.json`, run it, commit both.
