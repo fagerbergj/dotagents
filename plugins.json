@@ -1,11 +1,28 @@
 {
   "claude": [
-    { "id": "ponytail@ponytail", "marketplace_url": "https://github.com/DietrichGebert/ponytail.git" }
+    {
+      "id": "ponytail@ponytail",
+      "marketplace_url": "https://github.com/DietrichGebert/ponytail.git"
+    },
+    {
+      "id": "gopls-lsp@claude-plugins-official"
+    },
+    {
+      "id": "typescript-lsp@claude-plugins-official"
+    },
+    {
+      "id": "kotlin-lsp@claude-plugins-official"
+    }
   ],
   "opencode": [
-    { "id": "@dietrichgebert/ponytail", "source": "npm" }
+    {
+      "id": "@dietrichgebert/ponytail",
+      "source": "npm"
+    }
   ],
   "pi": [
-    { "id": "git:github.com/DietrichGebert/ponytail" }
+    {
+      "id": "git:github.com/DietrichGebert/ponytail"
+    }
   ]
 }

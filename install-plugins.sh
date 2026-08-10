@@ -38,10 +38,11 @@ if command -v claude >/dev/null 2>&1; then
     marketplace_seen=""
     for i in $(seq 0 $((count - 1))); do
       id=$(jq -r ".claude[$i].id" "$CONFIG")
-      marketplace_url=$(jq -r ".claude[$i].marketplace_url" "$CONFIG")
+      marketplace_url=$(jq -r ".claude[$i].marketplace_url // empty" "$CONFIG")
       if ! claude plugin list 2>/dev/null | grep -q "$id"; then
-        # Add marketplace if not already seen (simple substring dedup)
-        case " $marketplace_seen " in
+        # Add marketplace if not already seen (simple substring dedup).
+        # Empty/absent url = a built-in marketplace (claude-plugins-official).
+        [ -n "$marketplace_url" ] && case " $marketplace_seen " in
           *" $marketplace_url "*) ;;
           *)
             echo "Claude Code: adding marketplace $marketplace_url ..."
