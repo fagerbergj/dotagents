@@ -27,23 +27,25 @@ else
   echo "warn: npm not found; skipping typescript-language-server" >&2
 fi
 
-# --- kotlin-language-server (Kotlin) ---
-# fwcd/kotlin-language-server ships a server.zip release; needs a JRE at runtime.
-if have kotlin-language-server; then
-  echo "LSP: kotlin-language-server already installed"
-elif have curl && have unzip; then
-  echo "LSP: installing kotlin-language-server ..."
-  dest="$HOME/.local/share/kotlin-language-server"
+# --- kotlin-lsp (Kotlin, JetBrains) ---
+# Standalone build off their CDN; GitHub releases carry no assets and links
+# rotate weekly, so the version is pinned - bump deliberately (RELEASES.md).
+# Both Claude Code's kotlin-lsp plugin and .pi/lsp.json expect this binary.
+KOTLIN_LSP_VERSION="262.9593.0"
+if have kotlin-lsp; then
+  echo "LSP: kotlin-lsp already installed"
+elif have curl; then
+  echo "LSP: installing kotlin-lsp $KOTLIN_LSP_VERSION ..."
+  dest="$HOME/.local/share/kotlin-lsp"
   mkdir -p "$dest" "$HOME/.local/bin"
-  tmp=$(mktemp -d)
-  curl -fsSL -o "$tmp/server.zip" https://github.com/fwcd/kotlin-language-server/releases/latest/download/server.zip
-  unzip -qo "$tmp/server.zip" -d "$dest"
-  rm -rf "$tmp"
-  ln -sf "$dest/server/bin/kotlin-language-server" "$HOME/.local/bin/kotlin-language-server"
-  have java || echo "warn: no java on PATH - kotlin-language-server needs a JRE to run" >&2
-  have kotlin-language-server || echo "warn: ~/.local/bin is not on PATH" >&2
+  curl -fsSL "https://download-cdn.jetbrains.com/language-server/kotlin-server/$KOTLIN_LSP_VERSION/kotlin-server-$KOTLIN_LSP_VERSION.tar.gz" |
+    tar -xzf - -C "$dest"
+  chmod +x "$dest/kotlin-server-$KOTLIN_LSP_VERSION/kotlin-lsp.sh"
+  ln -sf "$dest/kotlin-server-$KOTLIN_LSP_VERSION/kotlin-lsp.sh" "$HOME/.local/bin/kotlin-lsp"
+  have java || echo "warn: no java on PATH - kotlin-lsp needs a JRE 17+ to run" >&2
+  have kotlin-lsp || echo "warn: ~/.local/bin is not on PATH" >&2
 else
-  echo "warn: curl/unzip not found; skipping kotlin-language-server" >&2
+  echo "warn: curl not found; skipping kotlin-lsp" >&2
 fi
 
 echo "Done with LSP servers."
