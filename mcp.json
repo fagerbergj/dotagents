@@ -1,9 +1,4 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
-  "mcpServers": {
-    "deepwiki": {
-      "type": "streamable-http",
-      "url": "http://jason-server:3008/mcp"
-    }
-  }
+  "mcpServers": {}
 }
