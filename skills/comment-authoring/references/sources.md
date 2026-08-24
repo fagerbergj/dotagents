@@ -1,29 +1,32 @@
-# Comment Authoring - Sources and Attribution
+# Comment Authoring References
 
-The SKILL.md body states the house rules directly: comments say what code cannot, capped at ~3 lines, no incident narratives. Those are stricter than the general industry guidance below and win on any conflict - most sources here would accept a longer paragraph-style comment (e.g. Jane Street's own worked examples run 5-6 lines) where this skill caps at 3.
+Load this reference for language-specific public API conventions or source attribution. The skill's one-or-two-line limit applies to local comments, not public API contracts.
 
-## Example attribution
+## Language Conventions
 
-- **Timeout-units example** (non-obvious constraint + warning), adapted from Google Testing Blog, [Code Health: To Comment or Not to Comment?](https://testing.googleblog.com/2017/07/code-health-to-comment-or-not-to-comment.html) - compressed from the source's 3-line prose form to fit the 3-line ceiling.
-- **`n = best_node` rename example**, from [Stack Overflow Blog: Best Practices for Writing Code Comments](https://stackoverflow.blog/2021/12/23/best-practices-for-writing-code-comments/).
-- **Module-level "Array of tuples" example**, from Jane Street, [10 Tips for Writing Comments (Plus One More)](https://blog.janestreet.com/10-tips-for-writing-comments-plus-one-more/) - originally about an OCaml module; the principle (one high-level comment eliminates dozens of line comments) is language-agnostic.
-- **Performance-hack one-clause example**, adapted from the same Jane Street post's "disimprovements that look like bugs" principle; the source's version is a full sentence, compressed here to a single clause per the house rule.
-- **Bug-fix comment example**, original to this skill, illustrating the house rule that the incident (date, ticket, node ID) belongs in the commit message, not the source.
+| Language | Convention | Primary source |
+| --- | --- | --- |
+| Go | `// Name ...` directly above the declaration, with no separating blank line | [Go doc comments](https://go.dev/doc/comment) |
+| Python | Triple-quoted docstring; one-line summary, then a blank line before detail | [PEP 257](https://peps.python.org/pep-0257/) |
+| Rust | `///` for item docs and `//!` for enclosing-item docs | [The rustdoc book](https://doc.rust-lang.org/rustdoc/) |
+| Java | `/** ... */` Javadoc attached to the API; document parameters, returns, and thrown errors when the signature does not suffice | [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html) |
+| C++ | Follow the repository's Doxygen or `///` convention consistently | [Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html) |
+| JavaScript / TypeScript | Follow the repository's JSDoc or TSDoc convention; document runtime behavior rather than repeating static types | [TypeScript JSDoc reference](https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html) |
 
-## Full source list
+## Research Basis
 
-- [Google Testing Blog: Code Health: To Comment or Not to Comment?](https://testing.googleblog.com/2017/07/code-health-to-comment-or-not-to-comment.html)
-- [Google Eng Practices: What to Look for in a Code Review](https://google.github.io/eng-practices/review/reviewer/looking-for.html)
-- [Google Style Guide: Documentation Best Practices](https://google.github.io/styleguide/docguide/best_practices.html)
-- [Jane Street Blog: 10 Tips for Writing Comments (Plus One More)](https://blog.janestreet.com/10-tips-for-writing-comments-plus-one-more/)
-- [Kevlin Henney, ACCU Overload: Comment Only What The Code Cannot Say](https://accu.org/journals/overload/28/157/henney_2796/)
-- [Robert C. Martin (Uncle Bob), Clean Code Blog: Necessary Comments](https://blog.cleancoder.com/uncle-bob/2017/02/23/NecessaryComments.html)
-- [Clean Code Tip of the Week #5: Avoid Redundant Comments (InformIT)](https://www.informit.com/articles/article.aspx?p=1327761)
-- [Clean Code Tip of the Week #4: Avoid Obsolete Comments (InformIT)](https://www.informit.com/articles/article.aspx?p=1326509)
-- [The Craftsman C1: Inappropriate Information (Object Mentor)](https://objectmentor.com/resources/articles/The_Craftsman_52.htm)
-- [Stack Overflow Blog: Best Practices for Writing Code Comments](https://stackoverflow.blog/2021/12/23/best-practices-for-writing-code-comments/)
-- [Ruthlessly Helpful: Rules for Commenting Code (Tim Ottinger)](https://ruthlesslyhelpful.net/2012/02/25/rules-for-commenting-code/)
-- [The Pragmatic Programmer: It's All Writing (Comments in Code)](https://flylib.com/books/en/1.315.1.73/1/)
-- [StepSize: The Engineer's Guide to Writing Meaningful Code Comments](https://stepsize.com/blog/the-engineers-guide-to-writing-code-comments)
-- [TypeScript Lang: JSDoc Reference](https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html)
-- [Microsoft FluidFramework Wiki: TSDoc Guidelines](https://github.com/microsoft/FluidFramework/wiki/TSDoc-Guidelines)
+- [Lanza and Robbes, *How Programmers Write Comments: A Survey Study*](https://arxiv.org/abs/1710.00830): developers value rationale and usage comments, while common comments often restate code.
+- [Martin Fowler et al., *Refactoring*](https://refactoring.com/book/): improve unclear code before explaining it with comments.
+- [Steve McConnell, *Code Complete*](https://www.oreilly.com/library/view/code-complete-2nd/0672322409/): document intent and constraints rather than mechanics.
+- [Google C++ Style Guide: Comments](https://google.github.io/styleguide/cppguide.html): comments must remain accurate and describe non-obvious behavior and interfaces.
+- [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html): Javadoc placement and formatting conventions.
+- [Go documentation comments](https://go.dev/doc/comment): canonical godoc syntax and package/declaration guidance.
+- [PEP 257](https://peps.python.org/pep-0257/): canonical Python docstring conventions.
+- [The rustdoc book](https://doc.rust-lang.org/rustdoc/): canonical Rust documentation syntax.
+
+## Practical References
+
+- [Google Testing Blog: To Comment or Not to Comment?](https://testing.googleblog.com/2017/07/code-health-to-comment-or-not-to-comment.html)
+- [Google Engineering Practices: What to Look for in a Code Review](https://google.github.io/eng-practices/review/reviewer/looking-for.html)
+- [Jane Street: 10 Tips for Writing Comments](https://blog.janestreet.com/10-tips-for-writing-comments-plus-one-more/)
+- [Kevlin Henney: Comment Only What the Code Cannot Say](https://accu.org/journals/overload/28/157/henney_2796/)

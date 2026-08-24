@@ -1,108 +1,102 @@
 ---
 name: comment-authoring
-description: >
-  How to write code comments that earn their keep - what to comment, what to delete, and how
-  short a comment must stay. Covers inline comments, module/file-level context, bug-fix
-  comments, TODOs, and doc comments (godoc/JSDoc) at API boundaries. Use when writing new
-  comments, reviewing comments in a diff, or auditing existing comments for staleness or bloat.
+description: |
+  Authors and audits code comments that explain intent, constraints, invariants, workarounds, security, performance, or public API contracts without narrating the code. Use when writing comments, TODOs, docstrings, godoc, Javadoc, JSDoc, or TSDoc; reviewing comment quality; or updating comments beside changed code.
 license: MIT
 metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
-  version: "1.0"
+  version: "2.0"
 ---
 
 # Comment Authoring
 
-A comment earns its place only by saying what the code cannot: a non-obvious *why*, a constraint or invariant, the ceiling of a deliberate shortcut, or a warning that stops the next person breaking something. Everything else - what the code plainly does, how the team got here, an incident's blow-by-blow - belongs in the commit message (see `commit-authoring`) or nowhere.
+## Overview
+
+Comments say what code cannot. First make the code clear through names and structure; then comment only the intent, constraint, or contract a competent maintainer could otherwise misunderstand. Local comments stay short. Public API documentation follows the language's tooling convention and may be longer when the contract requires it.
 
 ## When to Use
 
-Writing a new comment, reviewing comments in someone else's diff, or auditing an existing file where comments have drifted from the code.
+- Writing or revising an inline, block, file-level, or public API comment.
+- Adding a TODO, workaround note, security rationale, or performance constraint.
+- Reviewing a diff for stale, redundant, or missing comments.
+- Changing code next to an existing comment.
 
 ## When NOT to Use
 
-- Explaining the fix's history, root cause, or scope - that's the commit body (`commit-authoring`), not the source file.
-- Documenting a design decision's rationale for posterity - that's an ADR (`adr-authoring`) if it's significant enough to need one.
-- The fix itself is a rename or a simpler structure - see Delete-Don't-Defend below before reaching for a comment at all.
+- Put change history, incident narratives, and review context in the commit or PR.
+- Put durable architectural decisions in an ADR.
+- Rename, extract, or simplify code instead of commenting around unclear structure.
+- Do not add comments merely to increase documentation coverage.
 
-## The Rule: Say What the Code Cannot
+## Step-by-Step Procedure
 
-| Keep | Cut |
-|---|---|
-| Non-obvious *why* - the constraint that made this the right call | What the code plainly does (`i++ // add one to i`) |
-| An invariant or constraint the next editor must not violate | How the team got here (that's the commit) |
-| The ceiling of a deliberate shortcut - what it doesn't handle | An incident narrative - dates, ticket/node IDs, token counts, quoted output |
-| A warning that prevents a specific, non-obvious mistake | Praise, apology, or commentary on the code's quality |
-| A link to the algorithm or spec being implemented | Rejected alternatives or a change history |
+- [ ] **Read the code in context.** Check callers, tests, adjacent comments, and the surrounding file's established style.
+- [ ] **Try code first.** Rename or restructure when that makes the intent obvious without prose.
+- [ ] **Apply the decision test.** Could a competent reader be misled about intent, constraints, or the contract using only the code and good names? If no, do not comment.
+- [ ] **Choose the comment's job.** State one of: rationale, invariant, workaround, edge case, performance or security constraint, public contract, or actionable future work.
+- [ ] **Write at the narrowest scope.** Put the comment immediately above the code it governs; use file-level context only when one fact explains the whole file.
+- [ ] **Verify it against the code.** Remove or update any adjacent comment made stale by the change.
 
-If a comment could be deleted by renaming a variable or extracting a function, that's the fix - not the comment. See Delete-Don't-Defend.
+## What Earns a Comment
 
-## Length Ceiling: ~3 Lines
+- **Intent or tradeoff:** why the obvious implementation is wrong here.
+- **Invariant or contract:** an assumption or guarantee not enforced by types or tests.
+- **Workaround:** the external bug or limitation forcing this shape, with an issue, spec, or vendor link when it helps future removal.
+- **Subtle edge case:** the specific case a reasonable editor could break.
+- **Performance or security:** the measured cost or threat that makes surprising code necessary.
+- **Public API:** behavior, errors, ownership, side effects, and limits callers must know.
+- **TODO:** the action, reason for deferral, and accountable ticket or owner when one exists.
 
-If one line of code needs three or more lines of comment, the comment is too long - simplify the code or cut the comment down to the one clause that matters. A load-bearing war story compresses to a single clause:
+## Delete These
 
-```go
-// performance hack: this redundant allocation avoids a GC pause on the hot path.
-var cache *Entry
-```
+- Line-by-line narration or English translations of names and statements.
+- Comments that compensate for a bad name or needlessly complex structure.
+- Stale comments, commented-out code, separator banners, praise, apologies, and venting.
+- Vague warnings such as `magic`, `handles errors`, or `do not touch` without the concrete constraint.
+- History that does not help a maintainer preserve or remove the current behavior.
 
-Not a paragraph, not a timeline, not a link to the incident. If the constraint needs more than a clause to state, it usually means the constraint itself needs a smaller, plainer explanation - not a longer comment.
+## Local Comments
 
-## Delete-Don't-Defend
-
-Two failure modes, two fixes:
-
-- **A comment restates the code.** Delete it. `x = x + 1 // increment x` adds nothing and will drift the first time the line changes.
-- **A comment excuses an unclear name.** Don't keep the comment - rename. `n = best_node // n is the best node candidate` should be `bestNode = ...` with no comment at all.
-
-## Wrong Beats Absent - Never
-
-A stale comment actively misleads; an absent one just leaves a gap. Change the comment in the same commit as the code it describes, every time - a comment that survived a refactor unchanged is a bug, not documentation.
-
-## Module and File-Level Context
-
-A short comment at the top of a file or module that states the one thing that makes everything below it click is disproportionately valuable - it can replace dozens of line-level comments. Keep it to two or three lines: what this thing is, in terms the reader doesn't already have.
+Keep inline and local block comments to one or two lines. Use problem-domain language and explain why, not what.
 
 ```go
-// Array of tuples, except the tuples aren't boxed: slots may be pointers,
-// but the tuples themselves are inlined directly into the array.
+// Retry after refresh: the first token may expire between lookup and use.
+return client.Call(refresh(ctx))
 ```
 
-## Bug-Fix Comments
+A bug or ticket link belongs in source only when it identifies a live workaround, specification, or removal condition. Dates, incident timelines, and who found the bug belong in the commit or PR.
 
-Capture the root-cause constraint in a clause. The incident - date, ticket number, node ID, who found it - goes in the commit message, never the source.
+## Public API Documentation
 
-Bad (incident narrative in the source):
-```python
-# Fixed 2026-08-03 after node abc123 crashed in prod, see INC-4521. Root
-# cause was a nil session map during the 3am batch job. Also cleaned up
-# the retry logic while here.
-if session_map is None:
-    session_map = {}
+Document contracts, not signatures. Follow the repository's language and tooling convention; public does not mean every declaration needs prose when the project deliberately relies on generated or self-describing APIs.
+
+For Go, attach `// Name ...` directly above the declaration. For Python, use a PEP 257 docstring. For Rust use rustdoc, and for Java, C++, JavaScript, or TypeScript use the project's Javadoc, Doxygen, JSDoc, or TSDoc convention.
+
+## TODOs
+
+Use `TODO(owner-or-ticket): action and reason`. A TODO without a next action or removal condition is not a plan. Never keep commented-out code; version control already stores it.
+
+```java
+// TODO(SEC-231): use constant-time comparison after upgrading crypto to 1.4.
 ```
 
-Good (the constraint, nothing else):
-```python
-# Guard a nil map on first request - RunNode doesn't initialize
-# session state until the first event lands.
-if session_map is None:
-    session_map = {}
-```
+## Gotchas
 
-## TODOs and Commented-Out Code
+- A wrong comment is worse than no comment. Treat comment updates as part of the behavior change.
+- The one-or-two-line ceiling applies to local comments, not API contracts that genuinely need more detail.
+- An issue link without a stated constraint makes readers leave the file to learn why the code exists.
+- A comment can explain why a deliberate inefficiency remains; it cannot substitute for evidence that the tradeoff matters.
 
-A TODO is scoped and actionable - what's missing and, where it matters, an issue reference. `// TODO: handle empty input` with no more context than that is a confession, not a plan. Commented-out code is never committed: version control already has the deleted version: delete the comment along with the code, not the other way around.
+## Validation Loop
 
-## Doc Comments Are a Different Contract
-
-At an API boundary (godoc, JSDoc, docstrings), the doc comment documents the *contract* - usage, arguments, return values, errors - not the implementation. It answers "how do I call this and what can go wrong," which is a different question than an inline comment answers, and it doesn't restate the signature the reader can already see (`removes elt from t` above a function called `remove(t, elt)` says nothing new).
-
-## Check Before Committing
-
-Says why, not what · fits in ~3 lines or fewer · no dates/IDs/token counts/quoted output · would survive a rename-the-variable test (i.e., isn't excusing a bad name) · changed in this same commit if the code it describes changed.
+1. Read the code once without the comment. Delete the comment if names and structure already provide the same information.
+2. Check that every claim is true for the current implementation and its callers.
+3. Confirm the comment states one job, sits at the right scope, and follows language tooling rules.
+4. Search the diff for commented-out code, stale references, vague TODOs, and narration.
+5. Run `git diff --check`.
 
 ## Resources
 
-`references/sources.md` - full source list and attribution for the examples above; load only if you need to cite a claim.
+Read `references/sources.md` when documenting a public API in an unfamiliar language, choosing a TODO convention, or citing the research behind these rules.
