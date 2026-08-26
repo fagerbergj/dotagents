@@ -1,0 +1,209 @@
+name: Publish eval results
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'skills/**'
+      - 'evals/**'
+  workflow_dispatch:
+
+# Publishing is a read-modify-write of one branch. Two runs building on the same
+# parent would each push a store missing the other's rows; serialising them means
+# the second one merges on top instead. cancel-in-progress stays false: a cancelled
+# run is a silently dropped result, which is the thing this branch exists to avoid.
+concurrency:
+  group: eval-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish eval results to the eval-results branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # push the eval-results branch
+      actions: read         # list and download the PR run's artifacts
+      pull-requests: read   # find the PR this commit merged
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLISH_MODEL_LABEL: ci
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect affected suites
+        id: detect
+        run: |
+          # The push range is the PR's whole diff for both a merge and a squash
+          # commit, and is still right for a commit pushed straight to main.
+          base="${{ github.event.before }}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            # --verify -q, because plain rev-parse echoes the argument back on
+            # stdout when it cannot resolve it, which would set base to a literal
+            # "<sha>^" and take the git diff below down with it.
+            base="$(git rev-parse --verify -q "${{ github.sha }}^" || echo '')"
+          fi
+          if [ -n "$base" ]; then
+            git diff --name-only "$base" "${{ github.sha }}" > /tmp/changed-files.txt
+          else
+            git ls-tree -r --name-only "${{ github.sha }}" > /tmp/changed-files.txt
+          fi
+          suites="$(.github/scripts/detect-suites.sh "$GITHUB_WORKSPACE" < /tmp/changed-files.txt | jq -c '[.[].name]')"
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
+          echo "Affected suites: $suites"
+
+      # Reuse over re-run: a PR that already paid for these numbers should not pay
+      # again on merge. The artifact is found by walking commit -> merged PR -> that
+      # PR's Evals run -> its artifacts. Any link can be missing (evals were never
+      # approved, the artifact aged out of its retention window, the commit was
+      # pushed straight to main) and every one of those falls through to a re-run
+      # rather than failing - a missing artifact is normal, not an error.
+      #
+      # Artifacts are matched by the filename run.sh writes, `<suite>@<version>.json`,
+      # not by artifact name, so renaming the upload in evals.yml does not break this.
+      - name: Look for the merged PR's eval artifacts
+        id: reuse
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/reused
+          pr="$(gh api "repos/$GITHUB_REPOSITORY/commits/${{ github.sha }}/pulls" \
+                  --jq 'map(select(.merged_at != null)) | .[0].number' 2>/dev/null || echo '')"
+          if [ -z "$pr" ] || [ "$pr" = "null" ]; then
+            echo "no merged PR found for ${{ github.sha }}; will re-run"
+            echo "head_sha=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          head_sha="$(gh pr view "$pr" --json headRefOid --jq .headRefOid)"
+          echo "PR #$pr, head $head_sha"
+          run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$head_sha&per_page=100" \
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/evals.yml")]
+                  | sort_by(.run_started_at) | last | .id' 2>/dev/null || echo '')"
+          if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+            echo "no Evals run for $head_sha; will re-run"
+            echo "head_sha=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # Downloads every artifact that run uploaded; empty or expired is fine.
+          gh run download "$run_id" -D /tmp/reused || echo "no downloadable artifacts on run $run_id"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          find /tmp/reused -name '*.json' -print
+
+      - name: Decide reuse vs re-run per suite
+        id: plan
+        env:
+          SUITES: ${{ steps.detect.outputs.suites }}
+          HEAD_SHA: ${{ steps.reuse.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          : > /tmp/manifest.tsv          # suite \t json \t source-sha \t reused|rerun
+          rerun=()
+          for suite in $(echo "$SUITES" | jq -r '.[]'); do
+            found="$(find /tmp/reused -type f \( -name "$suite@*.json" -o -name "$suite.json" \) 2>/dev/null | head -1)"
+            if [ -n "$found" ] && jq -e '.results.results | length > 0' "$found" >/dev/null 2>&1; then
+              printf '%s\t%s\t%s\treused\n' "$suite" "$found" "$HEAD_SHA" >> /tmp/manifest.tsv
+            else
+              rerun+=("$suite")
+            fi
+          done
+          printf 'rerun=%s\n' "$(printf '%s\n' "${rerun[@]+"${rerun[@]}"}" | jq -R . | jq -sc 'map(select(. != ""))')" >> "$GITHUB_OUTPUT"
+          echo "Reusing:"; cut -f1 /tmp/manifest.tsv || true
+          echo "Re-running: ${rerun[*]-none}"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install eval deps
+        if: steps.plan.outputs.rerun != '[]'
+        working-directory: evals
+        run: npm ci
+
+      # Only reached when no usable artifact exists, and the only step that spends
+      # money. run.sh is the same entry point the PR workflow uses, so the free
+      # checks it fronts (assertion self-tests, check-case-vars.py, check-suite.py)
+      # and the per-suite PROMPTFOO_CONFIG_DIR come along with it - concurrent
+      # suites sharing one config dir deadlock promptfoo's SQLite with
+      # "database is locked". Suites run one at a time here: this is a rare
+      # fallback, and serialising keeps the publish step a single push.
+      - name: Re-run suites with no reusable artifact
+        if: steps.plan.outputs.rerun != '[]'
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Assertion-level providers ignore apiKeyEnvar and fall back to the
+          # OpenAI-compatible key, so judges 401 unless this points at the same key.
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          RERUN: ${{ steps.plan.outputs.rerun }}
+          MERGE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for suite in $(echo "$RERUN" | jq -r '.[]'); do
+            PROMPTFOO_CONFIG_DIR="/tmp/pf-$suite" evals/run.sh "$suite"
+            json="$(ls -t evals/results/"$suite"@*.json 2>/dev/null | head -1)"
+            if [ -z "$json" ]; then
+              echo "::warning::$suite produced no results file; not publishing it"
+              continue
+            fi
+            printf '%s\t%s\t%s\trerun\n' "$suite" "$(realpath "$json")" "$MERGE_SHA" >> /tmp/manifest.tsv
+          done
+
+      # A run whose graders errored, or whose arms lost different numbers of rows,
+      # is not a measurement: report.js prints CAUTION for exactly those two, and
+      # an uneven drop averages one arm over a smaller denominator without saying
+      # so. Publishing it would put a wrong number somewhere linkable, so the suite
+      # is dropped here and named in the commit message instead.
+      - name: Drop suites whose run errored
+        id: gate
+        run: |
+          set -euo pipefail
+          : > /tmp/publish.tsv
+          skipped=()
+          while IFS=$'\t' read -r suite json sha kind; do
+            [ -n "${suite:-}" ] || continue
+            why="$(node evals/report.js "$json" 2>&1 >/dev/null | grep -o 'CAUTION: [^.]*' | head -1 || true)"
+            if [ -n "$why" ]; then
+              echo "::warning::$suite not published - $why"
+              skipped+=("$suite ($why)")
+            else
+              printf '%s\t%s\t%s\t%s\n' "$suite" "$json" "$sha" "$kind" >> /tmp/publish.tsv
+            fi
+          done < /tmp/manifest.tsv
+          note=""
+          [ ${#skipped[@]} -gt 0 ] && note="Not published (run errored): $(printf '%s; ' "${skipped[@]}")"
+          {
+            echo "note=$note"
+            # hashFiles() only sees paths under the workspace, so it cannot test
+            # this file. A plain flag is what the `if:` below reads.
+            [ -s /tmp/publish.tsv ] && echo "any=true" || echo "any=false"
+          } >> "$GITHUB_OUTPUT"
+          cat /tmp/publish.tsv
+
+      - name: Publish to the eval-results branch
+        if: steps.gate.outputs.any == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO_DIR: ${{ github.workspace }}
+          MERGE_SHA: ${{ github.sha }}
+          SKIPPED_NOTE: ${{ steps.gate.outputs.note }}
+        run: |
+          .github/scripts/publish-results.sh /tmp/publish.tsv "$MERGE_SHA" \
+            "$PUBLISH_MODEL_LABEL" "$SKIPPED_NOTE"
+
+      - name: Summary
+        if: always()
+        env:
+          SKIPPED_NOTE: ${{ steps.gate.outputs.note }}
+        run: |
+          {
+            echo "## Eval publish for \`${GITHUB_SHA:0:7}\`"
+            echo
+            if [ -s /tmp/publish.tsv ]; then
+              echo "| suite | measured against | source |"
+              echo "|---|---|---|"
+              awk -F'\t' '{ printf "| `%s` | `%s` | %s |\n", $1, substr($3,1,7), $4 }' /tmp/publish.tsv
+              echo
+              echo "A \`measured against\` SHA other than \`${GITHUB_SHA:0:7}\` came from the PR's artifact and predates the merge."
+            else
+              echo "Nothing published."
+            fi
+            [ -n "${SKIPPED_NOTE:-}" ] && { echo; echo "$SKIPPED_NOTE"; }
+          } >> "$GITHUB_STEP_SUMMARY" || true
