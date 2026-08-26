@@ -9,6 +9,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
+  version: "1.0"
 ---
 
 # Format Markdown Skill

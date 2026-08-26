@@ -1,0 +1,9 @@
+{
+  "name": "dotagents-evals",
+  "private": true,
+  "description": "Eval suites for the skills in ../skills. Graders that need a real parser depend on it here rather than shelling out to npx.",
+  "dependencies": {
+    "conventional-commits-parser": "7.1.2",
+    "markdown-it": "15.0.0"
+  }
+}

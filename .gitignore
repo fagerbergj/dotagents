@@ -1,2 +1,6 @@
-mcp.json
+.env
 .pi-glla/
+evals/.cache/
+evals/results/
+mcp.json
+node_modules
