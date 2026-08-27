@@ -1,0 +1,297 @@
+# Cases span what the skill's description says it is for: substantial,
+# cross-team, public-interface, or hard-to-reverse changes - plus two changes
+# that are none of those, where the right answer is to turn the process down.
+# Tasks are what the engineer actually typed. They never name a document type,
+# a section, or anything else the skill would tell an author to do.
+
+- description: public API - money fields change shape under six partners
+  vars:
+    task: |
+      ok, the float thing again. every month reconciliation comes back off by a few cents and I'm in another thread explaining IEEE 754 to a partner's finance person. `amount` on /v1/invoices and /v1/payments should be an integer of minor units. and renamed, `amount_minor`, because silently changing what a number means is worse than breaking it loudly. the catch is v1 is public - six partners, plus our iOS app and the billing dashboard. one of those partners hasn't touched their integration since 2023 and the email on the account bounces.
+    rubric: |
+      It must be clear what the field becomes, that every existing v1 caller
+      breaks on the naive version, and how callers get from the old shape to
+      the new one without a flag day.
+  assert: &proposal
+    # The old decision_owner and decision_deadline regexes matched
+    # "decision-maker", "sign-off" and "comment period" - all SKILL.md
+    # vocabulary - so they paid the skill arm for reciting itself. What they
+    # were reaching for is now a judged criterion.
+    #
+    # Grounding, and what it is not. Two of these sources are also cited in
+    # references/industry-examples.md - Go's staged gate at line 52, the
+    # Squarespace approver/reviewer split at line 79 - so the earlier claim
+    # here that the grounding sat outside that file was false. What holds
+    # instead, and is the reason recitation is not a risk: lib/arms.js inlines
+    # only SKILL.md, never references/, and SKILL.md names Go, Rust and Mozilla
+    # once (line 50, "different artifacts, gates, and meanings") without
+    # carrying any of the substance below. The skill arm cannot recite a file
+    # it is never shown.
+    #
+    # Blast radius comes from the Squarespace RFC template's Dependencies and
+    # Operations prompts; decision from that template's Approver(s) versus
+    # "other reviewer(s)" split plus the Mozilla template's Start date / End
+    # date header fields; the case against from Rust's "Why should we *not* do
+    # this?"; reversibility from the skill description's own "hard-to-reverse"
+    # plus the Squarespace template's Risks prompt.
+    #
+    # "Proposal, not problem restated" carries no citation on purpose. It used
+    # to be grounded on Go's triage gate with the gloss "a restated problem
+    # cannot be accepted or declined", which the source does not say: step 2 is
+    # a three-outcome triage - accept, decline, or ask for a design doc - so a
+    # proposal can be decided at the first gate, and nothing there turns on how
+    # the problem is worded. It is a house criterion, and it stands as one.
+    - type: llm-rubric
+      value: |
+        An engineer described this situation to a colleague - "{{task}}" - and received
+        the document below. Score from 0 to 1, never above 1.
+
+        Proposal, not problem restated: the document commits to one change and states it
+        precisely enough that a reader could disagree with the change itself rather than
+        only with the problem. Quote the sentence that says what will be done, or answer
+        NONE. A document that surveys the situation, lists considerations, or asks the
+        reader to pick scores zero on this point.
+
+        Blast radius: it names specific parties outside the author's own service that this
+        change acts on - other teams, existing callers, stored data, published interfaces -
+        and says what each of them has to do. Quote the sentence that names one, or answer
+        NONE. "Downstream consumers may be affected" is NONE.
+
+        Decision: a reader on another team can tell who has the authority to accept or
+        reject this, and by when, in time for an objection to still matter. Quote the text,
+        or answer NONE. A list of people to notify is not a decision owner. A schedule for
+        the implementation work is not a decision date.
+
+        Additional requirement for this case: {{rubric}}
+
+        Score from 0 to 1, never above 1: award 0.25 for each of Proposal, Blast radius,
+        Decision, and the additional requirement for this case that you answered with a
+        quote, and nothing for each NONE. Judge the document as delivered. Do not reward or
+        penalise its length, its headings, which sections it contains, or whether it follows
+        any authoring convention. Fluent prose that produced NONE answers scores below plain
+        prose that produced quotes.
+      threshold: 0.7
+      metric: proposal_quality
+    - type: llm-rubric
+      value: |
+        An engineer described this situation to a colleague - "{{task}}" - and received
+        the document below. Score the document only on whether it is honest with its
+        reader. Score from 0 to 1, never above 1.
+
+        The case against: it gives a reader a reason not to do this, or not to do it this
+        way - a cost the author is accepting, a group of users it makes worse off, or a
+        rejected alternative put strongly enough that its appeal is visible. Quote it, or
+        answer NONE. A document in which every consideration resolves in favour of the
+        proposal scores zero on this point however well argued, and a drawback that is
+        raised and immediately dismissed in the same breath is NONE.
+
+        Reversibility: it distinguishes what cannot be undone once this ships from what
+        can, and says what the recovery is when it goes wrong. Quote it, or answer NONE.
+        An unqualified assurance that the change is safe scores zero, and so does a
+        rollback plan that would not actually recover the part the document itself called
+        irreversible.
+
+        Nothing invented: every system, team, person, version, figure and identifier the
+        document presents as established fact appears in what the engineer said. List any
+        that do not, or answer NONE. An unsourced specific that is explicitly labelled an
+        assumption or an estimate does not count against it; one presented as fact does,
+        and each one lowers the score.
+
+        Score from 0 to 1, never above 1: award 0.34 for The case against and 0.34 for
+        Reversibility where you answered with a quote, and 0.32 for Nothing invented where
+        you answered NONE. Then subtract 0.34 for each unsourced specific you listed as
+        presented in fact, floored at 0. State the list and the arithmetic.
+
+        Judge the document as delivered. Do not reward or penalise its length, its
+        headings, or which sections it contains.
+      threshold: 0.7
+      metric: honest_tradeoffs
+- description: cross-team infrastructure - self-hosted Kafka to a managed service
+  vars:
+    task: |
+      My manager wants this written up before I take it to the platform sync, so here's the short version. We run our own Kafka - three brokers on EC2, about 40 topics - and I'm the only person here who has replaced a broker without taking downtime. Payments, Search and Fulfilment all have things on it, eleven services in total. I want to pay for the managed one instead. It's roughly 2.3x the EC2 bill, which is the bit I expect to get argued with about, and every one of those eleven services needs someone on that team to change connection config.
+    rubric: |
+      It must be clear which teams have to do work, what the cost change is,
+      and how the move happens without a coordinated outage across all three
+      teams at once.
+  assert: *proposal
+
+- description: hard-to-reverse data model - 32-bit user IDs are running out
+  vars:
+    task: |
+      user ids are int4. we're at 1.9B, ceiling is 2.1B, ~14 months at current signup rate. need to be on uuidv7 before that. pk on `users`, fk in 14 tables, biggest one is 90M rows. ids are also in urls people have bookmarked, in the warehouse, and in the nightly export two enterprise accounts ingest. not a weekend job and I don't want to find that out halfway through.
+    rubric: |
+      It must state what the new identifier is, what happens to the 14 tables
+      and the existing rows, and what breaks for the warehouse and the two
+      export customers.
+  assert: *proposal
+
+- description: shared library defaults - timeouts and retries change under 60 services
+  vars:
+    task: |
+      Following on from the cascade last month - the thing that turned one slow dependency into an outage is that our `httpclient` package defaults to no timeout and retries 5xx forever. I want the defaults to be 5s and 3 retries with backoff in the next minor. What makes me nervous: about 60 services depend on it and most of them never pass options at all, so they'd get new behaviour just from bumping the version. And there are at least two batch jobs I know of that hold requests open for minutes on purpose.
+    rubric: |
+      It must say what the new defaults are, acknowledge that services which
+      never passed options get new behaviour without changing a line, and say
+      what the long-running batch jobs are supposed to do.
+  assert: *proposal
+
+- description: close call - run the open-source flag server or pay the vendor
+  vars:
+    task: |
+      I've rewritten this three times and I keep changing my mind, so I'm going to lay it out and let someone else break the tie. Feature flags: right now every team hand-rolls env vars and it's bad. Either we self-host the open source flag server, which means our uptime, our on-call, another postgres to back up - or we pay the vendor, about $40k a year, but evaluation happens at their edge and the on-prem installs have no egress at all, so that's a hard no for those customers unless we do something else for them. Four teams are blocked waiting on this.
+    rubric: |
+      Both options must be represented fairly with their real costs, the
+      on-prem constraint must be confronted rather than glossed, and the
+      document must not pretend the choice is obvious.
+  assert: *proposal
+
+- description: cross-team auth - static shared API keys to short-lived OIDC tokens
+  vars:
+    task: |
+      The audit finding landed on me. Every service talks to every other service with a static api key that lives in the config repo, last rotated some time in 2024. Nine services. One of them isn't even ours, it runs in a partner's VPC. What I want is an OIDC issuer and short-lived tokens instead of the shared key. The complication is Fulfilment - they're halfway through their rewrite and I don't believe they can take this on this quarter, and I'd rather know that now than after I've said we're doing it.
+    rubric: |
+      It must say what replaces the static keys, name the service in the
+      partner VPC as the hard case, and account for Fulfilment being mid-
+      rewrite rather than assuming everyone moves at once.
+  assert: *proposal
+
+- description: public interface - deleting an SDK method enterprise contracts name
+  vars:
+    task: |
+      Can we finally kill `client.query()`? It concatenates sql into a string, which is exactly the footgun it looks like, and `client.execute()` with parameter binding has been there a year. Awkward parts: telemetry says ~70% of downloads still call the old one, and three of the enterprise contracts name it explicitly, which legal will have opinions about. 3.0 is penciled in for November so that's the window if we're doing it.
+    rubric: |
+      It must state what happens to `query()` and when, treat the three
+      contract customers as a real constraint, and give current callers a
+      path off the old method.
+  assert: *proposal
+
+- description: platform standard - one event envelope and a schema registry for five teams
+  vars:
+    task: |
+      Reporting maintains something like 30 parsers for what is fundamentally one event. Some producers send `ts`, some `timestamp`, one puts it in a header. I want one envelope everyone uses, and a registry that CI validates producers against. Five teams produce, roughly 120 event types between them. Reporting has to read both shapes for however long it takes, which is the part I genuinely can't estimate.
+    rubric: |
+      It must define the envelope concretely, say what producers and Reporting
+      each have to do, and be honest that 120 event types across five teams do
+      not move on one date.
+  assert: *proposal
+
+# Negative controls: five situations where a formal proposal is the wrong
+# artifact - too small and reversible, already decided elsewhere, or not a
+# proposal at all. A polished document here is the failure mode, not the
+# success. One metric across all five: `stays_short` and `semantic_quality`
+# used to split the same two cases in half, and at n=2 a metric moves by more
+# than any delta it could report.
+- description: negative control - internal file split behind an existing flag
+  vars:
+    task: |
+      `payments_handler.py` is 900 lines and I dread opening it. I want to split it into card/wallet/refund inside our own service. No api change, no schema change, nobody outside the team imports it, and it's all behind the `new_handler_layout` flag we already have, so if it's wrong I flip it back in a deploy. Do I owe anyone a writeup first or can I just get on with it?
+    rubric: |
+      This change is internal, reversible in one deploy, and touches no other
+      team. What it calls for instead is the ordinary path - open the pull
+      request, get a code review, note the flag in the ticket.
+  assert: &control
+    # The old pair of graders is gone. `declines_process` and
+    # `names_lighter_path` were regexes over prose - "\bPR\b" and "ticket" are
+    # both satisfied by a full RFC that happens to mention opening one. Their
+    # replacements, `stays_short` (a word-and-heading count) and
+    # `semantic_quality`, then split two cases between two metrics: a word count
+    # is the magic number AGENTS.md warns about, and its 0-or-1 verdict is a
+    # binary switch bolted onto a graded scale. Both are folded into the five
+    # enumerated points below, where "did it ship a document" is worth the same
+    # fixed fraction as everything else instead of flipping the row.
+    #
+    # The Go quote in the preamble is verified against the source and is also
+    # summarised in references/industry-examples.md:46-54. That is not a
+    # recitation risk: lib/arms.js inlines only SKILL.md, and the skill arm
+    # never sees references/.
+    - &control_rubric
+      type: llm-rubric
+      value: |
+        An engineer described this situation to a colleague - "{{task}}" - and received the
+        reply below. This situation does not warrant a formal written proposal.
+
+        The Go proposal process gates on a brief issue before any design document: "The
+        proposal author creates a brief issue describing the proposal. Note: There is no
+        need for a design document at this point." Brevity is the correct answer here and
+        must not be penalised. An answer that is short because the situation calls for
+        little is not thereby a worse answer.
+
+        Answer each of the five below about the reply, quoting its own words or answering
+        NONE:
+
+        1. It says plainly that a formal written proposal is not warranted here. Quote the
+           sentence, or answer NONE. A reply that hedges both ways - offering to write one
+           as an equally good option - is NONE.
+        2. It gives the reason, drawn from the specifics of this situation rather than
+           stated as a general rule about process. Quote it, or answer NONE.
+        3. It names the lighter thing to do instead, concretely enough to act on. Quote it,
+           or answer NONE. "Keep it informal" or "use your judgement" is NONE.
+        4. It is the answer itself rather than a prospective proposal document. Quote its
+           opening sentence, and say whether the reply reads as a recommendation addressed
+           to the engineer or as the proposal document the engineer was asking whether to
+           write. A reply built out of summary / motivation / alternatives / rollout /
+           decision sections is the document, and is NONE for this point however well each
+           section reads. Section headings on their own decide nothing: a two-line answer
+           under a heading is still the answer. Note that a reply that is the document is
+           already NONE on point 1 by definition - a document is not a recommendation
+           against writing one - so no separate cap on its score is needed or wanted.
+        5. It invents nothing - no system, team, risk, figure, deadline or constraint the
+           engineer did not mention. List every one it added; if the list is non-empty this
+           point is NONE.
+
+        Score from 0 to 1, never above 1: award 0.2 for each of the five points you
+        answered with a quote rather than NONE, and sum them. Award nothing for a point
+        you could not quote for, and no partial credit within a point. State the
+        arithmetic.
+
+        What the situation calls for instead, specific to this case: {{rubric}}
+
+        Judge the reply as delivered. Do not reward or penalise which features it used or
+        whether it followed any authoring convention.
+      threshold: 0.7
+      metric: control_quality
+
+- description: negative control - bumping a connection pool size
+  vars:
+    task: |
+      Checkout's postgres pool is capped at 20 and we sit on the ceiling through the Friday peak. The database itself is bored, plenty of headroom. I want to take it to 40. It's one env var, it ships in a normal deploy, and it's two minutes to put back if it's wrong. Does this need writing up for anyone or am I overthinking it?
+    rubric: |
+      This is a one-variable change, reversible in minutes, inside one service.
+      What it calls for instead is to ship it and record the number and the
+      reason where the next person will find it - the ticket or the changelog.
+  assert: *control
+
+- description: negative control - internal tool, revert undoes it
+  vars:
+    task: |
+      our internal ops console - the one only the four of us use - renders its worklist with a table we hand-rolled in 2022. sorting is broken on two columns and i keep meaning to fix it. i'd rather drop in a real datagrid component and delete the hand-rolled one. it's behind the same sso as everything else, no customer ever sees it, no other team imports it, and if it turns out worse than what we have i revert the pr. worth writing up first?
+    rubric: |
+      This is an internal tool used by one team, with no customer-facing or
+      cross-team surface, and reverting the pull request undoes it. What it
+      calls for instead is the ordinary path - open the pull request and let
+      the people who use the tool review it.
+  assert: *control
+
+- description: negative control - decision already taken, only needs recording
+  vars:
+    task: |
+      the architecture review two weeks ago went with sqs over the self-hosted rabbit, and that's settled - anwar signed it off in the meeting and platform have already started on the terraform. problem is the only trace of it is my notes and a calendar invite, and i've now had the same "why not rabbit" question three times from people who weren't in the room. do i write it up as a proposal so there's something to point at?
+    rubric: |
+      The choice is already made, signed off, and being implemented. A
+      prospective proposal asks for a decision that has already been taken.
+      What it calls for instead is a short record of the decision - what was
+      chosen, what else was on the table, and why - filed where the people
+      asking will find it.
+  assert: *control
+
+- description: negative control - a question, not a proposal
+  vars:
+    task: |
+      before i touch anything - does our rate limiter count per api key or per source ip? i've read the middleware twice and i genuinely can't tell, there's a bucket keyed off something that gets built two files away. i'm not proposing we change it, i just need to know which one it is before i can even say whether there's a problem here. sana wrote it originally but she's on leave until the 8th. should i put a writeup together on this?
+    rubric: |
+      The engineer has a question, not a proposal, and says so. There is
+      nothing yet to accept or reject. What it calls for instead is to trace
+      the key construction in the code or ask in the team channel, and to
+      revisit whether anything needs proposing only once the answer is known.
+  assert: *control
