@@ -39,9 +39,17 @@
     # question it asked is asked again by items 1-3 below.
     - &pr_quality
       type: llm-rubric
+      # A rubric only ever sees {{output}} and {{rubric}}, and this suite disables
+      # templating, so a {{note}} in the value below reaches the judge as those
+      # eight literal characters. Carry it in a tag of its own instead.
+      rubricPrompt:
+        - role: user
+          content: |
+            <AuthorNote>{{note}}</AuthorNote>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
       value: |
-        The author said this about the change:
-        "{{note}}"
+        The author's own note about the change is in <AuthorNote> above.
 
         A reviewer is about to review a code change and has seen nothing of it
         but this pull request. Judge the pull request as delivered: do not
@@ -877,9 +885,20 @@
     # share the identical wording; each brings its own proportionality ceiling.
     - &restraint
       type: llm-rubric
+      # Step 2 below marks each claim against the diff or the note, so the judge
+      # needs both. Without this it sees neither and every claim collapses to
+      # NEITHER. Values are substituted, not re-parsed, so a diff containing its
+      # own {{ is safe here.
+      rubricPrompt:
+        - role: user
+          content: |
+            <AuthorNote>{{note}}</AuthorNote>
+            <Diff>{{diff}}</Diff>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
       value: |
-        The author said this about the change:
-        "{{note}}"
+        The author's note is in <AuthorNote> above and the change itself is in
+        <Diff>.
 
         Judge the pull request as delivered: do not reward or penalise how it was
         built or which authoring convention it followed.

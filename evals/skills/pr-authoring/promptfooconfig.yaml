@@ -5,8 +5,9 @@ description: PR authoring skill effectiveness
 # table-driven test in one diff (`}{{MsgQueued, false}, ...`) parsed as a
 # nunjucks interpolation and killed that case in both arms silently. Graders are
 # exempt from this flag (promptfoo checks `!isGrader`), so rubric prompts still
-# render {{output}} and {{criteria}}. Nothing here interpolates vars into an
-# assertion value - if that changes, this flag has to go.
+# render {{output}} and {{criteria}}. Assertion values are NOT rendered, so a
+# rubric needing a case var carries its own `rubricPrompt` - see the pr_quality
+# and restraint anchors in tests/cases.yaml.
 env:
   PROMPTFOO_DISABLE_TEMPLATING: "1"
 
