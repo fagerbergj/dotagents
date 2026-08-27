@@ -62,7 +62,7 @@ Tests are not self-validating - a human must confirm they check for meaningful f
 
 - Walk the new tests alongside the new logic: **would they actually fail if the code were broken?** A test that passes no matter what is worse than none.
 - Do they cover the new branches, the edge cases, and the failure modes - or only the happy path?
-- New behavior with no test is a `blocking:` gap, not a nit.
+- The behaviour the change exists to deliver shipping with no test is a `blocking:` gap, not a nit. An untested edge case beside a tested main path is a `suggestion:` - see `references/severity.md`.
 
 ### 6. Categorize every finding by severity
 

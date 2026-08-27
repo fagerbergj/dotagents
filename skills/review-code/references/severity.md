@@ -8,8 +8,8 @@ The dividing line is not how strongly you feel. It is whether you can point at s
 A finding supported only by your preference is a `nit:`, however sure you are. A finding supported by an anchor below is `blocking:`, however small it looks.
 
 ## The anchors
-Calibrate before you reach for one. Google's standard is that a reviewer approves once the change **definitely improves overall code health**, even where it is not perfect - so on a well-made change the expected outcome is approve with comments, and a blocking finding is the exception you have to earn. Measured on ten real merged pull requests, this skill blocked all ten, including the five their own reviewer approved: the anchors below were wide enough that something always qualified.
 
+Calibrate before you reach for one. Google's standard is that a reviewer approves once the change **definitely improves overall code health**, even where it is not perfect - so on a well-made change the expected outcome is approve with comments, and a blocking finding is the exception you have to earn. Measured on ten real merged pull requests, this skill blocked all ten, including the five their own reviewer approved: the anchors below were wide enough that something always qualified.
 
 `blocking:` requires ONE of these, and the finding must say which:
 
@@ -45,7 +45,7 @@ Where no convention exists, accept the author's choice rather than inventing one
 
 **Design is not style.**
 "Aspects of software design are almost never a pure style issue or just a personal preference. They are based on underlying principles and should be weighed on those principles, not simply by personal opinion" (Google).
-Naming the principle is what separates a design block from a taste argument.
+Naming the principle is what separates a design block from a taste argument - and naming the concrete future defect it invites is what separates a block from a principle you could cite about most code.
 
 **Out of scope is not blocking here.**
 Concerns about adjacent code the change doesn't touch belong in a separate issue.
@@ -74,7 +74,7 @@ A finding about code you never read is fabrication, whatever label you put on it
 Three verdicts, three levels of confidence:
 
 - Any surviving `blocking:` → **request changes**. You found a defect.
-- Else any unresolved `question:` → **comment**. You may be missing something; approval withheld, no changes demanded.
+- Else any unresolved `question:` **whose answer could land on an anchor above** → **comment**. You may be missing something; approval withheld, no changes demanded. A question that could not change the verdict either way does not reach this rung - see `question:` above, and note that a reviewer told to verify rather than trust always has one.
 - Else → **approve**, even with suggestions and nits outstanding; say explicitly that they're non-blocking.
 
 ### request changes
