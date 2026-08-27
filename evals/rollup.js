@@ -114,6 +114,20 @@ if (fs.existsSync(store)) {
     rowsCsv.set(key({ model: m, mode: mo, metric: met }), { model: m, mode: mo, metric: met, value: val, n, sd });
   }
 }
+// Latency is the one figure a cache hit destroys: a cached row records the
+// lookup, not the generation it replayed. Store it on a fresh run so a later
+// fully-cached run can report the last real measurement instead of a blank.
+if (!renderOnly) {
+  for (const arm of [...new Set(rows.map((r) => r.prompt?.label).filter(Boolean))]) {
+    const live = rows.filter((r) => r.prompt.label === arm && !((r.tokenUsage?.cached || 0) > 0));
+    if (!live.length) continue;                       // wholly cached: nothing new to record
+    const secs = live.reduce((a, r) => a + (r.latencyMs || 0), 0) / live.length / 1000;
+    const mode = arm === 'no-skill' ? 'no-skill' : arm.replace('skill-current', `skill@${version}`);
+    rowsCsv.set(key({ model: label, mode, metric: 'latency_s' }),
+      { model: label, mode, metric: 'latency_s', value: secs.toFixed(2), n: String(live.length), sd: '' });
+  }
+}
+
 if (!renderOnly) for (const [mo, mets] of Object.entries(measured))
   for (const [met, val] of Object.entries(mets))
     rowsCsv.set(key({ model: label, mode: mo, metric: met }), { model: label, mode: mo, metric: met, value: String(val), ...shapeOf(met) });

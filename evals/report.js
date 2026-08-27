@@ -2,6 +2,7 @@
 // Per-metric, per-arm table from a promptfoo results file. The aggregate pass
 // rate is meaningless here: select-best fails every non-winning arm by design.
 const fs = require('node:fs');
+const path = require('node:path');
 
 const file = process.argv[2];
 const mdFlag = process.argv.indexOf('--md');
@@ -197,9 +198,27 @@ const wins = (arm) => rows.filter((r) => r.prompt.label === arm
 const anySelectBest = rows.some((r) => (r.gradingResult?.componentResults || [])
   .some((c) => c.assertion?.type === 'select-best'));
 
+// A cached row's latencyMs is the cache lookup, not the generation it replayed,
+// so a wholly-cached run has no latency of its own. Fall back to the last real
+// measurement recorded in the rollup store, and say that is what it is.
+let carried = null;
+function storedLatency() {
+  if (carried !== null) return carried;
+  carried = {};
+  try {
+    const store = path.join(path.dirname(file), `${path.basename(file).split('@')[0]}.csv`);
+    for (const line of fs.readFileSync(store, 'utf8').trim().split('\n').slice(1)) {
+      const [, mode, metric, value] = line.split(',').map((c) => c.replace(/^"|"$/g, ''));
+      if (metric === 'latency_s') carried[mode.startsWith('skill') ? 'skill-current' : mode] = Number(value);
+    }
+  } catch { /* no store yet - first run, or a PR checkout without one */ }
+  return carried;
+}
 const lat = (arm) => {
   const v = rows.filter((r) => r.prompt.label === arm && !isCached(r)).map((r) => r.latencyMs);
-  return v.length ? v.reduce((a, b) => a + b, 0) / v.length / 1000 : null;
+  if (v.length) return { s: v.reduce((a, b) => a + b, 0) / v.length / 1000, carried: false };
+  const prev = storedLatency()[arm];
+  return prev === undefined ? null : { s: prev, carried: true };
 };
 const tok = (arm) => {
   const v = rows.filter((r) => r.prompt.label === arm).map((r) => r.tokenUsage?.total || 0);
@@ -209,7 +228,8 @@ if (anySelectBest) {
   const tests = new Set(rows.map((r) => r.testIdx)).size;
   console.log('\n' + pad('select-best wins', w) + arms.map((a) => pad(`${wins(a)}/${tests}`, 16)).join(''));
 }
-console.log(pad('latency (s avg)', w) + arms.map((a) => pad(lat(a) === null ? 'all cached' : lat(a).toFixed(1), 16)).join(''));
+const latCell = (a) => { const l = lat(a); return l === null ? 'not measured' : l.carried ? `${l.s.toFixed(1)} (prev)` : l.s.toFixed(1); };
+console.log(pad('latency (s avg)', w) + arms.map((a) => pad(latCell(a), 16)).join(''));
 console.log(pad('cached rows', w) + arms.map((a) => pad(`${cachedCount(a)}/${rows.filter((r) => r.prompt.label === a).length}`, 16)).join(''));
 console.log(pad('tokens (avg)', w) + arms.map((a) => pad(Math.round(tok(a)), 16)).join(''));
 
@@ -242,7 +262,8 @@ if (mdPath) {
     const tests = new Set(rows.map((r) => r.testIdx)).size;
     md.push(`| **select-best wins** | ${arms.map((a) => `${wins(a)}/${tests}`).join(' | ')} | | |`);
   }
-  md.push(`| latency (s avg) | ${arms.map((a) => (lat(a) === null ? 'all cached' : lat(a).toFixed(1))).join(' | ')} | | |`);
+  const mdLat = (a) => { const l = lat(a); return l === null ? 'not measured' : l.carried ? `${l.s.toFixed(1)} _(previous run)_` : l.s.toFixed(1); };
+  md.push(`| latency (s avg) | ${arms.map(mdLat).join(' | ')} | | |`);
   md.push(`| tokens (avg) | ${arms.map((a) => Math.round(tok(a))).join(' | ')} | | |`);
   if (diag.length) {
     md.push('', `<details><summary>${diag.length} metric${diag.length === 1 ? ' has' : 's have'} too few cases to make a reliable determination</summary>`, '',
@@ -273,12 +294,20 @@ if (mdPath) {
   failRows.sort((a, b) => Number(a.base) - Number(b.base));
   const withSkill = failRows.filter((f) => !f.base).length;
   const without = failRows.length - withSkill;
-  if (failRows.length) {
-    md.push('', `<details><summary>${withSkill} row(s) scored below par with the skill, ${without} without it</summary>`, '');
-    md.push('Rows scoring below a check\'s bar. Rows without the skill are the effect rather than a problem, which is what a positive change looks like case by case.', '');
-    md.push('| variant | case | check | why |', '| --- | --- | --- | --- |');
-    for (const f of failRows.slice(0, 20)) md.push(`| ${f.variant} | ${f.desc} | \`${f.metric}\` | ${f.why} |`);
-    if (failRows.length > 20) md.push('', `_${failRows.length - 20} more in the run artifacts._`);
+  const skillFails = failRows.filter((f) => !f.base);
+  if (skillFails.length || without) {
+    const head = skillFails.length
+      ? `${skillFails.length} check(s) scored below par with the skill`
+      : 'Nothing scored below par with the skill';
+    md.push('', `<details><summary>${head}</summary>`, '');
+    if (skillFails.length) {
+      md.push('| case | check | why |', '| --- | --- | --- |');
+      for (const f of skillFails.slice(0, 15)) md.push(`| ${f.desc} | \`${f.metric}\` | ${f.why} |`);
+      if (skillFails.length > 15) md.push('', `_${skillFails.length - 15} more._`);
+    }
+    // The baseline's failures are the effect itself, so they get a count and a
+    // link rather than twenty rows that bury the ones worth reading.
+    if (without) md.push('', `${without} check(s) also scored below par without the skill. That is the effect rather than a problem: the baseline doing badly is what a positive change looks like case by case. Full detail for both is in the run artifacts.`);
     md.push('</details>');
   }
   fs.writeFileSync(mdPath, md.join('\n') + '\n');
