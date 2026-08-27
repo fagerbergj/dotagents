@@ -1,0 +1,109 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: PR authoring skill effectiveness
+
+# The arms are JavaScript prompt functions and need no templating; a Go
+# table-driven test in one diff (`}{{MsgQueued, false}, ...`) parsed as a
+# nunjucks interpolation and killed that case in both arms silently. Graders are
+# exempt from this flag (promptfoo checks `!isGrader`), so rubric prompts still
+# render {{output}} and {{criteria}}. Nothing here interpolates vars into an
+# assertion value - if that changes, this flag has to go.
+env:
+  PROMPTFOO_DISABLE_TEMPLATING: "1"
+
+# Three arms over the same tasks. Arm labels come from the skill's frontmatter
+# version, so bumping metadata.version in SKILL.md relabels the comparison.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # Custom provider, not `openai:chat:*`: same OpenAI-compatible call, plus a
+  # `load_resource` tool over the skill's own directory so the skill arm can
+  # follow SKILL.md's instructions to read its bundled files. The tool exists
+  # only when the prompt supplies `skillDir` (see prompts/arms.js), so the
+  # baseline arm sends no `tools` key and is called exactly as before.
+  - id: file://../../lib/skill-tools.js
+    label: deepseek-v4-flash+resources
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      # One 1.1 KB asset. SKILL.md sends the model at the repo's own template first,
+      # which is not in the skill tree, so the extra rounds pay for that miss.
+      maxToolCalls: 4
+      maxResourceBytes: 4096
+
+defaultTest:
+  options:
+    # The llm-swap gateway returns reasoning as message content; strip it so the
+    # graders see the PR, not the leak. There is no fence to anchor on here, so
+    # this drops a closed reasoning block, a leading "Here is ..." preamble, and
+    # an outer code fence wrapped around the whole answer.
+    transform: file://../../lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        # Kept deliberately. It was blamed for a run of llm-rubric extraction
+        # failures and an isolated A/B cleared it; the real cause is unidentified
+        # and gets re-checked on the next run. Not json_schema - that makes
+        # promptfoo pre-parse the reply into an object.
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # No title regex and no verification wordlist. `^.{10,100}` was tautological -
+    # prompts/arms.js already says "Write the title on the first line" - and the
+    # verification wordlist was recitation: SKILL.md prescribes a `## Verification`
+    # heading, so the skill arm scored 1.00 for emitting what it was told to emit
+    # while a genuine reproduction using none of those stems scored 0. Verification
+    # is judged in the rubric now, where padding can fail.
+
+    # 1. Every name in the description exists in the change. Needs code: it
+    #    cross-references identifiers in the body against the diff itself.
+    #    Named for what it can see - invented NAMES. A fabricated causal claim
+    #    carrying no identifier is outside it, and left to the judges.
+    - type: javascript
+      value: file://assertions/pr.cjs:noFabricatedIdentifiers
+      metric: no_invented_identifiers
+
+    # 2. Proportionality - per-case word bounds, declared in tests/cases.yaml.
+    #    This is the grader for the "scaled to the size of the change" claim,
+    #    and needs the arithmetic. A word count cannot see padding that fits
+    #    inside the window, so the restatement criterion below is its other half.
+
+    # 3. pr_quality (llm-rubric) lives per-case in tests/cases.yaml, not here.
+    #    It is written to reward a complete what/why/verification write-up, so
+    #    scoring a trivial-change control against it outnumbers that control's
+    #    own restraint criterion. The ten real cases carry it unchanged,
+    #    anchored on the first; the five controls share a `restraint` block of
+    #    their own. what_and_why is gone - 19 of its 20 rows sat at exactly
+    #    1.00 and pr_quality items 1-3 ask every question it asked. No
+    #    comparative pick-a-winner
+    #    assertion: its "pick the one a reviewer would rather receive"
+    #    criterion was what/why/verified/proportionate, all already in
+    #    pr_quality and what_and_why - the one
+    #    thing it added (leading with the point, not burying it in preamble)
+    #    is folded into pr_quality's criteria instead.
+
+    # 5. What the skill costs to carry. Loading SKILL.md into every request buys
+    #    quality with tokens and latency; both belong in the comparison.
+    - type: latency
+      threshold: 180000
+      metric: latency_ceiling
+
+tests:
+  - file://tests/*.yaml
