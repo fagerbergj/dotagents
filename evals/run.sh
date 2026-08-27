@@ -62,6 +62,9 @@ node assertions/*.test.cjs
 # The load_resource provider is shared harness code, so its self-check runs for
 # every suite even though only mermaid uses it yet.
 node "$here/lib/skill-tools.test.cjs"
+# Fixture materialisation has its own offline check - a local repo stands in for
+# GitHub, so the diff range and the archived tree are exercised without network.
+node "$here/lib/fixtures.test.cjs"
 # A case var containing {{ or {% renders through nunjucks and can throw, which
 # empties the output in every arm while the run still reports success.
 python3 "$here/lib/check-case-vars.py" tests/*.yaml

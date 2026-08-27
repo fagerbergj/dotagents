@@ -48,9 +48,12 @@ function materialise(f, log = () => {}) {
   // makes it unreachable, and the fixture is then unusable rather than merely
   // stale - fail loudly instead of silently reviewing a different tree.
   // Fetch the reviewed commit explicitly rather than asking whether it is already
-  // present. `cat-file -e` only inspects this clone's object database, so on a warm
-  // cache an object left by an earlier fetch passes long after CI on a cold clone
-  // would fail - the check has to exercise the network path it is standing in for.
+  // present. This catches a since-dropped commit on a cold clone, which is CI's
+  // case and the one that matters. It does NOT catch it on a warm cache: git can
+  // satisfy the want from local objects, so a fixture the remote has dropped keeps
+  // passing here long after it would fail in CI. That is the same false-pass
+  // `cat-file -e` had; the fetch narrows it rather than closing it, and closing it
+  // would mean re-fetching from scratch every run.
   //
   // Ancestry would be the wrong test. A blocking review is normally followed by a
   // force-push, which orphans the reviewed commit: four of these sixteen fixtures
