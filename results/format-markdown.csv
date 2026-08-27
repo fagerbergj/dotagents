@@ -1,0 +1,13 @@
+model,mode,metric,value,n,sd
+ci:deepseek-v4-flash,no-skill,heading_hierarchy,0.9167,12,
+ci:deepseek-v4-flash,skill@1.0,heading_hierarchy,1,12,
+ci:deepseek-v4-flash,no-skill,preserved,0.3289,12,
+ci:deepseek-v4-flash,skill@1.0,preserved,0.8292,12,
+ci:deepseek-v4-flash,no-skill,readability,0.4667,12,
+ci:deepseek-v4-flash,skill@1.0,readability,0.8833,12,
+ci:deepseek-v4-flash,no-skill,tokens p50,378,0,
+ci:deepseek-v4-flash,skill@1.0,tokens p50,1029,0,
+ci:deepseek-v4-flash,no-skill,tokens total,5222,0,
+ci:deepseek-v4-flash,skill@1.0,tokens total,13118,0,
+ci:deepseek-v4-flash,no-skill,unchanged_when_clean,0.1017,3,
+ci:deepseek-v4-flash,skill@1.0,unchanged_when_clean,0.7333,3,
