@@ -1,0 +1,111 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: Commit authoring skill effectiveness
+
+# Both arms run the same diffs. Arm labels come from the skill's frontmatter
+# version, so bumping metadata.version in SKILL.md relabels the comparison.
+# skill-next stays out until a SKILL.next.md exists - lib/arms.js falls back to
+# the current skill, so the arm would be a duplicate that costs a third of the run.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  - id: openai:chat:deepseek/deepseek-v4-flash
+    config:
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      max_completion_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      showThinking: false
+      omitDefaults: true
+      # Self-hosted model with no published price. The rate is nominal, so the
+      # `cost` assertion reads as a token-count proxy: what matters is the gap
+      # between the arms, since loading SKILL.md is itself part of the cost.
+      cost: 0.0000002
+
+defaultTest:
+  options:
+    # The llm-swap gateway returns reasoning as message content; strip it so the
+    # graders see the message, not the leak. Anchors on the first fence, which
+    # is where the answer starts; a fenceless answer passes through untouched.
+    transform: file://../../lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        # Kept deliberately. It was blamed for judge rows dying with the verdict
+        # intact; an isolated A/B cleared it, and llm-rubric is unaffected either way.
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # Conventional Commits v1.0.0 conformance, decided by the reference parser
+    # (the engine commitlint runs on) rather than a pattern: the spec allows any
+    # noun type (§14), is case-insensitive except for BREAKING CHANGE (§15),
+    # and sets no length or punctuation rule. The §6 blank line before the body
+    # is folded in here too.
+    - type: javascript
+      value: file://assertions/commit.cjs:conventionalHeader
+      metric: conventional_header
+    # Whether the body carries the motivation is a semantic question, judged
+    # against the diff. An overlap-with-the-diff heuristic was tried and cut: a
+    # body that correctly explains why necessarily reuses the diff's nouns, so
+    # the proxy scored real commit bodies below fluent narration.
+    - type: llm-rubric
+      value: |
+        The developer said this about the change:
+        "{{context}}"
+
+        Judge the commit message as delivered. Do not reward or penalise how it was
+        built, which features it used, or whether it followed any particular authoring
+        convention. Do not reward or penalise Conventional Commits formatting itself -
+        the type, the scope, the `!`, the colon spacing - which a parser checks
+        separately.
+
+        Answer each of the six below with a quote from the message, or NONE. Answer all six
+        before scoring.
+
+        1. Something the diff does not already show: what prompted the change, the constraint
+           that forced it, the incident behind it, the option rejected, or what breaks without
+           it. Restating the diff in any wording is NONE.
+        2. The specifics - the system, rule, number, error, or person involved - named
+           concretely enough that a reader could repeat the reason back. Hedged, unnamed, or
+           degree-only phrasing is NONE: "a certain class of agent", "improves clarity", "to
+           fix an issue". If the body would still read true pasted under a completely
+           different diff, answer NONE.
+        3. A first line that describes what this change does specifically, such that a reader
+           could tell it from a generic or wrong one only by checking it against the diff.
+        4. Body length matched to the change: a body where a reviewer needs telling, or no
+           body where the change is a version bump or a typo. Quote either the body or the
+           subject you are counting.
+        5. Nothing invented: list every cause, actor, number, or identifier the message states
+           that the diff and the developer's note do not support, or answer NONE.
+        6. Where the diff holds two or more unrelated pieces of work, the text that says so -
+           flagging the mix or recommending a split. If the diff holds one piece of work,
+           answer N/A and count this item as satisfied.
+
+        Score from 0 to 1, never above 1: award 0.2 for each of items 1, 2, 3, 4 and 6 you
+        answered with a quote (or N/A), then subtract 0.2 for each distinct invention listed
+        under item 5, floored at 0. Award nothing for an item you could not quote for.
+      threshold: 0.7
+      metric: why_quality
+    # Loading a SKILL.md costs tokens and wall time; that overhead is part of
+    # what is being measured. Needs `--no-cache` to mean anything.
+    - type: latency
+      threshold: 120000
+      metric: latency_overhead
+
+tests:
+  - file://tests/*.yaml

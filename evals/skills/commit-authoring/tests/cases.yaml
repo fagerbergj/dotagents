@@ -1,0 +1,1128 @@
+# One case per shape of change a commit has to describe. Every diff is a real
+# commit from a working repository with its author's own message stripped out,
+# so the model is authoring rather than copying. The developer's line of context
+# never names a message format, a mood, or a rule.
+#
+# The four MIXED cases carry two unrelated changes in one tree - two features, a
+# refactor hiding a behaviour change, a fix beside a dependency bump, and a
+# formatter run beside a real fix. The claimed right answer there is to say so,
+# not to write one message that covers both, so each carries its own `ask` that
+# leaves the number of commits undecided; the default ask says "the commit
+# message", singular, which would foreclose the very choice being graded.
+#
+# The four breaking cases are diffs whose breaking nature is a fact about the
+# code, not a judgement: a removed config field, a renamed CLI flag, a renamed
+# argument in a published tool schema, and a config loader that now rejects what
+# it used to accept.
+
+- description: 'one-line fix - the disclosure advised a command the agent is not allowed to run'
+  vars:
+    context: 'ok tiny one. found this while poking at the read-only agents yesterday, already tested it. what do i put on the commit?'
+    diff: |
+      diff --git a/internal/acp/environment.go b/internal/acp/environment.go
+      index 4ebff39..e955ef0 100644
+      --- a/internal/acp/environment.go
+      +++ b/internal/acp/environment.go
+      @@ -58,7 +58,12 @@ func environmentBlock(ctx context.Context, cwd string, caps workspace.Caps) stri
+       			writable = append(writable, caps.HomeDir)
+       		}
+       		fmt.Fprintf(&b, "filesystem: writable: %s\n", strings.Join(writable, ", "))
+      -		b.WriteString("reads and execution work anywhere; in-tree writes (npm install, go build artifacts, file edits) fail. To run code against this tree, copy or `git clone --local` it into a writable path first - a clone keeps the module path, so language-level rules like Go's internal/ visibility still resolve.\n")
+      +		// `cp -a`, not `git clone --local`: clone is denied for every ACP agent
+      +		// without acp.allow_clone (opencodeEnv), which is all of them but the
+      +		// explorer - so naming clone here hands the reviewer advice its own
+      +		// permissions reject. A copy is allowed everywhere and carries go.mod
+      +		// just the same.
+      +		b.WriteString("reads and execution work anywhere; in-tree writes (npm install, go build artifacts, file edits) fail. To run code against this tree, copy it into a writable path first (`cp -a \"$PWD\" \"$TMPDIR/probe\"`) - the copy carries go.mod, so language-level rules like Go's internal/ visibility still resolve.\n")
+       	}
+       	b.WriteString("</environment_context>")
+       	return b.String()
+
+- description: 'new feature - environment block gains a read-only filesystem disclosure'
+  vars:
+    context: 'new bit for the acp environment block, plus tests. need a commit message.'
+    diff: |
+      diff --git a/internal/acp/environment.go b/internal/acp/environment.go
+      index f8745ad..0b41139 100644
+      --- a/internal/acp/environment.go
+      +++ b/internal/acp/environment.go
+      @@ -47,6 +47,11 @@ func environmentBlock(ctx context.Context, cwd string, caps workspace.Caps) stri
+       	default:
+       		fmt.Fprintf(&b, "entries: %s\n", strings.Join(entries, ", "))
+       	}
+      +	if caps.ReadOnly {
+      +		// Landlock enforces this; a reviewer that doesn't know WHY npm install
+      +		// bare-fails with EACCES burns a round finding out the hard way.
+      +		b.WriteString("filesystem: this working tree is READ-ONLY at the OS level (reads and execution work; any write into it - npm install, go build artifacts in-tree, file edits - fails with EACCES). Verify claims by reading code and the PR's CI results instead of building.\n")
+      +	}
+       	b.WriteString("</environment_context>")
+       	return b.String()
+       }
+      diff --git a/internal/acp/environment_test.go b/internal/acp/environment_test.go
+      index ac6abc6..7b90e76 100644
+      --- a/internal/acp/environment_test.go
+      +++ b/internal/acp/environment_test.go
+      @@ -97,6 +97,29 @@ func TestEnvironmentBlockEmptyDir(t *testing.T) {
+       	}
+       }
+       
+      +// TestEnvironmentBlockDisclosesReadOnly: a read-only round's block states the
+      +// filesystem is read-only (the landlock grant already enforces it - a
+      +// reviewer burning a round on an unexplained npm install EACCES is the bug
+      +// this line fixes), and stays silent when the tree is writable.
+      +func TestEnvironmentBlockDisclosesReadOnly(t *testing.T) {
+      +	dir := t.TempDir()
+      +
+      +	caps := workspace.DefaultCaps()
+      +	caps.ReadOnly = true
+      +	block := environmentBlock(context.Background(), dir, caps)
+      +	if !strings.Contains(block, "filesystem: this working tree is READ-ONLY") {
+      +		t.Errorf("block = %q, want a read-only filesystem disclosure line", block)
+      +	}
+      +	if !strings.Contains(block, "EACCES") {
+      +		t.Errorf("block = %q, want the EACCES consequence named", block)
+      +	}
+      +
+      +	block = environmentBlock(context.Background(), dir, workspace.DefaultCaps())
+      +	if strings.Contains(block, "filesystem:") {
+      +		t.Errorf("block = %q, want no filesystem line for a writable tree", block)
+      +	}
+      +}
+      +
+       func runGit(t *testing.T, dir string, args ...string) {
+       	t.Helper()
+       	cmd := exec.Command("git", args...)
+
+- description: 'revert - backing out a change that shipped last week'
+  vars:
+    context: 'this is me backing out what we merged last week - the extension dispatch thing was wedging queued chats in staging and i don''t have time to fix it forward before the demo. commit message?'
+    diff: |
+      diff --git a/internal/serve/extensions.go b/internal/serve/extensions.go
+      index 53eb5ae..b0451f8 100644
+      --- a/internal/serve/extensions.go
+      +++ b/internal/serve/extensions.go
+      @@ -370,11 +370,8 @@ func newExtDispatch(name string, orchRef *atomic.Pointer[orchestrator.Orchestrat
+       		ensureExtChatTitle(runCtx, st, chatID, req.Chat.Title, req.Chat.Origin)
+       
+       		turnID := uuid.NewString()
+      -		dispatchMsg := composeDispatchMessage(req)
+       		if err := st.SaveTurn(runCtx, chatID, turnID); err != nil {
+       			slog.Warn("extension dispatch: save turn failed", "component", "ext."+name, "chat", chatID, "err", err)
+      -		} else if err := st.SetTurnInput(runCtx, chatID, turnID, dispatchMsg); err != nil {
+      -			slog.Warn("extension dispatch: save turn input failed", "component", "ext."+name, "chat", chatID, "err", err)
+       		}
+       
+       		attachments := make([]*genai.Part, 0, len(req.Ask.Attachments))
+      @@ -425,7 +422,7 @@ func newExtDispatch(name string, orchRef *atomic.Pointer[orchestrator.Orchestrat
+       			runCtx = tools.WithContextItems(runCtx, toDagContextItems(req.Ask.ContextItems))
+       		}
+       		runCtx = tools.WithPlanOnly(runCtx, req.Run.ReadOnly)
+      -		go driveExtensionRun(runCtx, name, orch, st, hub, extHolder, userID, chatID, turnID, dispatchMsg, attachments, req.Run.Timeout)
+      +		go driveExtensionRun(runCtx, name, orch, st, hub, extHolder, userID, chatID, turnID, composeDispatchMessage(req), attachments, req.Run.Timeout)
+       		return nil
+       	}
+       }
+
+- description: 'pure refactor - hand-rolled body replaced by the upstream helper, same behaviour'
+  vars:
+    context: 'adk went and made PackTool public in v2.1.0 so i deleted our copy of it. nothing behaves differently. write me the commit.'
+    diff: |
+      diff --git a/internal/tools/guard.go b/internal/tools/guard.go
+      index 05971d1..6e8a6f3 100644
+      --- a/internal/tools/guard.go
+      +++ b/internal/tools/guard.go
+      @@ -28,6 +28,7 @@ import (
+       	"google.golang.org/adk/v2/model"
+       	"google.golang.org/adk/v2/session"
+       	"google.golang.org/adk/v2/tool"
+      +	"google.golang.org/adk/v2/tool/toolutils"
+       
+       	"github.com/fagerbergj/quack/internal/vetting"
+       )
+      @@ -98,34 +99,11 @@ func (g *guardedTool) Declaration() *genai.FunctionDeclaration { return g.inner.
+       
+       // ProcessRequest packs the WRAPPER - not the inner tool - into the request's
+       // tool map, so the flow dispatches this tool's calls through the guard
+      -// ladder's Run. Delegating to inner.ProcessRequest would register the INNER
+      -// tool under the name and silently bypass every guard. Replicates ADK's
+      -// toolutils.PackTool (internal, unimportable) - exactly what ADK's own
+      -// confirmationTool wrapper does.
+      +// ladder's Run. Passing g (not g.inner) is the whole point: registering the
+      +// inner tool under the name would silently bypass every guard. PackTool became
+      +// public in adk v2.1.0 (tool/toolutils); before that this body hand-replicated it.
+       func (g *guardedTool) ProcessRequest(_ agent.Context, req *model.LLMRequest) error {
+      -	if req.Tools == nil {
+      -		req.Tools = make(map[string]any)
+      -	}
+      -	name := g.Name()
+      -	if _, ok := req.Tools[name]; ok {
+      -		return fmt.Errorf("duplicate tool: %q", name)
+      -	}
+      -	req.Tools[name] = g
+      -	if req.Config == nil {
+      -		req.Config = &genai.GenerateContentConfig{}
+      -	}
+      -	decl := g.Declaration()
+      -	if decl == nil {
+      -		return nil
+      -	}
+      -	for _, tl := range req.Config.Tools {
+      -		if tl != nil && tl.FunctionDeclarations != nil {
+      -			tl.FunctionDeclarations = append(tl.FunctionDeclarations, decl)
+      -			return nil
+      -		}
+      -	}
+      -	req.Config.Tools = append(req.Config.Tools, &genai.Tool{FunctionDeclarations: []*genai.FunctionDeclaration{decl}})
+      -	return nil
+      +	return toolutils.PackTool(req, g)
+       }
+       
+       // Run is the guard ladder itself. See the package doc for the tier order.
+
+- description: 'docs-only - point agents at the untracked local deploy notes'
+  vars:
+    context: 'docs only, no code. agents keep guessing the deploy steps and getting them wrong, so i''m pointing them at my local notes instead. what''s the commit message?'
+    diff: |
+      diff --git a/.gitignore b/.gitignore
+      index 0e0e711..b55944f 100644
+      --- a/.gitignore
+      +++ b/.gitignore
+      @@ -35,3 +35,6 @@ storybook-static
+       # Skill-library plugin trees: fetched by scripts/plugins.sh (make plugins),
+       # pinned in .agents/vendor/plugins.yaml. Not committed.
+       .agents/vendor/*/
+      +
+      +# Personal, host-specific deployment notes - untracked by design.
+      +AGENTS.md.local
+      diff --git a/AGENTS.md b/AGENTS.md
+      index 9f88c95..4b12fd8 100644
+      --- a/AGENTS.md
+      +++ b/AGENTS.md
+      @@ -2,6 +2,8 @@
+       
+       This file provides guidance to AI coding agents working in this repository.
+       
+      +`AGENTS.md.local` (untracked, present only on the maintainer's machine) holds the host-specific deployment process: how to reach the server, the release and deploy commands, and the ones that look right but fail. Read it before deploying, restarting llm-swap, or reindexing deepwiki - do not reconstruct those steps from this file.
+      +
+       ## Hard Rules
+       
+       Never:
+
+- description: 'breaking change - configs with unknown keys now fail at startup instead of loading'
+  vars:
+    context: 'config loader change, goes out in the next release. #560 if you care. give me a commit message.'
+    diff: |
+      diff --git a/internal/config/config.go b/internal/config/config.go
+      index 39b9d2f..441ae55 100644
+      --- a/internal/config/config.go
+      +++ b/internal/config/config.go
+      @@ -5,6 +5,7 @@
+       package config
+       
+       import (
+      +	"bytes"
+       	"fmt"
+       	"log/slog"
+       	"os"
+      @@ -736,6 +737,31 @@ func validateNoLiteralTokens(raw string) error {
+       	return nil
+       }
+       
+      +// knownRenames maps a deprecated YAML key name → the replacement that should be used.
+      +// When an unknown field is detected by KnownFields and this map has an entry, the
+      +// loader appends a migration hint to the error message. Add entries here when you
+      +// deprecate a config key.
+      +var knownRenames = map[string]string{
+      +	"memory_role": "memory.bucket",
+      +}
+      +
+      +// scanForKnownRenames returns an error if any renamed (now unknown) key appears in
+      +// the raw YAML text, naming both the old key and the replacement.  This is a
+      +// purely mechanical check against the raw YAML lines and must run on the pre-expansion
+      +// text so it catches literal typos before env interpolation.
+      +func scanForKnownRenames(raw string) error {
+      +	for oldKey := range knownRenames {
+      +		// Match `oldKey:` at the start of a logical key (optionally preceded by
+      +		// whitespace inside a YAML mapping).  Anchored to word boundary so a longer
+      +		// name won't collide with an abbreviation.
+      +		re := regexp.MustCompile(`(?m)^\s*` + regexp.QuoteMeta(oldKey) + `:`)
+      +		if re.MatchString(raw) {
+      +			return fmt.Errorf("config: unknown field %q — use %s instead", oldKey, knownRenames[oldKey])
+      +		}
+      +	}
+      +	return nil
+      +}
+      +
+       // coderModelFallbackEnv/researcherModelEnv implement agents.code-implementer's
+       // documented model fallback (config/quack.yaml, §6 of
+       // .quack/plan-pr5-tool-schemas.md): QUACK_CODER_MODEL, or QUACK_RESEARCHER_MODEL
+      @@ -763,6 +789,8 @@ func expandEnv(key string) string {
+       }
+       
+       // Load reads the YAML at path, expands ${ENV} references, and validates it.
+      +// Unknown fields cause a startup error (KnownFields); known renames produce a
+      +// migration hint naming the replacement key.
+       func Load(path string) (*Config, error) {
+       	raw, err := os.ReadFile(path)
+       	if err != nil {
+      @@ -771,10 +799,15 @@ func Load(path string) (*Config, error) {
+       	if err := validateNoLiteralTokens(string(raw)); err != nil {
+       		return nil, err
+       	}
+      +	if err := scanForKnownRenames(string(raw)); err != nil {
+      +		return nil, err
+      +	}
+       	expanded := os.Expand(string(raw), expandEnv)
+       
+       	var c Config
+      -	if err := yaml.Unmarshal([]byte(expanded), &c); err != nil {
+      +	dec := yaml.NewDecoder(bytes.NewReader([]byte(expanded)))
+      +	dec.KnownFields(true)
+      +	if err := dec.Decode(&c); err != nil {
+       		return nil, fmt.Errorf("parse config %q: %w", path, err)
+       	}
+       	if err := c.validate(); err != nil {
+  assert:
+    # Conventional Commits v1.0.0 §11-13: a breaking change MUST be marked, by
+    # `!` before the colon or by a `BREAKING CHANGE:` footer (§16 also allows
+    # `BREAKING-CHANGE`). §15 makes every unit case-insensitive EXCEPT
+    # `BREAKING CHANGE`, which MUST be uppercase - hence `[A-Za-z]+` for the
+    # type and a literal uppercase footer token.
+    - &marks_breaking
+      type: regex
+      value: '(?:^|\n)[A-Za-z]+(?:\([^)\n]+\))?!:[ ]|(?:^|\n)BREAKING[ -]CHANGE:[ ]'
+      metric: marks_breaking
+
+- description: 'dependency bump - gorm postgres driver, no code touched'
+  vars:
+    context: 'dependabot-style bump, nothing else in it. commit message please.'
+    diff: |
+      diff --git a/go.mod b/go.mod
+      index 57834fc..ab1c124 100644
+      --- a/go.mod
+      +++ b/go.mod
+      @@ -49,7 +49,7 @@ require (
+       	google.golang.org/adk/v2 v2.2.0
+       	google.golang.org/genai v1.67.0
+       	gopkg.in/yaml.v3 v3.0.1
+      -	gorm.io/driver/postgres v1.6.0
+      +	gorm.io/driver/postgres v1.6.2
+       	gorm.io/gorm v1.31.2
+       )
+       
+      diff --git a/go.sum b/go.sum
+      index a3e46b8..93ea53a 100644
+      --- a/go.sum
+      +++ b/go.sum
+      @@ -421,8 +421,8 @@ gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EV
+       gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+       gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
+       gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+      -gorm.io/driver/postgres v1.6.0 h1:2dxzU8xJ+ivvqTRph34QX+WrRaJlmfyPqXmoGVjMBa4=
+      -gorm.io/driver/postgres v1.6.0/go.mod h1:vUw0mrGgrTK+uPHEhAdV4sfFELrByKVGnaVRkXDhtWo=
+      +gorm.io/driver/postgres v1.6.2 h1:BvXQ/cNUg63q5TFNg672DmDcowZSFrNLkkA3Xe6GXq4=
+      +gorm.io/driver/postgres v1.6.2/go.mod h1:0c4fQA44XhOklXDkgtuKqysHCycTa5i9e3EIpDGCwXk=
+       gorm.io/driver/sqlite v1.6.0 h1:WHRRrIiulaPiPFmDcod6prc4l2VGVWHz80KspNsxSfQ=
+       gorm.io/driver/sqlite v1.6.0/go.mod h1:AO9V1qIQddBESngQUKWL9yoH93HIeA1X6V633rBwyT8=
+       gorm.io/gorm v1.31.2 h1:3o8FXNo9v9S858gil+3LlZA1LkCOzgb4g5BL64FgaCo=
+
+- description: 'test-only - cover a fallback path that had no coverage'
+  vars:
+    context: 'no product code here, just a test i wanted for the reconnect path we hit in prod. what should the commit line be?'
+    diff: |
+      diff --git a/frontend/src/state/chatStore.test.ts b/frontend/src/state/chatStore.test.ts
+      index 864ddb5..ca00f7e 100644
+      --- a/frontend/src/state/chatStore.test.ts
+      +++ b/frontend/src/state/chatStore.test.ts
+      @@ -357,6 +357,40 @@ describe('ChatStore - mid-node steering', () => {
+           expect(ns?.question).toBe('which direction?')
+         })
+       
+      +  it('delivery_result fills in traceId when node_start never carried one (reconnect case)', async () => {
+      +    const sse = [
+      +      'event: dag_plan',
+      +      'data: {"plan_id":"p","nodes":[{"id":"a","agent":"researcher","task":"t","depends_on":[]}],"edges":[]}',
+      +      '',
+      +      'event: node_start',
+      +      'data: {"node_id":"a","agent":"researcher"}',
+      +      '',
+      +      'event: delivery_result',
+      +      'data: {"node_id":"a","outcome":"delivered","trace_id":"trace-123"}',
+      +      '',
+      +    ].join('\n')
+      +    fetchMock.mockResolvedValueOnce(makeStream(sse))
+      +    await store.submit('c', 'go')
+      +    expect(store.get('c').live?.dag?.nodeStates['a']?.traceId).toBe('trace-123')
+      +  })
+      +
+      +  it("delivery_result's traceId does not clobber one node_start already set", async () => {
+      +    const sse = [
+      +      'event: dag_plan',
+      +      'data: {"plan_id":"p","nodes":[{"id":"a","agent":"researcher","task":"t","depends_on":[]}],"edges":[]}',
+      +      '',
+      +      'event: node_start',
+      +      'data: {"node_id":"a","agent":"researcher","trace_id":"trace-original"}',
+      +      '',
+      +      'event: delivery_result',
+      +      'data: {"node_id":"a","outcome":"delivered","trace_id":"trace-stale"}',
+      +      '',
+      +    ].join('\n')
+      +    fetchMock.mockResolvedValueOnce(makeStream(sse))
+      +    await store.submit('c', 'go')
+      +    expect(store.get('c').live?.dag?.nodeStates['a']?.traceId).toBe('trace-original')
+      +  })
+      +
+         it("a node's answer reflects only its LATEST worker/revise draft - judge commentary never leaks in, and a revision replaces (doesn't concatenate with) the draft it revised", async () => {
+           const sse = [
+             'event: dag_plan',
+
+- description: 'MIXED - a behaviour-preserving enum refactor and an unrelated span-dispatch behaviour change'
+  vars:
+    context: 'so this is everything sitting in my working tree right now. been at it all afternoon.'
+    ask: 'What should I do about committing this?'
+    diff: |
+      diff --git a/internal/dag/control.go b/internal/dag/control.go
+      index cd8c6f2..15f6792 100644
+      --- a/internal/dag/control.go
+      +++ b/internal/dag/control.go
+      @@ -22,14 +22,49 @@ type NodeStateStore interface {
+       	GetNodeState(ctx context.Context, chatID, nodeID string) (status, pauseReason, pendingQuestion, queueJSON string, err error)
+       }
+       
+      -// queuedMsg: one message in a running node's queue. Delivered messages are kept but immutable.
+      +// MsgStatus is a queued steer message's lifecycle state.
+      +type MsgStatus string
+      +
+      +const (
+      +	MsgQueued    MsgStatus = "queued"    // accepted, nothing has picked it up yet
+      +	MsgForwarded MsgStatus = "forwarded" // injected into the live round (native BeforeModelCallback or ACP stdin)
+      +	MsgDrained   MsgStatus = "drained"   // consumed at a gate boundary (the slow path)
+      +)
+      +
+      +// queuedMsg: one message in a running node's queue. Non-queued messages are kept but immutable.
+       type queuedMsg struct {
+       	ID        string
+       	Text      string
+      -	Delivered bool
+      +	Status    MsgStatus
+       	CreatedAt time.Time
+       }
+       
+      +// UnmarshalJSON derives Status from a legacy row that only has the old
+      +// Delivered bool: true meant "drained" for the vast majority of historical
+      +// rows (the gate-boundary path predates live delivery, #1029/#1042).
+      +func (m *queuedMsg) UnmarshalJSON(b []byte) error {
+      +	var shape struct {
+      +		ID        string
+      +		Text      string
+      +		Status    MsgStatus
+      +		Delivered *bool
+      +		CreatedAt time.Time
+      +	}
+      +	if err := json.Unmarshal(b, &shape); err != nil {
+      +		return err
+      +	}
+      +	m.ID, m.Text, m.CreatedAt = shape.ID, shape.Text, shape.CreatedAt
+      +	switch {
+      +	case shape.Status != "":
+      +		m.Status = shape.Status
+      +	case shape.Delivered != nil && *shape.Delivered:
+      +		m.Status = MsgDrained
+      +	default:
+      +		m.Status = MsgQueued
+      +	}
+      +	return nil
+      +}
+      +
+       func newMsgID() string {
+       	b := make([]byte, 8)
+       	_, _ = rand.Read(b)
+      @@ -88,7 +123,7 @@ func (c *nodeControl) PeekQueued() string {
+       	defer c.mu.Unlock()
+       	var out []string
+       	for _, m := range c.queue {
+      -		if !m.Delivered {
+      +		if m.Status == MsgQueued {
+       			out = append(out, m.Text)
+       		}
+       	}
+      @@ -100,8 +135,8 @@ func (c *nodeControl) TakeQueued() string {
+       	c.mu.Lock()
+       	var out []string
+       	for _, m := range c.queue {
+      -		if !m.Delivered {
+      -			m.Delivered = true
+      +		if m.Status == MsgQueued {
+      +			m.Status = MsgDrained
+       			out = append(out, m.Text)
+      diff --git a/internal/orchestrator/orchestrator.go b/internal/orchestrator/orchestrator.go
+      index 2db4fde..9ad6a22 100644
+      --- a/internal/orchestrator/orchestrator.go
+      +++ b/internal/orchestrator/orchestrator.go
+      @@ -779,12 +779,18 @@ func (o *Orchestrator) StartNode(ctx context.Context, userID, sessionID, nodeID,
+       }
+       
+       func (o *Orchestrator) startNodeRun(ctx context.Context, userID, sessionID, message string, pend *pendingInterrupt, nodeID string, yield func(stream.SSEEvent, error) bool) {
+      -	// Single choke point for both StartNode (fresh dispatch, bare ctx) and
+      -	// Run's resumeNodeRun (already inside Run's "run" span) - a nested span
+      -	// here is harmless (same trace) and gives the bare-ctx caller a real one.
+      +	// Single choke point for both StartNode (fresh dispatch, bare ctx, needs a
+      +	// real span) and Run's resumeNodeRun (already inside Run's "run" span) -
+      +	// skip opening a redundant child so resumed-node traces don't show run-under-run.
+       	var span oteltrace.Span
+      -	ctx, span = otelobs.Start(ctx, "run", attribute.String(otelobs.ChatIDKey, sessionID))
+      -	defer otelobs.End(span, nil)
+      +	if !oteltrace.SpanFromContext(ctx).SpanContext().IsValid() {
+      +		ctx, span = otelobs.Start(ctx, "run", attribute.String(otelobs.ChatIDKey, sessionID))
+      +	}
+      +	defer func() {
+      +		if span != nil {
+      +			otelobs.End(span, nil)
+      +		}
+      +	}()
+       	plan, ok := o.stashedPlan(ctx, userID, sessionID)
+       	if !ok {
+       		yield(stream.Errorf("resume: no plan in session to resume"), nil)
+  assert:
+    - &splits_mixed_change
+      type: llm-rubric
+      value: |
+        The developer said this about the change:
+        "{{context}}"
+
+        Judge the response as delivered. Do not reward or penalise how it was built,
+        which features it used, or whether it followed any particular authoring
+        convention.
+
+        The working tree described in the request holds two unrelated pieces of work.
+        The response passes if it either gives two separate, well-formed commit
+        messages, or says plainly that these changes should not be committed
+        together. A single message that covers both concerns scores zero, however
+        well written it is.
+
+        Offering the combination as an acceptable choice is not recommending a split
+        and also scores zero: a reply that presents a single-commit option alongside a
+        two-commit one, or that says one commit is fine if the changes are related, has
+        not split them. So has a reply that supplies one example message and only
+        mentions in passing that two would work - the two messages must be written out.
+
+        Return one score from 0 to 1, never above 1.
+      threshold: 0.7
+      metric: splits_mixed_change
+
+- description: 'MIXED - a permissions behaviour fix and an unrelated dependency bump in one tree'
+  vars:
+    context: 'my branch has drifted a bit, this is the whole thing.'
+    ask: 'What should I do about committing this?'
+    diff: |
+      diff --git a/internal/acp/proc.go b/internal/acp/proc.go
+      index a4f50e6..77463a8 100644
+      --- a/internal/acp/proc.go
+      +++ b/internal/acp/proc.go
+      @@ -59,12 +59,24 @@ func (a *Agent) wrappedArgv(cwd string, extraRO []string, caps workspace.Caps) [
+       // effective caps (ReadOnly/ScratchDir already resolved by the caller, same as
+       // wrappedArgv takes) - TMPDIR must track caps.ScratchDir's per-node grant, not
+       // the agent's static opts.Caps, or every round would share one scratch dir.
+      +//
+      +// The GIT_* trio strips the child's authority to authenticate to any real
+      +// remote (#936) - GIT_ASKPASS/GIT_SSH_COMMAND point at /bin/false so an HTTPS
+      +// or SSH credential prompt fails closed instead of hanging or succeeding, and
+      +// GIT_TERMINAL_PROMPT=0 kills git's own fallback prompt. `git push` itself
+      +// stays fully allowed: it works against a local/file:// remote (the test
+      +// suite's own target) and merely can't authenticate anywhere else. This is
+      +// independent of internal/vetting's gate-owned push, which builds its own env
+      +// from scratch (pushGitEnv) and is never touched here.
+       func (a *Agent) spawnEnv(caps workspace.Caps) []string {
+       	env := []string{
+       		"PATH=" + workspace.ChildPath(caps),
+       		"HOME=" + a.opts.Home,
+       		"TMPDIR=" + workspace.SandboxTmpDir(caps),
+       		"NO_COLOR=1",
+      +		"GIT_ASKPASS=/bin/false",
+      +		"GIT_SSH_COMMAND=/bin/false",
+      +		"GIT_TERMINAL_PROMPT=0",
+       	}
+       	if opts := workspace.SandboxJavaToolOptions(caps); opts != "" {
+       		env = append(env, "JAVA_TOOL_OPTIONS="+opts)
+      diff --git a/go.mod b/go.mod
+      index d0f6e68..57834fc 100644
+      --- a/go.mod
+      +++ b/go.mod
+      @@ -33,7 +33,7 @@ require (
+       	github.com/qdrant/go-client v1.19.0
+       	github.com/spf13/cobra v1.10.2
+       	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
+      -	github.com/zitadel/oidc/v3 v3.48.1
+      +	github.com/zitadel/oidc/v3 v3.49.2
+       	go.opentelemetry.io/otel v1.45.0
+       	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.20.0
+       	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.45.0
+      diff --git a/go.sum b/go.sum
+      index 95351bc..a3e46b8 100644
+      --- a/go.sum
+      +++ b/go.sum
+      @@ -325,8 +325,8 @@ github.com/yuin/goldmark v1.8.2 h1:kEGpgqJXdgbkhcOgBxkC0X0PmoPG1ZyoZ117rDVp4zE=
+       github.com/yuin/goldmark v1.8.2/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
+       github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
+       github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
+      -github.com/zitadel/oidc/v3 v3.48.1 h1:7uUWccuPbmwSLmmjFRFayWzqK7B8itjM8H8bBSTyr7Q=
+      -github.com/zitadel/oidc/v3 v3.48.1/go.mod h1:HwoguOGo0eem0RK5Gb+P6Q4aQLVinJ9LhomlVEA57ck=
+      +github.com/zitadel/oidc/v3 v3.49.2 h1:yKvB2Hx6rVWp0vOTk1pEyXAPxJusgIHNmr20AxOohmQ=
+      +github.com/zitadel/oidc/v3 v3.49.2/go.mod h1:HwoguOGo0eem0RK5Gb+P6Q4aQLVinJ9LhomlVEA57ck=
+       github.com/zitadel/schema v1.3.2 h1:gfJvt7dOMfTmxzhscZ9KkapKo3Nei3B6cAxjav+lyjI=
+       github.com/zitadel/schema v1.3.2/go.mod h1:IZmdfF9Wu62Zu6tJJTH3UsArevs3Y4smfJIj3L8fzxw=
+       go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
+  assert:
+    - *splits_mixed_change
+
+- description: 'breaking change - a judge config field is removed, and configs still setting it stop loading'
+  vars:
+    context: 'pulled the skeptic stage out - it was never switched on anywhere and every error path in it defaults to refuted, so one flaky local call could sink a good run. the dead adversarial.go and its tests go with it, not shown here. anyone whose config still has gates.judge.skeptics in it gets a startup error now, we reject unknown keys. what goes on the commit?'
+    diff: |
+      diff --git a/config/quack.yaml b/config/quack.yaml
+      index 3459e1d..c8d3f23 100644
+      --- a/config/quack.yaml
+      +++ b/config/quack.yaml
+      @@ -266,10 +266,7 @@ gates:
+                                   # (weakest-link gating, no averaging, no caps).
+           max_iterations: 6       # safety cap on the judge's model turns per round
+           context_window: 65536   # gemma's served slot (llm-swap --parallel 1 ⇒ full 64K/call); budgets the assembled judge prompt so it fits before the call instead of 400ing (#291)
+      -    skeptics: 0              # adversarial verify (#370): N independent skeptics per load-bearing
+      -                              # PASSING criterion, majority-refute kills it. 0 (default) = off -
+      -                              # each qualifying criterion costs N extra judge-model calls.
+      -    max_output_tokens: 8192  # cap on the judge/skeptic/plan-judge round's own reply - a runaway
+      +    max_output_tokens: 8192  # cap on the judge/plan-judge round's own reply - a runaway
+                                     # generation loop can otherwise decode tens of thousands of tokens on
+                                     # a verdict that should be a few hundred (#889). 0 = uncapped.
+       
+      diff --git a/internal/config/config.go b/internal/config/config.go
+      index b88cdda..fd8db58 100644
+      --- a/internal/config/config.go
+      +++ b/internal/config/config.go
+      @@ -482,8 +482,7 @@ type JudgeConfig struct {
+       	Threshold     float64 `yaml:"threshold"`
+       	MaxIterations int     `yaml:"max_iterations"`
+       	ContextWindow int     `yaml:"context_window"`
+      -	Skeptics      int     `yaml:"skeptics"`
+      -	// MaxOutputTokens caps the judge/skeptic/plan-judge round's own reply
+      +	// MaxOutputTokens caps the judge/plan-judge round's own reply
+       	// tokens - 0 (the Go zero value, e.g. an older config that predates this
+       	// field) leaves it uncapped like before #889. quack.yaml's own default is 8192.
+       	MaxOutputTokens int `yaml:"max_output_tokens"`
+      @@ -1122,9 +1121,6 @@ func (c *Config) validate() error {
+       			if g.Judge.MaxIterations < 1 {
+       				return fmt.Errorf("config: gates.judge.max_iterations must be >= 1")
+       			}
+      -			if g.Judge.Skeptics < 0 {
+      -				return fmt.Errorf("config: gates.judge.skeptics must be >= 0")
+      -			}
+       			if g.Judge.MaxOutputTokens < 0 {
+       				return fmt.Errorf("config: gates.judge.max_output_tokens must be >= 0")
+       			}
+      diff --git a/internal/serve/serve.go b/internal/serve/serve.go
+      index 07f9301..c1dd385 100644
+      --- a/internal/serve/serve.go
+      +++ b/internal/serve/serve.go
+      @@ -963,9 +963,6 @@ func buildAgents(cfg *config.Config, sessions session.Service, skillTS *skilltoo
+       				judgeSkillsets = []tool.Toolset{skillTS}
+       			}
+       			judgeFactory = vetting.NewJudgeFactory(judge, judgeReadTools, judgeSkillsets)
+      -			if cfg.Gates.Judge.Skeptics > 0 {
+      -				gateCfg.Skeptic = vetting.NewSkepticFactory(judge, judgeReadTools)
+      -			}
+       			// Own instances: gated nodes stamp per-round coords on `judge`
+       			// (vetting/node.go), and these callers are not nodes - sharing it
+       			// makes their calls inherit whichever node stamped last (#1049).
+      diff --git a/internal/vetting/node.go b/internal/vetting/node.go
+      index a442b24..23b56c7 100644
+      --- a/internal/vetting/node.go
+      +++ b/internal/vetting/node.go
+      @@ -490,9 +490,6 @@ func RunGatedRefine(ctx adkagent.Context, nodeID string, workerNode workflow.Nod
+       				res = GateResult{Score: 0, Passed: false, Feedback: feedback, Rounds: round}
+       				break
+       			}
+      -			// Adversarial verify: load-bearing passing criteria get refuted by independent skeptics.
+      -			// ledgerCtx, not judgeCtx: skeptics are their own model calls and need the same coords.
+      -			v = adversarialVerify(ledgerCtx, cfg, question, answer, act, v, judgePartEmitter(sink, nodeID, runID+"-skeptic"))
+       			v = sanitizeAnchors(v, answer, cfg)
+       			v = mergeDeterministic(v, det, cfg)
+       			v = applyRubricSpecs(v, cfg.RubricSpecs)
+      diff --git a/internal/vetting/rubric.go b/internal/vetting/rubric.go
+      index bd46fee..d172da7 100644
+      --- a/internal/vetting/rubric.go
+      +++ b/internal/vetting/rubric.go
+      @@ -34,7 +34,6 @@ func FromConfig(c config.GatesConfig) (Config, error) {
+       		Rubric:               rubric,
+       		RubricSpecs:          specs,
+       		RubricFixes:          fixes,
+      -		SkepticRounds:        c.Judge.Skeptics,
+       		JudgeMaxOutputTokens: c.Judge.MaxOutputTokens,
+       	}, nil
+       }
+  assert:
+    - *marks_breaking
+
+- description: 'breaking change - a CLI flag is renamed and the old name is gone'
+  vars:
+    context: 'error handling moved up to the global flags so it covers every command, not just upload. --on-server-errors is gone, it is --on-errors now. people have the old one in their scripts and cron jobs. commit message?'
+    diff: |
+      diff --git a/app/app.go b/app/app.go
+      index 58677c8..dec7a9d 100644
+      --- a/app/app.go
+      +++ b/app/app.go
+      @@ -2,8 +2,11 @@ package app
+       
+       import (
+       	"context"
+      +	"errors"
+      +	"sync/atomic"
+       	"time"
+       
+      +	cliflags "github.com/simulot/immich-go/internal/cliFlags"
+       	"github.com/simulot/immich-go/internal/config"
+       	"github.com/simulot/immich-go/internal/fileevent"
+       	"github.com/spf13/cobra"
+      @@ -23,14 +26,19 @@ type Application struct {
+       	tz     *time.Location
+       	Config *config.ConfigurationManager
+       	CommonFlags
+      +
+      +	numErrors atomic.Int64 // count the errors occurred during the run
+       }
+       
+       type CommonFlags struct {
+      -	DryRun bool
+      +	DryRun   bool
+      +	OnErrors cliflags.OnErrorsFlag
+       }
+       
+       func (cf *CommonFlags) RegisterFlags(flags *pflag.FlagSet) {
+      +	cf.OnErrors.Set("stop")
+       	flags.BoolVar(&cf.DryRun, "dry-run", false, "dry run")
+      +	flags.Var(&cf.OnErrors, "on-error", "Action to take on errors, (stop|continue| <n> errors)")
+       }
+       
+       func New(ctx context.Context, cmd *cobra.Command, cm *config.ConfigurationManager) *Application {
+      @@ -92,3 +100,27 @@ func ChainRunEFunctions(prev RunE, fn RunEAdaptor, ctx context.Context, cmd *cob
+       		return fn(ctx, cmd, app)
+       	}
+       }
+      +
+      +func (app *Application) ProcessError(err error) error {
+      +	if err == nil {
+      +		return nil
+      +	}
+      +	// we don't count context.Canceled as an error
+      +	// but we want to return it to the caller
+      +	if errors.Is(err, context.Canceled) {
+      +		return err
+      +	}
+      +
+      +	nErr := app.numErrors.Add(1)
+      +	if app.OnErrors == cliflags.OnErrorsStop {
+      +		app.Log().Error("Error", "err", err.Error())
+      +		return err
+      +	} else if app.OnErrors == cliflags.OnErrorsNeverStop {
+      +		app.Log().Error("Error", "err", err.Error())
+      +		return nil
+      +	} else if nErr > int64(app.OnErrors) {
+      +		app.Log().Error("Too many errors, stopping", "err", err.Error())
+      +		return err
+      +	}
+      +	return nil
+      +}
+      diff --git a/app/client.go b/app/client.go
+      index cb7c8ef..1e3b2fd 100644
+      --- a/app/client.go
+      +++ b/app/client.go
+      @@ -14,7 +14,6 @@ import (
+       	"time"
+       
+       	"github.com/simulot/immich-go/immich"
+      -	cliflags "github.com/simulot/immich-go/internal/cliFlags"
+       	"github.com/spf13/cobra"
+       	"github.com/spf13/pflag"
+       )
+      @@ -22,24 +21,23 @@ import (
+       // Client represents an Immich server client with configuration and connection management.
+       // It handles authentication, API communication, and various client-side settings.
+       type Client struct {
+      -	Server                    string                      // Immich server address (http://<your-ip>:2283/api or https://<your-domain>/api)
+      -	APIKey                    string                      // API Key
+      -	AdminAPIKey               string                      // API Key for admin
+      -	APITrace                  bool                        // Enable API call traces
+      -	SkipSSL                   bool                        // Skip SSL Verification
+      -	ClientTimeout             time.Duration               // Set the client request timeout
+      -	DeviceUUID                string                      // Set a device UUID
+      -	DryRun                    bool                        // Protect the server from changes
+      -	TimeZone                  string                      // Override default TZ
+      -	TZ                        *time.Location              // Time zone to use
+      -	APITraceWriter            io.WriteCloser              // API tracer
+      -	APITraceWriterName        string                      // API trace log name
+      -	Immich                    immich.ImmichInterface      // Immich client
+      -	AdminImmich               immich.ImmichInterface      // Immich client for admin
+      -	ClientLog                 *slog.Logger                // Logger
+      -	OnServerErrors            cliflags.OnServerErrorsFlag // Behavior on server errors, (stop|continue| <n> errors)
+      -	User                      immich.User                 // User info corresponding to the API key
+      -	PauseImmichBackgroundJobs bool                        // Pause Immich background jobs
+      +	Server                    string                 // Immich server address (http://<your-ip>:2283/api or https://<your-domain>/api)
+      +	APIKey                    string                 // API Key
+      +	AdminAPIKey               string                 // API Key for admin
+      +	APITrace                  bool                   // Enable API call traces
+      +	SkipSSL                   bool                   // Skip SSL Verification
+      +	ClientTimeout             time.Duration          // Set the client request timeout
+      +	DeviceUUID                string                 // Set a device UUID
+      +	DryRun                    bool                   // Protect the server from changes
+      +	TimeZone                  string                 // Override default TZ
+      +	TZ                        *time.Location         // Time zone to use
+      +	APITraceWriter            io.WriteCloser         // API tracer
+      +	APITraceWriterName        string                 // API trace log name
+      +	Immich                    immich.ImmichInterface // Immich client
+      +	AdminImmich               immich.ImmichInterface // Immich client for admin
+      +	ClientLog                 *slog.Logger           // Logger
+      +	User                      immich.User            // User info corresponding to the API key
+      +	PauseImmichBackgroundJobs bool                   // Pause Immich background jobs
+       }
+       
+       // RegisterFlags adds client-related command-line flags to the provided flag set.
+      @@ -58,7 +56,6 @@ func (client *Client) RegisterFlags(flags *pflag.FlagSet) {
+       	flags.StringVar(&client.DeviceUUID, "device-uuid", client.DeviceUUID, "Set a device UUID")
+       	flags.BoolVar(&client.DryRun, "dry-run", false, "Simulate all actions")
+       	flags.StringVar(&client.TimeZone, "time-zone", client.TimeZone, "Override the system time zone")
+      -	flags.Var(&client.OnServerErrors, "on-server-errors", "Action to take on server errors, (stop|continue| <n> errors)")
+       }
+       
+       // AddClientFlags registers client flags for a command and sets up pre/post run hooks
+  assert:
+    - *marks_breaking
+
+- description: 'breaking change - a published tool argument is renamed, callers passing the old name lose it'
+  vars:
+    context: 'the web_search tool arg is category now instead of topic, and searxng gets it passed through with two more values it can take. anything out there still calling web_search with topic= just silently loses it. what should this commit say?'
+    diff: |
+      diff --git a/docs/tools.md b/docs/tools.md
+      index d66adb1f..9497a005 100644
+      --- a/docs/tools.md
+      +++ b/docs/tools.md
+      @@ -344,7 +344,7 @@ Search the web using a text query.
+       |---------------|---------|----------|-------------|
+       | `query`       | string  | yes      | The search query. |
+       | `max_results` | integer | no       | Max results to return (default 5, max 20). |
+      -| `topic`       | string  | no       | Search topic: `general` or `news` (default `general`). |
+      +| `category`    | string  | no       | Search category: `general` (default), `news`, `it` (code/tech), or `science`. Maps to SearxNG categories; the model picks per query. |
+       
+       - **What it does**: Searches the web and returns ranked results with titles, URLs, and content snippets. Uses provider-native search when available:
+         - **Anthropic**: Replaced at the API boundary with Anthropic's `web_search_20250305` server-side tool. Claude decides when to search; the API executes it and returns results with citations inline. No backend needed.
+      diff --git a/turnstone/core/session.py b/turnstone/core/session.py
+      index 79bf7fcc..2318862e 100644
+      --- a/turnstone/core/session.py
+      +++ b/turnstone/core/session.py
+      @@ -5098,7 +5098,7 @@ class ChatSession:
+                   elif name == "web_fetch":
+                       it["func_args"] = {"url": it.get("url", ""), "question": it.get("question", "")}
+                   elif name == "web_search":
+      -                it["func_args"] = {"query": it.get("query", ""), "topic": it.get("topic", "")}
+      +                it["func_args"] = {"query": it.get("query", ""), "category": it.get("category", "")}
+                   elif name == "skills":
+                       # Projection for judge / audit on the model-facing skills
+                       # tool. Mutating actions surface name + action + a snippet
+      @@ -6977,9 +6977,9 @@ class ChatSession:
+                   max_results = min(max(int(args.get("max_results") or 5), 1), 20)
+               except (ValueError, TypeError):
+                   max_results = 5
+      -        topic = args.get("topic", "general") or "general"
+      -        if topic not in ("general", "news"):
+      -            topic = "general"
+      +        category = args.get("category", "general") or "general"
+      +        if category not in ("general", "news", "it", "science"):
+      +            category = "general"
+               q_preview = query[:200] + ("..." if len(query) > 200 else "")
+               preview = f"    {q_preview}"
+               return {
+      @@ -6992,7 +6992,7 @@ class ChatSession:
+                   "execute": self._exec_web_search,
+                   "query": query,
+                   "max_results": max_results,
+      -            "topic": topic,
+      +            "category": category,
+               }
+       
+           def _prepare_tool_search(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
+      @@ -12600,7 +12600,7 @@ class ChatSession:
+               call_id = item["call_id"]
+               query = item["query"]
+               max_results = item.get("max_results", 5)
+      -        topic = item.get("topic", "general")
+      +        category = item.get("category", "general")
+       
+               client = self._resolve_search_client()
+               if not client:
+      @@ -12609,7 +12609,7 @@ class ChatSession:
+                   return call_id, msg
+       
+               try:
+      -            output = client.search(query, max_results=max_results, topic=topic)
+      +            output = client.search(query, max_results=max_results, category=category)
+               except Exception as e:
+                   msg = f"Error: web search failed: {e}"
+                   self._report_tool_result(call_id, "web_search", msg, is_error=True)
+      diff --git a/turnstone/core/web_search.py b/turnstone/core/web_search.py
+      index 00f06865..adfa07a3 100644
+      --- a/turnstone/core/web_search.py
+      +++ b/turnstone/core/web_search.py
+      @@ -44,10 +44,10 @@ class SearXNGClient:
+           config does this; a stock instance returns 403/HTML otherwise.
+           """
+       
+      -    # The web_search tool's ``topic`` arg → SearxNG ``categories``. ``"general"``
+      -    # is intentionally absent so the param is omitted and SearxNG uses its
+      -    # default category mix.
+      -    _TOPIC_CATEGORIES = {"news": "news"}
+      +    # The web_search tool's ``category`` arg → SearxNG ``categories``.
+      +    # ``"general"`` is intentionally absent so the param is omitted and SearxNG
+      +    # uses its default category mix.
+      +    _CATEGORIES = {"news": "news", "it": "it", "science": "science"}
+       
+           def __init__(self, base_url: str, engines: str = "", timeout: float = 120) -> None:
+               self._base_url = base_url.rstrip("/")
+      @@ -56,7 +56,7 @@ class SearXNGClient:
+       
+           def search(self, query: str, max_results: int = 5, **kwargs: Any) -> str:
+               params: dict[str, str] = {"q": query, "format": "json"}
+      -        category = self._TOPIC_CATEGORIES.get(str(kwargs.get("topic", "general")))
+      +        category = self._CATEGORIES.get(str(kwargs.get("category", "general")))
+               if category:
+                   params["categories"] = category
+               if self._engines:
+      @@ -84,9 +84,9 @@ class MCPSearchClient:
+               args: dict[str, Any] = {"query": query}
+               if max_results != 5:
+                   args["max_results"] = max_results
+      -        topic = kwargs.get("topic")
+      -        if topic:
+      -            args["topic"] = topic
+      +        category = kwargs.get("category")
+      +        if category:
+      +            args["category"] = category
+               return self._mcp.call_tool_sync(self._tool, args, timeout=max(1, math.ceil(self._timeout)))
+       
+       
+      diff --git a/turnstone/tools/web_search.json b/turnstone/tools/web_search.json
+      index e3098a59..8bb82534 100644
+      --- a/turnstone/tools/web_search.json
+      +++ b/turnstone/tools/web_search.json
+      @@ -12,9 +12,10 @@
+               "type": "integer",
+               "description": "Max results to return (default 5, max 20)."
+             },
+      -      "topic": {
+      +      "category": {
+               "type": "string",
+      -        "description": "Search topic: general or news (default general)."
+      +        "enum": ["general", "news", "it", "science"],
+      +        "description": "Search category: general (default), news (current events), it (code/programming/tech), science (papers/research)."
+             }
+           },
+           "required": ["query"]
+  assert:
+    - *marks_breaking
+
+- description: 'MIXED - two unrelated features in one tree: a pre-flight mermaid tool and a config warning'
+  vars:
+    context: 'friday branch, i had two things on the go at once and never split them. this is everything uncommitted.'
+    ask: 'How should I get this into git?'
+    diff: |
+      diff --git a/internal/tools/registry.go b/internal/tools/registry.go
+      index e866830..5c01e71 100644
+      --- a/internal/tools/registry.go
+      +++ b/internal/tools/registry.go
+      @@ -44,17 +44,18 @@ type Deps struct {
+       type constructor func(Deps) (tool.Tool, error)
+       
+       var registry = map[string]constructor{
+      -	"web_search":   newWebSearch,
+      -	"web_fetch":    newFetch,
+      -	"summarize":    newSummarize,
+      -	"current_date": newCurrentDate,
+      -	"stage_memory": newStageMemory,
+      -	"ask_user":     func(Deps) (tool.Tool, error) { return NewAskUserTool() },
+      -	"ask_advisor":  func(d Deps) (tool.Tool, error) { return NewAskAdvisorTool(d.Advisor, d.Sessions) },
+      -	"read_file":    newReadFile,
+      -	"list_dir":     newListDir,
+      -	"glob":         newGlob,
+      -	"grep":         newGrep,
+      +	"web_search":    newWebSearch,
+      +	"web_fetch":     newFetch,
+      +	"summarize":     newSummarize,
+      +	"current_date":  newCurrentDate,
+      +	"stage_memory":  newStageMemory,
+      +	"ask_user":      func(Deps) (tool.Tool, error) { return NewAskUserTool() },
+      +	"ask_advisor":   func(d Deps) (tool.Tool, error) { return NewAskAdvisorTool(d.Advisor, d.Sessions) },
+      +	"read_file":     newReadFile,
+      +	"list_dir":      newListDir,
+      +	"glob":          newGlob,
+      +	"grep":          newGrep,
+      +	"check_mermaid": newCheckMermaid,
+       }
+       
+       // Build: resolves tool names to ADK tools.
+      diff --git a/internal/vetting/mermaid.go b/internal/vetting/mermaid.go
+      index b6bae64..d4fdba4 100644
+      --- a/internal/vetting/mermaid.go
+      +++ b/internal/vetting/mermaid.go
+      @@ -11,6 +11,7 @@ import (
+       	"path/filepath"
+       	"regexp"
+       	"runtime"
+      +	"strconv"
+       	"strings"
+       	"sync"
+       	"time"
+      @@ -275,6 +276,27 @@ func unrecognizedMermaidError(raw string) string {
+       		"(e.g. G[\"...\"]) usually fixes it. Raw parser error:\n" + raw
+       }
+       
+      +// mermaidLocatedRe pulls line/column back out of translateMermaidError's/
+      +// unrecognizedMermaidError's "diagram line N, column C:" prefix.
+      +var mermaidLocatedRe = regexp.MustCompile(`^parse error: diagram line (\d+), column (\d+):`)
+      +
+      +// CheckMermaid validates one mermaid diagram's source (no fence wrapper) via
+      +// the SAME validator the delivery gate runs (mermaidError) - so a worker
+      +// calling this tool before submitting gets exactly the gate's verdict, not a
+      +// second reimplementation that could disagree with it. line/column are 1-based,
+      +// 0 when the error has no known location.
+      +func CheckMermaid(source string) (ok bool, line, column int, message string) {
+      +	msg := mermaidError(source)
+      +	if msg == "" {
+      +		return true, 0, 0, ""
+      +	}
+      +	if m := mermaidLocatedRe.FindStringSubmatch(msg); m != nil {
+      +		line, _ = strconv.Atoi(m[1])
+      +		column, _ = strconv.Atoi(m[2])
+      +	}
+      +	return false, line, column, msg
+      +}
+      +
+       // mermaidCriterion scans the answer and staged delivery bodies for invalid ```mermaid blocks.
+       func mermaidCriterion(answer string, act workerActivity) (criterionScore, bool) {
+       	for _, t := range deliveryTexts(answer, act) {
+      diff --git a/internal/vetting/node.go b/internal/vetting/node.go
+      index 7224b8f..352c89d 100644
+      --- a/internal/vetting/node.go
+      +++ b/internal/vetting/node.go
+      @@ -1169,7 +1169,7 @@ var deterministicCriterionSpec = map[string]struct {
+       	"grounded_in_retrieval":        {"Claims must trace to retrieval performed this session (web fetch/search or file reads), not model memory.", "Research the task and cite what you retrieve; call ask_user if blocked on information only the user has."},
+       	"checks_pass":                  {"The node's configured or derived build/test checks must exit zero.", "Fix the failing check(s) named in the failure output."},
+       	"no_vacuous_tests":             {"An added test file must exercise a real production identifier, not assert trivially.", "Rewrite the test to call/assert against actual production code."},
+      -	"mermaid_valid":                {"Mermaid diagrams in the deliverable must be syntactically valid.", "Fix the invalid mermaid diagram(s) named in the failure."},
+      +	"mermaid_valid":                {"Mermaid diagrams in the deliverable must be syntactically valid.", "Fix the invalid mermaid diagram(s) named in the failure - iterate with the check_mermaid tool until it reports ok, then resubmit."},
+       	"no_tool_call_syntax":          {"The deliverable must not contain a leaked or malformed tool-call fragment.", "Remove the leaked tool-call fragment from the answer."},
+       	"no_dangling_deliverable_path": {"A deliverable must not point to a file that exists only in this run's discarded working directory.", "State the result in the answer text itself, or commit the file so it survives the run."},
+       	"delivery_complete":            {"The task's delivery step (commit/push/PR) must actually show in the session ledger.", "Complete the delivery step the task asked for - commit, push, or open the PR."},
+      diff --git a/internal/config/config.go b/internal/config/config.go
+      index d4cdb4e..d5294f1 100644
+      --- a/internal/config/config.go
+      +++ b/internal/config/config.go
+      @@ -803,6 +803,9 @@ func (c *Config) validate() error {
+       		if a.Acp != nil && a.Acp.AllowClone && !a.Acp.ReadOnly {
+       			return fmt.Errorf("config: agent %q sets acp.allow_clone without acp.read_only", name)
+       		}
+      +		if a.Acp != nil && len(a.Skills) > 0 {
+      +			slog.Warn("agent skills: has no effect on an ACP-harness agent; ACP workers always get the full skill library", "component", "config", "agent", name)
+      +		}
+       	}
+       	for name := range c.Stores {
+       		s, ok := c.Store(name)
+  assert:
+    - *splits_mixed_change
+
+- description: 'MIXED - a formatter run over the frontend plus an unrelated fence-defanging fix'
+  vars:
+    context: 'ran prettier over the frontend, and separately closed the whitespace gap in the fence defanging - `< /tag` was getting detected but not defanged. this is the whole working tree.'
+    ask: 'What do I do with this before it goes up?'
+    diff: |
+      diff --git a/turnstone/console/static/style.css b/turnstone/console/static/style.css
+      index 7020c303..4b8b74af 100644
+      --- a/turnstone/console/static/style.css
+      +++ b/turnstone/console/static/style.css
+      @@ -2139,7 +2139,9 @@ textarea.skill-content-area {
+            that don't support font-variant-emoji fall back gracefully. */
+         font-variant-emoji: text;
+         cursor: pointer;
+      -  transition: background 0.15s, border-color 0.15s;
+      +  transition:
+      +    background 0.15s,
+      +    border-color 0.15s;
+         z-index: 2;
+       }
+       .skill-lock-btn:hover {
+      @@ -4342,4 +4344,3 @@ textarea.skill-content-area {
+           transition: none;
+         }
+       }
+      -
+      diff --git a/turnstone/shared_static/auth.js b/turnstone/shared_static/auth.js
+      index 98faa2d1..4657e31a 100644
+      --- a/turnstone/shared_static/auth.js
+      +++ b/turnstone/shared_static/auth.js
+      @@ -572,7 +572,9 @@ function _handleSubmit() {
+       }
+       
+       function _submitLogin() {
+      -  const username = (document.getElementById("login-username").value || "").trim();
+      +  const username = (
+      +    document.getElementById("login-username").value || ""
+      +  ).trim();
+         const password = document.getElementById("login-password").value || "";
+       
+         if (!username) {
+      @@ -644,7 +646,9 @@ function _submitToken() {
+       }
+       
+       function _submitSetup() {
+      -  const username = (document.getElementById("setup-username").value || "").trim();
+      +  const username = (
+      +    document.getElementById("setup-username").value || ""
+      +  ).trim();
+         const displayName = (
+           document.getElementById("setup-displayname").value || ""
+         ).trim();
+      diff --git a/turnstone/core/fence.py b/turnstone/core/fence.py
+      index 7fd12d47..a842e9f4 100644
+      --- a/turnstone/core/fence.py
+      +++ b/turnstone/core/fence.py
+      @@ -61,12 +61,18 @@ def _marker_pattern(tag: str, *, opening: bool) -> re.Pattern[str]:
+           ``</tag`` (closing) is always matched — that is how content breaks *out* of
+           a fence wrapping it.  ``<tag`` (opening) is matched too when *opening* is
+           set — that is how surrounding text forges a fake fence to break *in*.
+      -    ``\\s*`` tolerates ``</ tag`` whitespace tricks.  Only the tag *prefix* is
+      -    anchored, so a nonce suffix (``<system-reminder_abcd>``) is matched and
+      -    defanged regardless of whether the hex matches the real nonce.
+      +
+      +    The single capture spans the whole run between ``<`` and the tag — optional
+      +    whitespace, the slash, more optional whitespace — rather than anchoring the
+      +    slash right after ``<``.  That defangs whitespace tricks on *both* sides of
+      +    the slash (``< /tag``, ``<  /tag``, ``</ tag``) and keeps this in lockstep
+      +    with ``output_guard._RE_FENCE_MARKER`` (``<\\s*/?\\s*tag``) so a marker can
+      +    never be detected-but-not-defanged.  Only the tag *prefix* is anchored, so a
+      +    nonce suffix (``<system-reminder_abcd>``) is matched and defanged regardless
+      +    of whether the hex matches the real nonce.
+           """
+      -    slash = "/?" if opening else "/"
+      -    return re.compile(rf"<({slash})(\s*){re.escape(tag)}", re.IGNORECASE)
+      +    mid = r"\s*/?\s*" if opening else r"\s*/\s*"
+      +    return re.compile(rf"<({mid}){re.escape(tag)}", re.IGNORECASE)
+       
+       
+       def neutralize(text: str, tag: str, *, opening: bool = False) -> str:
+      @@ -85,7 +91,7 @@ def neutralize(text: str, tag: str, *, opening: bool = False) -> str:
+           if "<" not in text:
+               return text
+           pattern = _marker_pattern(tag, opening=opening)
+      -    return pattern.sub(lambda m: f"<\\{m.group(1)}{m.group(2)}{tag}", text)
+      +    return pattern.sub(lambda m: f"<\\{m.group(1)}{tag}", text)
+       
+       
+       def wrap(content: str, nonce: str, tag: str) -> str:
+  assert:
+    - *splits_mixed_change
