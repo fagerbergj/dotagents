@@ -21,7 +21,17 @@ function modelLabel(profile, rows) {
 const dir = path.dirname(file);
 const [suite, version = 'unversioned'] = path.basename(file).replace(/\.(json|csv)$/, '').split('@');
 const rows = renderOnly ? [] : JSON.parse(fs.readFileSync(file, 'utf8')).results.results;
-const mode = (label) => (label === 'no-skill' ? 'no-skill' : `skill@${version}`);
+// With three arms, skill-current is the version already shipped and skill-next
+// the one under review. They must not collapse into one column, so the shipped
+// one is stamped with its own version when the caller names it.
+// Written beside the results by run.sh when a three-arm run happened; the env
+// var wins so a caller can still override.
+const baseSidecar = file.replace(/\.json$/, '.base-version');
+const baseVersion = process.env.SKILL_BASE_VERSION
+  || (fs.existsSync(baseSidecar) ? fs.readFileSync(baseSidecar, 'utf8').trim() : '');
+const mode = (label) => (label === 'no-skill' ? 'no-skill'
+  : (label === 'skill-current' && baseVersion) ? `skill@${baseVersion}`
+  : `skill@${version}`);
 // An error and a genuine zero are different facts. promptfoo records both
 // as score 0, which is how a JSON-parse bug spent hours looking like a skill
 // regression. Anything matching this is excluded from the mean and counted separately.
@@ -76,6 +86,7 @@ const store = renderOnly ? file : path.join(dir, `${suite}.csv`);
 // worth. Measured: a judge metric on 2 cases swung +0.50 to -0.50 across five
 // identical runs; a computed one on 11 cases moved 0.000.
 function shapeOf(metric) {
+  const hasNext = rows.some((r) => r.prompt?.label === 'skill-next');
   const cell = new Map();
   for (const r of rows) {
     if (r.namedScores?.[metric] === undefined) continue;
@@ -94,7 +105,9 @@ function shapeOf(metric) {
         const v = [...cell.entries()].filter(([k, a]) => k.startsWith(arm + '\u0000') && a[i] !== undefined).map(([, a]) => a[i]);
         return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null;
       };
-      const b = mean('no-skill'), t = mean('skill-current');
+        // Same rule as the reported delta: the arm under review is the
+      // rightmost skill arm, not the shipped one.
+    const b = mean('no-skill'), t = mean(hasNext ? 'skill-next' : 'skill-current');
       if (b !== null && t !== null) deltas.push(t - b);
     }
     if (deltas.length > 1) {
@@ -122,9 +135,8 @@ if (!renderOnly) {
     const live = rows.filter((r) => r.prompt.label === arm && !((r.tokenUsage?.cached || 0) > 0));
     if (!live.length) continue;                       // wholly cached: nothing new to record
     const secs = live.reduce((a, r) => a + (r.latencyMs || 0), 0) / live.length / 1000;
-    const mode = arm === 'no-skill' ? 'no-skill' : arm.replace('skill-current', `skill@${version}`);
-    rowsCsv.set(key({ model: label, mode, metric: 'latency_s' }),
-      { model: label, mode, metric: 'latency_s', value: secs.toFixed(2), n: String(live.length), sd: '' });
+    rowsCsv.set(key({ model: label, mode: mode(arm), metric: 'latency_s' }),
+      { model: label, mode: mode(arm), metric: 'latency_s', value: secs.toFixed(2), n: String(live.length), sd: '' });
   }
 }
 
@@ -140,7 +152,21 @@ for (const r of sorted) ((data[r.model] ??= {})[r.mode] ??= {})[r.metric] = /^-?
 // ---- render ----
 const NO_DELTA = new Set();  // counts and percentiles have meaningful deltas too
 const models = Object.keys(data).sort();
-const modes = ['no-skill', ...[...new Set(models.flatMap((m) => Object.keys(data[m])))].filter((x) => x !== 'no-skill').sort()];
+// Columns run oldest to newest so the rightmost is the latest skill, which is
+// what the delta compares and what the header promises. Alphabetical would put
+// skill@1.0.1 left of skill@unversioned and 1.10 left of 1.9; this compares the
+// numeric parts, and anything without them (skill@unversioned, which predates
+// the version field) sorts first.
+const vparts = (m) => (m.split('@')[1] || '').split('.').map(Number);
+const byVersion = (a, b) => {
+  const [x, y] = [vparts(a), vparts(b)];
+  if (!x.length || x.some(Number.isNaN)) return (!y.length || y.some(Number.isNaN)) ? a.localeCompare(b) : -1;
+  if (!y.length || y.some(Number.isNaN)) return 1;
+  for (let i = 0; i < Math.max(x.length, y.length); i++)
+    if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
+  return 0;
+};
+const modes = ['no-skill', ...[...new Set(models.flatMap((m) => Object.keys(data[m])))].filter((x) => x !== 'no-skill').sort(byVersion)];
 const metrics = [...new Set(models.flatMap((m) => Object.values(data[m]).flatMap(Object.keys)))].filter((k) => !k.endsWith('!errors'))
   .sort((a, b) => (NO_DELTA.has(a) - NO_DELTA.has(b)) || a.localeCompare(b));
 const head = ['model', 'metric', ...modes, 'Δ'];

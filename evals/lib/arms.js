@@ -18,7 +18,10 @@ function skillVersion(body) {
 }
 
 module.exports = function arms(skillName, taskTemplate) {
-  const current = path.join(SKILLS, skillName, 'SKILL.md');
+  // On a PR that edits the skill, the checkout IS the new version, so comparing
+  // it against the shipped one needs that shipped copy extracted somewhere and
+  // named here. Unset (the normal case) both fall through to the checkout.
+  const current = process.env.SKILL_CURRENT || path.join(SKILLS, skillName, 'SKILL.md');
   const next = process.env.SKILL_NEXT || path.join(SKILLS, skillName, 'SKILL.next.md');
   const task = (vars) => taskTemplate(vars);
 

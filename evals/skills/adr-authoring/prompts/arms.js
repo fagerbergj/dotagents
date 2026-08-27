@@ -11,4 +11,7 @@ Return only that document, or only that explanation. No commentary around it.`);
 module.exports = {
   noSkill: arms.noSkill,
   skillCurrent: (ctx) => ({ prompt: arms.skillCurrent(ctx), config: { skillDir: arms.skillDir } }),
+  // Only runs when SKILL_CURRENT names a shipped copy to compare against;
+  // otherwise arms.js falls back to the current skill and it never appears.
+  skillNext: (ctx) => ({ prompt: arms.skillNext(ctx), config: { skillDir: arms.skillDir } }),
 };

@@ -68,7 +68,10 @@ if (errors.length) {
 function metricRow(m) {
   const vals = arms.map((a) => cell(a, m));
   const base = vals[arms.indexOf('no-skill')] ?? vals[0];
-  const test = vals[arms.indexOf('skill-current')] ?? vals[vals.length - 1];
+  // The rightmost skill arm is the one under review: with three arms that is
+  // skill-next, and comparing skill-current would report the shipped version.
+  const testArm = arms.includes('skill-next') ? 'skill-next' : 'skill-current';
+  const test = vals[arms.indexOf(testArm)] ?? vals[vals.length - 1];
   const rel = reliability(metricShape(m));
   // Shape, not delta, decides diagnostic: a metric only one arm scored is the
   // least trustworthy row in the table and must not sit among the solid ones.
@@ -118,6 +121,7 @@ function metricShape(metric) {
 // comment-authoring, a judge metric on 2 cases swung +0.50 to -0.50 across five
 // identical runs while a computed one on 11 cases moved 0.000.
 function repeatStats(metric) {
+  const hasNext = arms.includes('skill-next');
   const cell = new Map();
   for (const r of rows) {
     const v = r.namedScores?.[metric];
@@ -138,7 +142,9 @@ function repeatStats(metric) {
         .map(([, a]) => a[i]);
       return vals.length ? vals.reduce((x, y) => x + y, 0) / vals.length : null;
     };
-    const b = armMean('no-skill'), t = armMean('skill-current');
+      // Same rule as the reported delta: the arm under review is the
+      // rightmost skill arm, not the shipped one.
+    const b = armMean('no-skill'), t = armMean(hasNext ? 'skill-next' : 'skill-current');
     if (b !== null && t !== null) deltas.push(t - b);
   }
   const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;

@@ -15,6 +15,10 @@ version="$(sed -n 's/^[[:space:]]*version:[[:space:]]*"\?\([^"]*\)"\?[[:space:]]
 version="${version:-unversioned}"
 out="$here/results/$suite@$version.json"
 mkdir -p "$here/results"
+# rollup.js runs again at publish time, off the uploaded artifact and without this
+# job's env, so the shipped version has to travel with the results or both skill
+# arms collapse into one column and the older one is filed under the newer name.
+[ -n "${SKILL_BASE_VERSION:-}" ] && printf '%s' "$SKILL_BASE_VERSION" > "${out%.json}.base-version"
 
 # The no-skill arm's prompt never changes, so its results stay valid until the
 # case text or the model does - promptfoo keys the cache on both. Bumping a
@@ -35,6 +39,25 @@ done
 set -- "${args[@]+"${args[@]}"}"
 
 cd "$here/skills/$suite"
+# Three arms only when there is a second skill version to compare against.
+# SKILL_CURRENT names the shipped copy; the checkout is then the new one, and the
+# third prompt is appended to a throwaway config so the ten committed ones stay
+# two-arm. Parsed and re-emitted rather than text-appended: the configs carry
+# anchors, and a sed would sit inside one.
+config=promptfooconfig.yaml
+if [ -n "${SKILL_CURRENT:-}" ]; then
+  export SKILL_NEXT="$here/../skills/$suite/SKILL.md"
+  config=".promptfooconfig.3arm.yaml"
+  python3 - "$config" <<'PYCFG'
+import sys, yaml
+c = yaml.safe_load(open('promptfooconfig.yaml'))
+labels = {p.get('label') for p in c['prompts']}
+if 'skill-next' not in labels:
+    c['prompts'].append({'id': 'file://prompts/arms.js:skillNext', 'label': 'skill-next'})
+yaml.safe_dump(c, open(sys.argv[1], 'w'), sort_keys=False, width=10**6)
+PYCFG
+  trap 'rm -f "$here/skills/$suite/.promptfooconfig.3arm.yaml"' EXIT
+fi
 node assertions/*.test.cjs
 # The load_resource provider is shared harness code, so its self-check runs for
 # every suite even though only mermaid uses it yet.
@@ -46,7 +69,7 @@ python3 "$here/lib/check-case-vars.py" tests/*.yaml
 # assertion was deleted, and for an assertion with no metric or a dangling
 # file://...:fn. This walks the parsed tree instead.
 python3 "$here/lib/check-suite.py" .
-npx -y promptfoo@latest eval -c promptfooconfig.yaml -o "$out" \
+npx -y promptfoo@latest eval -c "$config" -o "$out" \
   $cache_flag --no-share --max-concurrency "${EVAL_CONCURRENCY:-8}" "$@" || true
 node "$here/report.js" "$out" --md "${out%.json}.md"
 echo "results: $out"
