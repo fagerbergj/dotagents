@@ -1,0 +1,321 @@
+name: Evals
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'skills/**'
+      - 'evals/**'
+
+# Comment scheme: every run posts a NEW comment and marks this workflow's
+# earlier ones as outdated via GitHub's `minimizeComment` (see
+# .github/scripts/pr-comment.js). Nothing is overwritten, so the numbers from an
+# earlier push stay on the PR to compare against, collapsed. Two markers keep
+# the two kinds distinguishable:
+#   <!-- dotagents-evals:plan -->     what will run, and what it costs
+#   <!-- dotagents-evals:results -->  what happened
+# Both share the '<!-- dotagents-evals' prefix, which is what the minimize step
+# matches on - broad enough to catch every variant of ours, narrow enough never
+# to touch a human's comment.
+
+jobs:
+  detect:
+    name: Detect affected eval suites
+    runs-on: ubuntu-latest
+    # Fork-PR handling: this job stays on plain `pull_request` rather than switching
+    # to `pull_request_target`. `pull_request_target` runs with the base repo's write
+    # permissions and secrets even for a fork PR, and evaluates against the base
+    # branch's workflow file - a bigger blast radius the moment anything in this
+    # workflow ever checks out or runs PR-controlled code. `pull_request` keeps the
+    # standard, safer default: it checks out the harmless merge commit (fine here,
+    # since this job only reads paths, it doesn't execute anything from the PR),
+    # and the trade-off is that GITHUB_TOKEN is force-read-only for a fork PR
+    # regardless of the `permissions:` block below. So: detection and the job
+    # summary always run; the PR-comment step is skipped for fork PRs (it would
+    # 403 anyway) and those results surface only in the job summary instead.
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      suites: ${{ steps.detect.outputs.suites }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: List changed files
+        id: changed
+        run: |
+          git diff --name-only \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            > /tmp/changed-files.txt
+          echo "Changed files:"
+          cat /tmp/changed-files.txt
+
+      - name: Detect affected suites
+        id: detect
+        run: |
+          suites_json="$(.github/scripts/detect-suites.sh "$GITHUB_WORKSPACE" < /tmp/changed-files.txt)"
+          echo "$suites_json" > /tmp/suites-detail.json
+          names_json="$(jq -c '[.[].name]' /tmp/suites-detail.json)"
+          echo "suites=$names_json" >> "$GITHUB_OUTPUT"
+          echo "Detected suites: $names_json"
+
+      - name: Build estimate and comment body
+        id: report
+        run: |
+          count="$(jq 'length' /tmp/suites-detail.json)"
+          # Measured on this project: ~14 min and ~$0.05 per suite on
+          # openrouter:deepseek-v4-flash. Suites run in a matrix, so wall-clock is
+          # roughly one suite's time, not the sum; cost is per-suite so it does sum.
+          cost="$(awk -v n="$count" 'BEGIN { printf "%.2f", n * 0.05 }')"
+
+          {
+            echo "<!-- dotagents-evals:plan -->"
+            echo "## Eval suites for this PR"
+            echo
+            if [ "$count" -eq 0 ]; then
+              echo "No eval suites are affected by the changed files under \`skills/**\` or \`evals/**\`. Nothing will run."
+            else
+              echo "This PR affects **$count** eval suite(s):"
+              echo
+              echo "| Suite | Triggered by |"
+              echo "|---|---|"
+              jq -r '.[] | "| `" + .name + "` | " +
+                ( ( [ if (.skill_paths | length) > 0 then "skill changed (`" + .skill_paths[0] + "`)" else empty end,
+                      if (.suite_paths | length) > 0 then "suite changed (`" + .suite_paths[0] + "`)" else empty end
+                    ] | join("; ") )
+                ) + " |"' /tmp/suites-detail.json
+              echo
+              echo "**Estimate:** ~14 minutes wall-clock (suites run in a matrix, so this is roughly the time for one suite, not the sum) and ~\$$cost total (\$0.05/suite on \`openrouter:deepseek-v4-flash\`). An unchanged suite mostly replays from the cached promptfoo responses and costs far less than that."
+              echo
+              echo "Evals do not run automatically. A maintainer must approve the \`eval-approval\` environment before this workflow spends anything. **Approval is per run, not per PR:** every push to this branch starts a new run that has to be approved again."
+            fi
+          } > /tmp/comment-body.md
+
+          cat /tmp/comment-body.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on PR
+        # Skipped for fork PRs: GITHUB_TOKEN is read-only there under `pull_request`
+        # no matter what `permissions:` says, so this call would just 403 - and so
+        # would the minimize mutation inside the helper. The job summary written
+        # above still carries the same information.
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const post = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            const text = fs.readFileSync('/tmp/comment-body.md', 'utf8');
+            await post({
+              github,
+              context,
+              markers: ['<!-- dotagents-evals'],
+              // Whether an eval has ever run on this PR is only knowable from the
+              // comments the helper is about to collapse, so the note is built
+              // from them. "Stale results above" and "nothing has run yet" are
+              // different states and a reader must not have to guess which it is.
+              body: (stale) => {
+                const ranBefore = stale.some((c) => c.body.includes('<!-- dotagents-evals:results -->'));
+                return text + '\n' + (ranBefore
+                  ? '_An eval ran on an earlier push. Those results are still on this PR, collapsed as outdated - they describe the previous head, not this one._\n'
+                  : '_No eval has run on this PR yet._\n');
+              },
+            });
+
+  eval:
+    name: Eval ${{ matrix.suite }}
+    needs: detect
+    # Two separate gates, both load-bearing:
+    #   - the suites check keeps the matrix from being empty, which is a hard
+    #     workflow error rather than a skip;
+    #   - the fork check keeps PR-controlled code away from the API key. Under
+    #     plain `pull_request` a fork never receives secrets anyway, so without
+    #     this the job would burn an approval and then fail on an unset key.
+    #     Fork PRs get the detect comment and the job summary, nothing paid.
+    if: needs.detect.outputs.suites != '[]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # Nothing spends money until a maintainer approves this environment. The
+    # approval is scoped to one run, so every push needs a new one.
+    environment: eval-approval
+    permissions:
+      contents: read
+    timeout-minutes: 60
+    strategy:
+      # One suite failing must not cancel the others: a red suite is still a
+      # result worth reporting, and the report job wants every artifact it can get.
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJson(needs.detect.outputs.suites) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: evals/package-lock.json
+
+      - name: Install eval dependencies
+        working-directory: evals
+        # Graders that need a real parser (conventional-commits-parser,
+        # markdown-it) depend on it here rather than shelling out to npx.
+        # PyYAML is for lib/check-case-vars.py and is not guaranteed on the runner.
+        run: |
+          npm ci
+          python3 -m pip install --quiet --disable-pip-version-check pyyaml
+
+      - name: Restore promptfoo response cache
+        uses: actions/cache@v4
+        with:
+          path: evals/.cache
+          # The key busts on the suite's own files and on the skill under test,
+          # which are the only two inputs that change a prompt. `restore-keys`
+          # then falls back to this suite's previous cache on a miss, which is
+          # safe and is the whole point: promptfoo keys each cached response on
+          # the request itself (prompt text, model, params), so a changed prompt
+          # cannot read a stale entry - it just misses and calls the API. What
+          # the fallback buys is the unchanged half of a run: edit a SKILL.md and
+          # the `no-skill` arm still replays for free while `skill-current`
+          # genuinely re-runs.
+          #
+          # Deliberately NOT keyed on a run id or a commit sha: that would miss
+          # on every single run and make the cache decorative.
+          key: promptfoo-${{ matrix.suite }}-${{ hashFiles(format('evals/skills/{0}/**', matrix.suite), format('skills/{0}/**', matrix.suite)) }}
+          restore-keys: |
+            promptfoo-${{ matrix.suite }}-
+
+      - name: Run suite
+        working-directory: evals
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # `evals/.env` is gitignored and does not exist in CI, so the key comes
+          # from the environment. run.sh also exports OPENAI_API_KEY from it:
+          # every provider here is `openai:chat:*` and assertion-level provider
+          # config ignores apiKeyEnvar, so the judges authenticate off the
+          # OpenAI-compatible fallback or they 401 while generations succeed.
+          PROMPTFOO_CACHE_PATH: ${{ github.workspace }}/evals/.cache
+          # promptfoo writes every run to one shared SQLite db under its config
+          # dir, and concurrent suites deadlock on it with "database is locked".
+          # Matrix jobs are separate runners so they cannot collide today; this
+          # is set anyway so the invocation matches the local one and so
+          # collapsing the matrix into a single job stays safe.
+          PROMPTFOO_CONFIG_DIR: /tmp/pf-${{ matrix.suite }}
+        # run.sh is the same entry point used locally, and it already does the
+        # free checks first: the suite's offline self-test (node assertions/
+        # *.test.cjs) and lib/check-case-vars.py, which fails the run if a case
+        # var holds `{{` or `{%`. nunjucks would render those and blank BOTH arms
+        # while the run still reported success - that has produced a fabricated
+        # result here before. Both run before a single token is bought.
+        run: ./run.sh "${{ matrix.suite }}"
+
+      - name: Check the suite actually ran
+        working-directory: evals
+        # Not a score gate. This fires only when no row produced a score at all,
+        # which means the eval never ran - a bad key, an unreachable gateway, a
+        # broken provider - and that is a failed job, not a result. run.sh lets
+        # promptfoo exit non-zero so the report still renders from partial rows,
+        # so without this check a total wipeout would report as a green PR with
+        # an empty table.
+        run: |
+          set -eu
+          f="$(ls results/*.json | head -1)"
+          node -e '
+            const rows = require(process.argv[1]).results.results;
+            if (!rows.length || rows.every((r) => !Object.keys(r.namedScores || {}).length)) {
+              console.error("No row produced a score. The eval did not run; this is not a result.");
+              process.exit(1);
+            }
+          ' "$PWD/$f"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # Named per suite so a reader can pull one suite's run out of a matrix
+          # of ten. Holds the raw promptfoo JSON and the rendered report table.
+          name: eval-${{ matrix.suite }}
+          path: evals/results/
+          if-no-files-found: warn
+
+  report:
+    name: Report eval results
+    needs: [detect, eval]
+    # always(), because a failed or partly-failed matrix is exactly when the
+    # comment matters most. Skipped only when nothing was ever going to run.
+    if: always() && needs.eval.result != 'skipped' && needs.detect.outputs.suites != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v4
+        # A matrix where every suite died leaves nothing to download. That is
+        # the case this job most needs to report, so a failed download must not
+        # stop it - the missing suites become the CAUTION banner below.
+        continue-on-error: true
+        with:
+          path: artifacts
+          pattern: eval-*
+
+      - name: Build comment body
+        env:
+          SUITES: ${{ needs.detect.outputs.suites }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          missing=()
+          {
+            echo "<!-- dotagents-evals:results -->"
+            echo "## Eval results for \`${HEAD_SHA:0:7}\`"
+            echo
+            echo "> [!NOTE]"
+            echo "> **Informational only.** This job is not a required check and never fails a PR on a score. A negative delta below is a measurement, not a broken build. The job goes red only when a suite could not run at all."
+            echo
+            echo "Read the **reliability** column before the delta. A metric marked \`within noise\` moved less than its own noise floor, and diagnostic metrics - fewer than 5 cases - are folded away under each table, because at that case count a +0.50 and a +0.00 are the same measurement. Raw JSON and per-suite reports are in the [run artifacts]($RUN_URL)."
+            echo
+
+            for suite in $(printf '%s' "$SUITES" | jq -r '.[]'); do
+              # `find`, not a shallow glob: upload-artifact roots the archive at the
+              # least common ancestor, and whether that flattens `evals/results/`
+              # away is version- and input-dependent. Searching the tree is correct
+              # under either layout, and is what eval-publish.yml already does.
+              md="$(find "artifacts/eval-$suite" -name '*.md' 2>/dev/null | head -1 || true)"
+              if [ -z "$md" ]; then missing+=("$suite"); continue; fi
+              echo
+              # Demote the report's own `# suite@version` heading to sit under
+              # this comment's `##`. First line only, so nothing in a grader's
+              # quoted reason can be rewritten by accident.
+              awk 'NR==1 { sub(/^# /, "### ") } { print }' "$md"
+            done
+
+            if [ ${#missing[@]} -gt 0 ]; then
+              echo
+              echo "> [!CAUTION]"
+              echo "> **${#missing[@]} suite(s) produced no results:** $(printf '`%s` ' "${missing[@]}")"
+              echo "> The eval could not run there, which is not the same as scoring badly. Check the [job log]($RUN_URL) before comparing anything against an earlier run."
+            fi
+          } > /tmp/results-body.md
+
+          cat /tmp/results-body.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on PR
+        # Same fork constraint as the detect job: read-only GITHUB_TOKEN on a
+        # fork PR means both createComment and minimizeComment 403. The eval job
+        # never runs for a fork anyway, so this is belt and braces.
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const post = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            await post({
+              github,
+              context,
+              markers: ['<!-- dotagents-evals'],
+              body: fs.readFileSync('/tmp/results-body.md', 'utf8'),
+            });
