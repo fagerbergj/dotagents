@@ -14,8 +14,12 @@ const lints = new Map();
 
 const CRASH_SIGNATURE = /puppeteer|Protocol error|Target closed|Navigation failed|spawn ENOMEM/i;
 
+// GitHub's ubuntu runners restrict unprivileged user namespaces, so Chromium
+// aborts with "No usable sandbox!" unless launched with the flags in this file.
+const PUPPETEER_CONFIG = path.join(__dirname, 'puppeteer.json');
+
 function renderOnce(input, output) {
-  const run = spawnSync('npx', ['-y', '@mermaid-js/mermaid-cli@11.16.0', '-i', input, '-o', output], { encoding: 'utf8', timeout: 180000 });
+  const run = spawnSync('npx', ['-y', '@mermaid-js/mermaid-cli@11.16.0', '-i', input, '-o', output, '-p', PUPPETEER_CONFIG], { encoding: 'utf8', timeout: 180000 });
   if (run.error) return { ok: false, error: `validator failed to start: ${run.error.message}` };
   if (run.status !== 0 || !fs.existsSync(output)) {
     const stderr = `${run.stderr || run.stdout || ''}`;
