@@ -9,7 +9,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
-  version: "1.0"
+  version: "1.0.1"
 ---
 
 # RFD authoring
@@ -24,6 +24,8 @@ Use this default when the question matters but the solution, scope, evidence, or
 
 ## When NOT to Use
 
+Check this list before drafting, not after. Where one of these fits, the answer is the other artifact - not an RFD carrying a disclaimer.
+
 - Follow the house definition when the organization already defines RFD differently.
 - Use an RFC when a concrete proposal is ready for structured review and decision.
 - Use an ADR when a bounded decision has been made and needs a durable record.
@@ -32,7 +34,7 @@ Use this default when the question matters but the solution, scope, evidence, or
 ## Authoring Procedure
 
 1. **Find the house definition.** Search the repository and governance docs for RFD examples, templates, labels, meeting rules, voting rules, and dispositions. Local meaning overrides this skill’s default.
-2. **Confirm the discussion need.** State the question, affected people, uncertainty, and why an issue comment or ordinary meeting is insufficient.
+2. **Confirm the discussion need, and stop if there is none.** State the question, affected people, uncertainty, and why an issue comment or ordinary meeting is insufficient. If nothing is actually undecided - the choice is already made, the requirement is external and fixed, the mechanism already exists, or the change is small and reversible - say so plainly and write what the situation does need instead: a durable record, a plan of the work, a request for a named sign-off, or an account of how the thing already behaves. Exiting here is a correct outcome of this skill, not a failure to apply it.
 3. **Gather known context.** Separate facts, assumptions, constraints, candidate directions, missing evidence, and the people whose input matters. Do not invent a preferred solution to make the document look complete.
 4. **Choose a shape.** Use the house template. Otherwise read `references/industry-examples.md` and use the exploratory default there; the Nebari and LSST examples demonstrate that RFD processes can differ sharply.
 5. **Draft for discussion.** Put the central question and desired outcome first. Ask specific questions whose answers could change the next step. Label any provisional direction as tentative.
@@ -49,7 +51,7 @@ Use this default when the question matters but the solution, scope, evidence, or
 ## Gotchas
 
 - Nebari uses RFDs for proposals that can proceed to a vote; LSST uses them to organize in-depth technical discussions. Neither establishes a universal meaning.
-- An exploratory RFD should expose uncertainty, not manufacture consensus.
+- An exploratory RFD should expose uncertainty, not manufacture consensus - and equally, not manufacture uncertainty. An Open Questions section listing things nobody is actually asking exists to justify the document, and is worse than not writing one.
 - “Discussion” is not a useful status unless the document says what input is wanted and what ends the discussion.
 - Do not record a tentative direction as an accepted architectural decision.
 

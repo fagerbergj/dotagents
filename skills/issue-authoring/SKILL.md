@@ -9,7 +9,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
-  version: "1.0"
+  version: "1.0.1"
 ---
 
 # Issue Authoring
@@ -43,6 +43,8 @@ Use this skill to create or revise a bug report, feature request, engineering ta
 
 ## Default Shape
 
+A section is filled from the report or it is left out. Never supply a product area, endpoint, error code, version, severity, customer, or reproduction step the report did not contain in order to complete a section - a plausible invention is worse than a gap, because the reader cannot tell it from a fact. If the report does not identify a product, a behaviour, or a failure, the answer is not an issue at all: say the report is insufficient and ask the specific questions that would unblock it.
+
 When no house template exists, keep the issue compact:
 
 - **Title:** specific outcome or observed failure, including the affected area.
@@ -52,7 +54,7 @@ When no house template exists, keep the issue compact:
 - **Acceptance criteria:** observable pass/fail conditions.
 - **Evidence and references:** reproduction, logs, screenshots, designs, decisions, related issues, or source links as needed.
 
-Omit empty sections. A short, complete issue is better than a large form filled with placeholders.
+Omit empty sections - omitting is the correct outcome when the report supports nothing, not a shortfall to be papered over. A short, complete issue is better than a large form filled with placeholders.
 
 ## Gotchas
 

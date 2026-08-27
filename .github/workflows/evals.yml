@@ -157,6 +157,29 @@ jobs:
         suite: ${{ fromJson(needs.detect.outputs.suites) }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The shipped skill is read out of the base branch for the third arm,
+          # so this job needs history, not just the merge commit.
+          fetch-depth: 0
+
+      - name: Stage the shipped skill for comparison
+        # A PR that edits SKILL.md makes the checkout the NEW version, so
+        # `skill-current` would silently BE the change with nothing to compare
+        # against - which is why a skill fix could only ever be judged against a
+        # published run from another day. Extract the base branch's copy and name
+        # it; run.sh then adds a third arm and the report gains a column.
+        # Unchanged (a suite-only PR) means two arms and no wasted third of a run.
+        run: |
+          base="origin/${{ github.base_ref }}"
+          file="skills/${{ matrix.suite }}/SKILL.md"
+          git show "$base:$file" > /tmp/shipped-SKILL.md 2>/dev/null || exit 0
+          if diff -q /tmp/shipped-SKILL.md "$file" >/dev/null 2>&1; then
+            echo "skill unchanged against $base - two arms"; exit 0
+          fi
+          v=$(sed -n 's/^[[:space:]]*version:[[:space:]]*"\?\([^"]*\)"\?[[:space:]]*$/\1/p' /tmp/shipped-SKILL.md | head -1)
+          echo "SKILL_CURRENT=/tmp/shipped-SKILL.md" >> "$GITHUB_ENV"
+          echo "SKILL_BASE_VERSION=${v:-unversioned}" >> "$GITHUB_ENV"
+          echo "comparing against shipped ${v:-unversioned}"
 
       - uses: actions/setup-node@v6
         with:

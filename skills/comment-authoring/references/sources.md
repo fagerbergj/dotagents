@@ -15,7 +15,8 @@ Load this reference for language-specific public API conventions or source attri
 
 ## Research Basis
 
-- [Lanza and Robbes, *How Programmers Write Comments: A Survey Study*](https://arxiv.org/abs/1710.00830): developers value rationale and usage comments, while common comments often restate code.
+- [Pascarella and Bacchelli, *Classifying Code Comments in Java Open-Source Software Systems*](https://doi.org/10.1109/MSR.2017.63) (MSR 2017): manual classification of 2,000 files found summary comments outnumber rationale comments by roughly twenty to one.
+- [Wen, Nagy, Bavota and Lanza, *A Large-Scale Empirical Study on Code-Comment Inconsistencies*](https://doi.org/10.1109/ICPC.2019.00019) (ICPC 2019): comments drifting out of step with the code they describe is the dominant real-world failure, not comment scarcity.
 - [Martin Fowler et al., *Refactoring*](https://refactoring.com/book/): improve unclear code before explaining it with comments.
 - [Steve McConnell, *Code Complete*](https://www.oreilly.com/library/view/code-complete-2nd/0672322409/): document intent and constraints rather than mechanics.
 - [Google C++ Style Guide: Comments](https://google.github.io/styleguide/cppguide.html): comments must remain accurate and describe non-obvious behavior and interfaces.

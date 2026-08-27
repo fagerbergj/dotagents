@@ -18,6 +18,8 @@ Default PR body template. Used only when the target repo has no .github/pull_req
 
 ## Verification
 
+<!-- Only what you actually ran and observed. Nothing run? Say what the reviewer should run, imperative. Never claim a result you did not see. -->
+
 <!-- How you confirmed it works: tests added, commands run + result, steps to
      reproduce, screenshots for UI. -->
 

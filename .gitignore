@@ -4,3 +4,6 @@ evals/.cache/
 evals/results/
 mcp.json
 node_modules
+
+# Transient three-arm config run.sh writes beside a suite when comparing versions
+evals/skills/*/.promptfooconfig.3arm.yaml
