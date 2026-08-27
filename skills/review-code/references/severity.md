@@ -9,15 +9,17 @@ A finding supported only by your preference is a `nit:`, however sure you are. A
 
 ## The anchors
 
+Calibrate before you reach for one. Google's standard is that a reviewer approves once the change **definitely improves overall code health**, even where it is not perfect - so on a well-made change the expected outcome is approve with comments, and a blocking finding is the exception you have to earn. Measured on ten real merged pull requests, this skill blocked all ten, including the five their own reviewer approved: the anchors below were wide enough that something always qualified.
+
 `blocking:` requires ONE of these, and the finding must say which:
 
 | Anchor | What it means | Not this |
 |---|---|---|
 | **defect** | Concrete inputs or state produce wrong output, a crash, or data loss | "This feels fragile" |
 | **security** | Auth flaw, unvalidated input, injection, PII or secret exposure | "I'd sanitise this differently" |
-| **design** | A *named* principle violated — SRP, coupling, complexity that can't be followed without explanation | "I'd have structured it differently" |
+| **design** | A *named* principle violated, **and** you can say which concrete future defect it invites | Naming a principle you could name about most code |
 | **scope** | The change does something its task never asked for | A pre-existing wart in adjacent code |
-| **tests** | New or changed behaviour ships with no test, or a test passes while what it claims to cover is broken | "I'd add more tests eventually" |
+| **tests** | The behaviour this change *exists to deliver* ships with no test, or a test passes while what it claims to cover is broken | An untested edge case, fallback, or guard alongside a tested main path - that is a `suggestion:` |
 
 There is deliberately no *intent* anchor.
 A human reviewer blocking on "I don't understand this" is healthy scepticism; an automated reviewer doing it would block on anything unfamiliar, at any hour, with nobody to argue back.
@@ -31,7 +33,7 @@ The author may ignore it. Never blocks.
 
 `question:` — you suspect a problem but aren't sure.
 Asking resolves it faster than demanding a change.
-An unresolved question **withholds approval but does not request changes** — see the verdict rules.
+A question does **not** withhold approval on its own: an automated reviewer verifying rather than trusting will always have one, so letting questions gate approval means never approving. Withhold only when the answer would land on a defect anchor above, and say so.
 
 `praise:` — summary only, never inline.
 
@@ -43,7 +45,7 @@ Where no convention exists, accept the author's choice rather than inventing one
 
 **Design is not style.**
 "Aspects of software design are almost never a pure style issue or just a personal preference. They are based on underlying principles and should be weighed on those principles, not simply by personal opinion" (Google).
-Naming the principle is what separates a design block from a taste argument.
+Naming the principle is what separates a design block from a taste argument - and naming the concrete future defect it invites is what separates a block from a principle you could cite about most code.
 
 **Out of scope is not blocking here.**
 Concerns about adjacent code the change doesn't touch belong in a separate issue.
@@ -72,7 +74,7 @@ A finding about code you never read is fabrication, whatever label you put on it
 Three verdicts, three levels of confidence:
 
 - Any surviving `blocking:` → **request changes**. You found a defect.
-- Else any unresolved `question:` → **comment**. You may be missing something; approval withheld, no changes demanded.
+- Else any unresolved `question:` **whose answer could land on an anchor above** → **comment**. You may be missing something; approval withheld, no changes demanded. A question that could not change the verdict either way does not reach this rung - see `question:` above, and note that a reviewer told to verify rather than trust always has one.
 - Else → **approve**, even with suggestions and nits outstanding; say explicitly that they're non-blocking.
 
 ### request changes
