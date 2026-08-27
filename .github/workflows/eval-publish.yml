@@ -111,7 +111,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '24'   # current LTS; matches evals/package.json engines
 
       - name: Install eval deps
         if: steps.plan.outputs.rerun != '[]'
