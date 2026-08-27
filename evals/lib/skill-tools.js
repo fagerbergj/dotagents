@@ -36,6 +36,25 @@ const TOOL = {
   },
 };
 
+// Reading the code under review is not a skill affordance - it is the subject
+// matter - so this tool is offered to every arm that names a source tree, and
+// both arms then send an identical `tools` shape. Only load_resource above is
+// gated on the skill.
+const SOURCE_TOOL = {
+  type: 'function',
+  function: {
+    name: 'read_source',
+    description:
+      'Read a file from the source tree under review, at the commit the change was opened against. `path` is repo-relative, e.g. "internal/vetting/node.go". A directory path returns its entries.',
+    parameters: {
+      type: 'object',
+      properties: { path: { type: 'string', description: 'Path relative to the repository root.' } },
+      required: ['path'],
+      additionalProperties: false,
+    },
+  },
+};
+
 // Thrown for anything that means the harness could not run the turn. A grader or
 // tool that could not run is not a verdict, so this propagates and promptfoo
 // records an error row rather than scoring an empty completion as a bad answer.
@@ -166,14 +185,23 @@ class SkillToolsProvider {
     // The one mechanism that separates the arms: the skill arm's prompt function
     // returns a skillDir alongside its messages, the baseline's returns nothing.
     const skillDir = context.prompt?.config?.skillDir;
-    let root = null;
-    if (skillDir) {
+    // The source tree, when the suite reviews real code. Symmetric across arms.
+    const repoDir = context.prompt?.config?.repoDir;
+    const real = (dir, label) => {
       try {
-        root = fs.realpathSync(skillDir);
+        return fs.realpathSync(dir);
       } catch {
-        throw new LoopError(`skillDir does not exist: ${skillDir}`);
+        throw new LoopError(`${label} does not exist: ${dir}`);
       }
-    }
+    };
+    const roots = {};
+    if (skillDir) roots[TOOL.function.name] = real(skillDir, 'skillDir');
+    if (repoDir) roots[SOURCE_TOOL.function.name] = real(repoDir, 'repoDir');
+    const root = roots[TOOL.function.name] || null;
+    const tools = [
+      ...(roots[TOOL.function.name] ? [TOOL] : []),
+      ...(roots[SOURCE_TOOL.function.name] ? [SOURCE_TOOL] : []),
+    ];
     const maxToolCalls = this.config.maxToolCalls ?? DEFAULTS.maxToolCalls;
     const maxBytes = this.config.maxResourceBytes ?? DEFAULTS.maxResourceBytes;
     const budget = { total: maxBytes, remaining: maxBytes };
@@ -185,7 +213,7 @@ class SkillToolsProvider {
         model: this.config.model,
         messages,
         ...(this.config.max_tokens ? { max_tokens: this.config.max_tokens } : {}),
-        ...(root ? { tools: [TOOL], tool_choice: 'auto' } : {}),
+        ...(tools.length ? { tools, tool_choice: 'auto' } : {}),
         ...(this.config.passthrough || {}),
       };
       const { json, cached } = await this.chat(body, context);
@@ -213,7 +241,7 @@ class SkillToolsProvider {
         };
       }
       if (round >= maxToolCalls) {
-        throw new LoopError(`load_resource loop exceeded ${maxToolCalls} rounds (requested: ${loaded.join(', ')})`);
+        throw new LoopError(`tool loop exceeded ${maxToolCalls} rounds (requested: ${loaded.join(', ')})`);
       }
       messages = messages.concat([message]);
       for (const call of calls) {
@@ -224,9 +252,10 @@ class SkillToolsProvider {
           args = {};
         }
         const requested = args.path;
-        const content = call.function?.name === TOOL.function.name
-          ? loadResource(root, requested, budget)
-          : `refused: unknown tool "${call.function?.name}".`;
+        const called = call.function?.name;
+        const content = roots[called]
+          ? loadResource(roots[called], requested, budget)
+          : `refused: unknown tool "${called}".`;
         loaded.push(String(requested));
         messages.push({ role: 'tool', tool_call_id: call.id, content });
       }

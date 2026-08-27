@@ -62,6 +62,9 @@ node assertions/*.test.cjs
 # The load_resource provider is shared harness code, so its self-check runs for
 # every suite even though only mermaid uses it yet.
 node "$here/lib/skill-tools.test.cjs"
+# Fixture materialisation has its own offline check - a local repo stands in for
+# GitHub, so the diff range and the archived tree are exercised without network.
+node "$here/lib/fixtures.test.cjs"
 # A case var containing {{ or {% renders through nunjucks and can throw, which
 # empties the output in every arm while the run still reports success.
 python3 "$here/lib/check-case-vars.py" tests/*.yaml
@@ -69,6 +72,11 @@ python3 "$here/lib/check-case-vars.py" tests/*.yaml
 # assertion was deleted, and for an assertion with no metric or a dangling
 # file://...:fn. This walks the parsed tree instead.
 python3 "$here/lib/check-suite.py" .
+# Real pull requests as input: clone the repo at the pinned SHAs and materialise
+# the diff plus the tree the change was opened against. No-op for a suite with no
+# tests/fixtures.json, which is every suite but review-code. Network, so it runs
+# after the free checks and before a single token is bought.
+node "$here/lib/fetch-fixtures.js" .
 npx -y promptfoo@latest eval -c "$config" -o "$out" \
   $cache_flag --no-share --max-concurrency "${EVAL_CONCURRENCY:-8}" "$@" || true
 node "$here/report.js" "$out" --md "${out%.json}.md"
