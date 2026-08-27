@@ -3,10 +3,11 @@
 // open the surrounding code rather than judging from hunks alone - which is the
 // whole claim review-code makes.
 //
-// The head tree, not the base one. A reviewer reads and cites the code the change
-// is asking for: files the PR adds do not exist at the base, and citing a line it
-// appends is not a fabrication. Resolving against base marked three of nine rows
-// as invented citations when every one of them was real.
+// The tree at the commit the review was actually written against - GitHub records
+// it as `reviews[].commit_id`. Pinning the merged head instead is wrong twice
+// over: later commits fix what the review asked for, so the defect the ground
+// truth names is no longer in the diff, and files the change adds do not exist at
+// the base, so citing a line it appends looks like a fabrication.
 //
 // Both SHAs are pinned. `refs/pull/<n>/head` moves under a force-push, so the
 // ref is how the objects are reached and the pinned head is what is verified
@@ -40,16 +41,24 @@ function materialise(f, log = () => {}) {
   // A raw SHA cannot be fetched from GitHub, so the PR ref is the way in and the
   // base comes along with it as an ancestor of the head.
   git(p.git, ['fetch', '-q', '--filter=blob:none', 'origin', `refs/pull/${f.pr}/head:refs/fixtures/${f.pr}`]);
-  const head = git(p.git, ['rev-parse', `refs/fixtures/${f.pr}`]).trim();
-  if (head !== f.head) {
-    throw new Error(`fixture ${f.name}: refs/pull/${f.pr}/head is ${head.slice(0, 12)}, pinned ${f.head.slice(0, 12)} - the PR was force-pushed; re-pin or drop it`);
+  // The reviewed commit must still be an ancestor of the PR ref. A force-push
+  // makes it unreachable, and the fixture is then unusable rather than merely
+  // stale - fail loudly instead of silently reviewing a different tree.
+  try {
+    git(p.git, ['cat-file', '-e', `${f.reviewed}^{commit}`]);
+  } catch {
+    throw new Error(`fixture ${f.name}: reviewed commit ${f.reviewed.slice(0, 12)} is unreachable from refs/pull/${f.pr}/head - force-pushed; re-pin or drop it`);
   }
-  git(p.git, ['cat-file', '-e', `${f.base}^{commit}`]);
-  fs.writeFileSync(p.patch, git(p.git, ['diff', `${f.base}..${head}`]));
+  git(p.git, ['fetch', '-q', '--filter=blob:none', 'origin', f.base]);
+  // Three dots: the base branch moves on after a PR opens, so diffing against its
+  // tip would fold in everyone else's commits. The merge base is what the
+  // reviewer was looking at.
+  const mergeBase = git(p.git, ['merge-base', f.base, f.reviewed]).trim();
+  fs.writeFileSync(p.patch, git(p.git, ['diff', `${mergeBase}..${f.reviewed}`]));
   fs.rmSync(p.tree, { recursive: true, force: true });
   fs.mkdirSync(p.tree, { recursive: true });
-  execFileSync('bash', ['-c', `git -C ${JSON.stringify(p.git)} archive ${head} | tar -x -C ${JSON.stringify(p.tree)}`]);
-  log(`  ${f.name}: ${f.repo}#${f.pr} ${f.base.slice(0, 7)}..${head.slice(0, 7)}`);
+  execFileSync('bash', ['-c', `git -C ${JSON.stringify(p.git)} archive ${f.reviewed} | tar -x -C ${JSON.stringify(p.tree)}`]);
+  log(`  ${f.name}: ${f.repo}#${f.pr} ${mergeBase.slice(0, 7)}..${f.reviewed.slice(0, 7)} (as reviewed)`);
 }
 
 // Read-only. Throws rather than fetching: a missing fixture at eval time means

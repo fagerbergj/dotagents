@@ -20,14 +20,14 @@ assert.equal(lineCount('/nonexistent/file.go'), null, 'a missing file reports nu
 // citation outside the changed range as invented, which marked the skill arm
 // down for opening the surrounding file - the behaviour the skill exists to
 // produce. These pin the distinction that replaced it.
-const ctx = { vars: { fixture: 'quack-1013' } };
+const ctx = { vars: { fixture: 'caddy-7916' } };
 const score = (t) => noInventedCitations(t, ctx).score;
 
 try {
-  assert.equal(score('see internal/dag/planner.go:421'), 1, 'a real line outside every hunk is a real citation');
-  assert.equal(score('see planner.go:421'), 1, 'reviews cite bare basenames too');
-  assert.equal(score('see internal/dag/planner.go:999999'), 0, 'a line past the end of the file is invented');
-  assert.equal(score('see internal/dag/ghost.go:5'), 0, 'a repo-relative path not in the tree is invented');
+  assert.equal(score('see modules/caddyhttp/reverseproxy/healthchecks.go:40'), 1, 'a real line outside every hunk is a real citation');
+  assert.equal(score('see healthchecks.go:40'), 1, 'reviews cite bare basenames too');
+  assert.equal(score('see modules/caddyhttp/reverseproxy/healthchecks.go:999999'), 0, 'a line past the end of the file is invented');
+  assert.equal(score('see modules/caddyhttp/reverseproxy/ghost.go:5'), 0, 'a repo-relative path not in the tree is invented');
   assert.equal(score('config.yaml:3'), 1, 'a bare name matching nothing is prose, not a citation');
   assert.equal(score('no citations at all'), 1, 'citing nothing invents nothing');
 } catch (err) {
