@@ -1,0 +1,1046 @@
+# Each task is written the way the person who wants the API would actually type
+# it: partial context, casual phrasing, facts out of order. No case names an
+# OpenAPI section, a status code, or a design rule - deciding those is the thing
+# being graded. Cases that evolve a published contract get it as a `contract` var.
+#
+# Every metric is anchored on the first case and aliased into the cases that
+# earn it, rather than sitting in defaultTest: the four negative controls whose
+# right answer is not a document would otherwise be scored by three graders that
+# can only report "no OpenAPI document found" against correct behaviour.
+
+- description: fresh CRUD resource - support tickets
+  vars:
+    task: |
+      ok we're finally building the helpdesk thing. customers write in with a subject line, the actual message, and how urgent they say it is (they always say urgent). agents need to pull up the queue, open a specific one, and there's a Resolve button that closes it out. also they fix typos in the subject sometimes so that has to be editable. can you write me the openapi for it
+    rubric: |
+      A ticket resource exists with subject, body, and priority; agents can list them, read one, create one, change one, and resolve one; each of those is a distinct operation.
+  assert:
+    # 1. Is it an OpenAPI document at all, and does its shape hold up. One JSON
+    #    Schema covers the claims that are pure structure: every operation admits
+    #    failure (error semantics), and the codes it declares fit the method it
+    #    declares them on (method semantics).
+    - &contract_shape
+      type: is-json
+      metric: contract_shape
+      value:
+        type: object
+        required: [openapi, info, paths]
+        properties:
+          openapi:
+            type: string
+            pattern: '^3\.'
+          info:
+            type: object
+            required: [title, version]
+          paths:
+            type: object
+            minProperties: 1
+            additionalProperties:
+              type: object
+              # Every operation, whatever the method: at least one non-2xx
+              # response, and a 204 that carries no body. The method-specific
+              # rules sit in allOf so they do not overlap patternProperties,
+              # which ajv rejects in strict mode.
+              patternProperties:
+                '^(get|put|post|patch|delete|head|options)$':
+                  type: object
+                  required: [responses]
+                  properties:
+                    responses:
+                      type: object
+                      minProperties: 1
+                      allOf:
+                        # At least one non-2xx: the operation admits failure.
+                        - not:
+                            propertyNames:
+                              pattern: '^2'
+                        # At least one 2xx: and it admits success.
+                        - not:
+                            propertyNames:
+                              pattern: '^[^2]'
+                      properties:
+                        '204':
+                          type: object
+                          not:
+                            type: object
+                            required: [content]
+              allOf:
+                # A read takes no request body and creates nothing.
+                - properties:
+                    get:
+                      type: object
+                      not:
+                        anyOf:
+                          - type: object
+                            required: [requestBody]
+                          - type: object
+                            required: [responses]
+                            properties:
+                              responses:
+                                type: object
+                                required: ['201']
+                          - type: object
+                            required: [responses]
+                            properties:
+                              responses:
+                                type: object
+                                required: ['202']
+                - properties:
+                    delete:
+                      type: object
+                      not:
+                        type: object
+                        required: [responses]
+                        properties:
+                          responses:
+                            type: object
+                            required: ['201']
+    # 2. Does a real OpenAPI validator accept it.
+    - &contract_valid
+      type: javascript
+      value: file://assertions/restapi.cjs:validatesAsOpenApi
+      metric: contract_valid
+    # 3. Resource modeling: nouns, plural collections.
+    - &resource_modeling
+      type: javascript
+      value: file://assertions/restapi.cjs:resourcePathsAreNouns
+      metric: resource_modeling
+    # 4. Shared unchanged across every case that calls for a full or evolved
+    #    contract - individually anchored so each case can append it to its own
+    #    distinct deterministic checks below. llm-rubric, not g-eval: g-eval
+    #    scores each criterion in isolation and discards a verdict it cannot
+    #    extract, and its criteria list invited restating the SKILL.md procedure.
+    #    No comparative pick-a-winner assertion here either - the one that used
+    #    to sit beside this restated its criteria one-for-one in comparative
+    #    phrasing.
+    - &design_quality
+      type: llm-rubric
+      threshold: 0.7
+      metric: design_quality
+      # Consequence questions, not properties. The four g-eval criteria this
+      # replaces were near-verbatim SKILL.md procedure lines, so the skill arm
+      # scored for reciting the vocabulary it had just been handed. A question
+      # like "what does the second call return" cannot be answered by naming a
+      # convention - only by a mechanism the judge can quote back. Question 5 is
+      # the per-case coverage requirement, absorbed from a `semantic_quality`
+      # metric that asked three holistic bullets with no arithmetic and sat at
+      # the ceiling on 15 of 20 rows.
+      value: |
+        You are reading an HTTP API contract written in response to this request:
+        "{{task}}"
+
+        Answer the five questions below from the delivered contract alone. A
+        question counts as answered only if you can quote the part of the
+        document that answers it. Naming a convention, a header, an RFC, or a
+        design principle is not an answer; only a mechanism a client could act
+        on is. If nothing in the document answers a question, the answer is
+        NONE and that question earns nothing.
+
+        1. Take the operation that changes the most state. A client sends it,
+           times out, and sends the identical request again. What does the
+           contract say the second call does? Quote it, or answer NONE.
+        2. Take one failure a real client will hit on that operation. Can the
+           client tell it apart from the other failures the same operation
+           declares, and behave differently? Quote the two responses that
+           differ, or answer NONE.
+        3. Find a concept that appears in more than one place. Does the
+           document say it is one thing, so that changing it changes every
+           place at once? Quote it, or answer NONE.
+        4. Take the operation with the largest request body. Could a client
+           build a valid request from this document alone, without guessing a
+           field name, a format, or whether a field is optional? Quote what
+           makes it unambiguous, or answer NONE.
+        5. Coverage: does the contract express everything this request needs,
+           with nothing contradicting it? Specifically: {{rubric}} - quote what
+           expresses it, or answer NONE.
+
+        Score from 0 to 1, never above 1: award 0.2 for each of the five
+        questions you answered with a quotable mechanism and 0 for each NONE.
+        Judge the contract as delivered; do not reward or penalise which
+        conventions, headers, or authoring style it used.
+    # 5. Does the emitted contract satisfy the requirements this case stated.
+    #    One metric across all eleven contract cases, configured per case: the
+    #    eight metrics it replaces were carried by one case each, and a metric
+    #    on fewer than five cases moved sd 0.37 across identical runs and swung
+    #    +0.50 to -0.50. The score is the fraction of this case's requirements
+    #    met, so every case contributes a graded row rather than one bit.
+    #    Structural facts only - the judgement a parser cannot make is design
+    #    quality's question 5, against the same `rubric` var.
+    - type: javascript
+      value: file://assertions/restapi.cjs:contractRequirements
+      metric: contract_requirements
+      config:
+        requirements:
+          # The resource name is the model's to choose, so this matches any
+          # collection and its item route rather than naming "tickets".
+          - check: routeHasMethods
+            kind: collection
+            methods: ['get', 'post']
+          - check: routeHasMethods
+            kind: item
+            methods: ['get', 'put|patch']
+
+- description: nested sub-resource - comments hang off an article
+  vars:
+    task: |
+      Following up from standup - the comments feature. Articles already live at /articles in our spec, that bit is done. A comment belongs to one article, it can't float on its own. Editors want to pull up everything on a given article and nuke a bad one; readers post them. Can you draft the OpenAPI for just the comment part?
+    rubric: |
+      Comments are addressed underneath a specific article rather than as a top-level collection; listing, creating, and deleting are all present, and deleting targets one identified comment.
+  assert:
+    - *contract_shape
+    - *contract_valid
+    - *resource_modeling
+    - *design_quality
+    - type: javascript
+      value: file://assertions/restapi.cjs:contractRequirements
+      metric: contract_requirements
+      config:
+        requirements:
+          # Suffix-matched over the parsed path keys. The regexes this replaces
+          # were anchored on a leading quote, so a correct answer under a
+          # version prefix (/v1/articles/{id}/comments) failed.
+          - check: routeHasMethods
+            suffix: '/articles/{}/comments'
+            methods: ['get', 'post']
+          - check: routeHasMethods
+            suffix: '/articles/{}/comments/{}'
+            methods: ['delete']
+
+- description: action and state transition - cancelling a booking
+  vars:
+    task: |
+      customer support keeps asking for this one. traveller wants to cancel their booking from the app. rules are: only up to 24h before departure, and obviously you can't cancel something that's already cancelled. the refund doesn't land instantly either, takes 3-5 days, so the app can't just say "done, money's back". the app team says they need to tell those two failure cases apart so they can show the right message. bookings are at /bookings/{id} already. openapi please
+    rubric: |
+      Cancellation is modelled as its own operation rather than a plain delete or a free-form update; the two failure cases are distinguishable from each other; the response does not claim the refund has already settled.
+  assert:
+    - *contract_shape
+    - *contract_valid
+    - *resource_modeling
+    # No contract_requirements block. The one check it carried counted distinct
+    # 4xx codes on the cancel operation, which RFC 9457 s3.1.1 contradicts:
+    # consumers "MUST use the \"type\" URI ... as the problem type's primary
+    # identifier", so one 422 carrying two problem types tells the two failures
+    # apart and scored 0 anyway (measured). RFC 9110 s15.5 is a real section -
+    # "Client Error 4xx" - but it asks only for "a representation containing an
+    # explanation of the error situation", never for two codes. What is left is
+    # design_quality question 2, which asks whether the client can tell one
+    # failure from another and behave differently, against the same rubric var.
+    - *design_quality
+
+- description: collection with pagination and filtering - audit trail
+  vars:
+    task: |
+      hey - admin console needs the audit trail screen. we've got something like 40 million rows in there so obviously we're not handing over all of it, the table shows 50 at a time. compliance want to narrow it down by who did the thing, what kind of thing it was, and between two dates. only internal admins ever see this screen. can you spec the endpoint?
+    rubric: |
+      One read operation over the audit entries, with a way to walk through the results in pages and to narrow by actor, action type, and a date range; access is restricted.
+  assert:
+    - *contract_shape
+    - *contract_valid
+    - *resource_modeling
+    - *design_quality
+    - type: javascript
+      value: file://assertions/restapi.cjs:contractRequirements
+      metric: contract_requirements
+      config:
+        requirements:
+          - check: paginationAndFiltering
+            minFilters: 3
+          - check: securityIsDeclaredAndApplied
+            requireScopes: false
+
+- description: authentication and scopes - marketplace payouts
+  vars:
+    task: |
+      marketplace payouts. sellers get paid weekly and they want to see their own history in the seller dashboard. separately finance needs to be able to look at any seller's payouts when someone opens a ticket, and they want a button to push an off-cycle payout. everyone hits us with a token from our IdP. this is money so please be careful about who's allowed to do what. openapi file would be great
+    rubric: |
+      Sellers reading their own payouts, finance reading anyone's, and triggering an off-cycle payout are separated by privilege rather than all being open to any authenticated caller.
+  assert:
+    - *contract_shape
+    - *contract_valid
+    - *resource_modeling
+    - *design_quality
+    - type: javascript
+      value: file://assertions/restapi.cjs:contractRequirements
+      metric: contract_requirements
+      config:
+        requirements:
+          - check: securityIsDeclaredAndApplied
+            requireScopes: true
+          # The off-cycle payout has to be something a caller can actually
+          # trigger; which collection it hangs off is the model's decision.
+          - check: routeHasMethods
+            kind: collection
+            methods: ['post']
+
+- description: compatibility - split shipments without breaking old clients
+  vars:
+    task: |
+      ok so product wants orders to support more than one shipping address, think split shipments, plus we need to record which address each shipment actually went to. problem is the iOS app is on an 18 month refresh cycle and there are still people on builds from 2024. we cannot break those. can you give me the updated file
+    contract: |
+      openapi: 3.0.3
+      info:
+        title: Orders
+        version: 1.4.0
+      paths:
+        /orders:
+          get:
+            summary: List orders
+            responses:
+              '200':
+                description: Orders
+                content:
+                  application/json:
+                    schema:
+                      type: array
+                      items: { $ref: '#/components/schemas/Order' }
+              '401': { description: Unauthenticated }
+          post:
+            summary: Place an order
+            requestBody:
+              required: true
+              content:
+                application/json:
+                  schema: { $ref: '#/components/schemas/Order' }
+            responses:
+              '201':
+                description: Created
+                headers:
+                  Location: { schema: { type: string } }
+              '422': { description: Invalid order }
+        /orders/{orderId}:
+          get:
+            summary: Read one order
+            parameters:
+              - { name: orderId, in: path, required: true, schema: { type: string } }
+            responses:
+              '200':
+                description: Order
+                content:
+                  application/json:
+                    schema: { $ref: '#/components/schemas/Order' }
+              '404': { description: Unknown order }
+      components:
+        schemas:
+          Address:
+            type: object
+            required: [line1, city, postalCode, country]
+            properties:
+              line1: { type: string }
+              city: { type: string }
+              postalCode: { type: string }
+              country: { type: string }
+          Order:
+            type: object
+            required: [lineItems, shippingAddress]
+            properties:
+              id: { type: string }
+              placedAt: { type: string, format: date-time }
+              shippingAddress: { $ref: '#/components/schemas/Address' }
+              lineItems:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    sku: { type: string }
+                    quantity: { type: integer }
+    rubric: |
+      Split shipments and the address each shipment went to are expressible; a client written against the old file still sends and receives everything it did before.
+  assert:
+    - *contract_shape
+    - *contract_valid
+    - *resource_modeling
+    - *design_quality
+    - type: javascript
+      value: file://assertions/restapi.cjs:contractRequirements
+      metric: contract_requirements
+      config:
+        requirements:
+          # The address a shipment went to is the address shape the file
+          # already defines, not a second parallel copy of it.
+          - check: reusesSharedSchema
+            pattern: 'address'
+            minRefs: 2
+            maxDefinitions: 1
+          # Anchored: the baseline already declares postalCode and
+          # shippingAddress, so an unanchored pattern would match itself.
+          - check: declaresProperties
+            properties: ['^(shipments?|parcels?|deliveries|packages?|fulfil?lments?)$']
+    # oasdiff decides compatibility, not a pre-declared list of axes: the
+    # hand-rolled grader this replaces passed a narrowed enum, a removed
+    # optional property and a tightened maxLength because its config named
+    # none of them. Baseline is this case's own vars.contract.
+    - &compatibility
+      type: javascript
+      value: file://assertions/restapi.cjs:preservesExistingContract
+      metric: compatibility
+
+- description: deprecation - sunsetting the old export endpoint
+  vars:
+    task: |
+      the old reports export endpoint is going away on 2027-01-15. the new analytics one has been live for months. thing is nobody reads the changelog - we've mailed the integrators twice and traffic on the old one hasn't moved at all. can you make the spec itself tell them? current file below
+    contract: |
+      openapi: 3.0.3
+      info:
+        title: Reporting
+        version: 2.1.0
+      paths:
+        /reports/exports:
+          get:
+            summary: Export a report
+            parameters:
+              - { name: reportId, in: query, required: true, schema: { type: string } }
+            responses:
+              '200':
+                description: Export
+                content:
+                  text/csv:
+                    schema: { type: string }
+              '404': { description: Unknown report }
+        /analytics/exports:
+          get:
+            summary: Export an analytics dataset
+            parameters:
+              - { name: datasetId, in: query, required: true, schema: { type: string } }
+            responses:
+              '200':
+                description: Export
+                content:
+                  application/json:
+                    schema: { type: object }
+              '404': { description: Unknown dataset }
+    rubric: |
+      The old export endpoint still works and is still described, but the document makes its retirement and the 2027-01-15 date visible to a caller, and points at the replacement.
+  assert:
+    - *contract_shape
+    - *contract_valid
+    - *resource_modeling
+    - *design_quality
+    - type: javascript
+      value: file://assertions/restapi.cjs:contractRequirements
+      metric: contract_requirements
+      config:
+        requirements:
+          # The retirement is announced in the contract, not performed by
+          # deletion.
+          - check: deprecatedOperation
+            path: '/reports/exports'
+          # The date comes from the prompt, so this computes against input. It
+          # is not keyed on a header name: requiring Deprecation/Sunset pays the
+          # skill arm for reciting the two RFC numbers SKILL.md hands it, and
+          # RFC 8594 is Informational rather than Standards Track.
+          - check: sunsetDateMatches
+            path: '/reports/exports'
+            date: '2027-01-15'
+    - *compatibility
+
+- description: schema composition - reuse the address shape for warehouses
+  vars:
+    task: |
+      adding warehouses to the inventory API. a warehouse has a name, a short code, a street address, and the date it opened. attaching what we've got so far, customers are already in there. openapi
+    contract: |
+      openapi: 3.0.3
+      info:
+        title: Inventory
+        version: 1.0.0
+      paths:
+        /customers:
+          get:
+            summary: List customers
+            responses:
+              '200':
+                description: Customers
+                content:
+                  application/json:
+                    schema:
+                      type: array
+                      items: { $ref: '#/components/schemas/Customer' }
+              '401': { description: Unauthenticated }
+      components:
+        schemas:
+          Address:
+            type: object
+            required: [line1, city, postalCode, country]
+            properties:
+              line1: { type: string }
+              line2: { type: string }
+              city: { type: string }
+              postalCode: { type: string }
+              country: { type: string, description: ISO 3166-1 alpha-2 }
+          Customer:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              billingAddress: { $ref: '#/components/schemas/Address' }
+    rubric: |
+      Warehouses carry a name, a code, an opening date, and a street address; the address is the same shape customers already use rather than a second, parallel definition of the same thing.
+  assert:
+    - *contract_shape
+    - *contract_valid
+    - *resource_modeling
+    - *design_quality
+    - type: javascript
+      value: file://assertions/restapi.cjs:contractRequirements
+      metric: contract_requirements
+      config:
+        requirements:
+          - check: reusesSharedSchema
+            pattern: 'address'
+            minRefs: 2
+            maxDefinitions: 1
+          # `code` is anchored because the baseline Address already declares
+          # postalCode; the opening date is not, because nothing in the
+          # baseline contains "open" and the model may name it half a dozen ways.
+          - check: declaresProperties
+            properties: ['^(code|short_?code|warehouse_?code)$', 'opened|opening']
+    - *compatibility
+
+- description: versioning - search results have to change shape
+  vars:
+    task: |
+      our search endpoint hands back a flat array of results. frontend needs a total count and a cursor for the next page, which means the body has to become an object. no way around it. we've got maybe 40 integrators on the current one and we promised them 12 months notice before anything breaks under them. what does the spec look like? current one attached
+    contract: |
+      openapi: 3.0.3
+      info:
+        title: Search
+        version: 1.0.0
+      paths:
+        /v1/search:
+          get:
+            summary: Search
+            parameters:
+              - { name: q, in: query, required: true, schema: { type: string } }
+            responses:
+              '200':
+                description: Matching results
+                content:
+                  application/json:
+                    schema:
+                      type: array
+                      items: { $ref: '#/components/schemas/SearchResult' }
+              '400': { description: Malformed query }
+      components:
+        schemas:
+          SearchResult:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              score: { type: number }
+    rubric: |
+      The new envelope with a total and a cursor is available, and callers on the existing flat-array response can keep using it unchanged for the notice period rather than being cut over.
+  assert:
+    - *contract_shape
+    - *contract_valid
+    - *resource_modeling
+    - *design_quality
+    - type: javascript
+      value: file://assertions/restapi.cjs:contractRequirements
+      metric: contract_requirements
+      config:
+        requirements:
+          # The two fields the request names, matched over declared schema
+          # property names - machine-readable syntax, not prose. Where the new
+          # envelope lives, and how the old array survives, is the model's
+          # decision and is graded by compatibility below.
+          - check: declaresProperties
+            properties:
+              - '^(total|total_?count|count|total_?results|total_?hits)$'
+              - '^(cursor|next_?cursor|next|next_?page_?token|next_?page|after)$'
+    - *compatibility
+
+- description: long-running operation - full account data export
+  vars:
+    task: |
+      data export request from legal. an admin asks for a dump of everything in the account. takes anywhere from 30 seconds to an hour depending on how big the account is. the UI wants to show progress and then hand them a download at the end. we obviously can't hold the connection open for an hour. openapi for this?
+    rubric: |
+      Kicking off an export returns immediately without the finished file; there is something the UI can poll for progress; the finished export is retrievable once it is ready.
+  assert:
+    - *contract_shape
+    - *contract_valid
+    - *resource_modeling
+    - *design_quality
+    - type: javascript
+      value: file://assertions/restapi.cjs:contractRequirements
+      metric: contract_requirements
+      config:
+        requirements:
+          # RFC 9110 s15.3.3: 202 is only honest if the outcome is readable
+          # later. The regex this replaces matched "202" anywhere in the
+          # document text.
+          - check: asyncWorkIsPollable
+
+- description: conflict and idempotency - reserving the last unit of stock
+  vars:
+    task: |
+      warehouse team here. storefront calls us to hold stock for a cart before checkout. two things keep biting us. one, two shoppers grab the last unit at the same instant and both get told they've got it - exactly one should win. two, the storefront retries when we time out and we end up with two separate holds for the same cart. need the spec for the reserve call.
+    rubric: |
+      Losing the race is reported as a distinct, recognisable failure rather than a generic error, and a retried request for the same cart cannot produce a second hold.
+  assert:
+    - *contract_shape
+    - *contract_valid
+    - *resource_modeling
+    # No contract_requirements block, for the same reason as the cancel case:
+    # its only check counted distinct 4xx codes, which RFC 9457 rejects as the
+    # discriminator. Losing the race is design_quality question 2 and the retry
+    # that cannot double-hold is question 1, both against this case's rubric.
+    - *design_quality
+
+# Negative controls. Every other case rewards producing more; these five are the
+# only place the suite can see a skill over-applying itself, which for a skill
+# whose whole subject is "what should this contract say" is where its value most
+# shows. Each has one defensible right answer that is not a contract: correct a
+# claim and stop, point at the operation that already does it, say nothing needs
+# to change, or name the contradiction before writing anything. None of them
+# carries the three document graders above - the right answer to four of them is
+# not a document at all, and those graders can only report "no OpenAPI document
+# found" against correct behaviour.
+#
+# The zero-gate in each rubric is deliberate and is not the holistic switch the
+# rubric guidance warns about: whether the one requested thing was done is
+# genuinely one bit here, and the graded part - what was added on top - carries
+# its own arithmetic underneath.
+- description: negative control - documentation-only fix, not a redesign
+  vars:
+    task: |
+      quick one. support noticed the docs say the coupon code is case sensitive. it isn't and never has been, the backend upper-cases whatever you send. can you fix the file? nothing else is changing, we're mid-freeze.
+    contract: |
+      openapi: 3.0.3
+      info:
+        title: Coupons
+        version: 3.2.1
+      paths:
+        /coupons/{code}:
+          get:
+            summary: Look up a coupon
+            parameters:
+              - name: code
+                in: path
+                required: true
+                description: Case-sensitive coupon code.
+                schema: { type: string }
+            responses:
+              '200':
+                description: The coupon
+                content:
+                  application/json:
+                    schema: { $ref: '#/components/schemas/Coupon' }
+              '404': { description: No such coupon }
+      components:
+        schemas:
+          Coupon:
+            type: object
+            properties:
+              code: { type: string }
+              percentOff: { type: integer }
+              expiresAt: { type: string, format: date-time }
+    rubric: |
+      The incorrect case-sensitivity claim is corrected and the rest of the file is left as it was. Adding operations, schemas, security, versioning, or error responses that nobody asked for is wrong here, not thorough.
+  assert:
+    # This one control does emit a document - the edited file - so the document
+    # graders apply to it. The other four do not.
+    - *contract_shape
+    - *contract_valid
+    - *resource_modeling
+    - *compatibility
+    # design_quality rewards a contract with more mechanism in it, which is the
+    # wrong direction here. Judged on its own terms instead. The
+    # case-sensitivity claim is read out of the parsed parameter description
+    # and judged; the not-regex it replaces failed the correct answer, because
+    # "the code is not case sensitive" matches /[Cc]ase[- ]sensitive/.
+    - type: llm-rubric
+      metric: control_quality
+      threshold: 0.7
+      value: |
+        Someone asked for this, mid-freeze:
+        "{{task}}"
+
+        The file they attached:
+
+        ```yaml
+        {{contract}}
+        ```
+
+        The reply is below. The correct
+        answer is the existing contract with one incorrect claim corrected and
+        nothing else changed.
+
+        Answer these from the delivered document alone:
+        1. Quote the description of the `code` path parameter on
+           GET /coupons/{code} exactly as delivered. Does it still assert that
+           the code IS case sensitive? A description saying the code is not
+           case sensitive, that lookup is case-insensitive, or that the code is
+           upper-cased on the way in is the correct fix, not a failure.
+        2. List everything present in the reply that was not in the file they
+           sent: operations, schemas, parameters, response codes, security,
+           version changes. Quote each addition, or answer NONE.
+        3. Additional requirement for this case: {{rubric}} - is it met?
+
+        Score from 0 to 1, never above 1. Start at 1. A parameter description
+        that still asserts the code is case sensitive scores 0. Subtract 0.25
+        for each distinct addition listed in question 2, however well designed
+        it is - added scope is the wrong answer here, not thoroughness. A reply
+        that changes only that one description and leaves everything else byte
+        for byte scores 1 and must not be marked down for looking sparse.
+        Judge the document as delivered; do not reward or penalise which
+        conventions or authoring style it used.
+
+- description: negative control - the existing endpoint already does it
+  vars:
+    task: |
+      billing dashboard needs an unpaid invoices page. can you add GET /invoices/unpaid to the spec and give me the file back? attached is what we've got. no rush but ideally today
+    contract: |
+      openapi: 3.0.3
+      info:
+        title: Billing
+        version: 2.0.0
+      paths:
+        /invoices:
+          get:
+            summary: List invoices
+            parameters:
+              - name: status
+                in: query
+                description: Return only invoices in this state.
+                schema: { type: string, enum: [draft, sent, paid, unpaid, void] }
+              - name: customerId
+                in: query
+                schema: { type: string }
+              - name: limit
+                in: query
+                schema: { type: integer, default: 50, maximum: 200 }
+              - name: cursor
+                in: query
+                schema: { type: string }
+            responses:
+              '200':
+                description: A page of invoices
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        items:
+                          type: array
+                          items: { $ref: '#/components/schemas/Invoice' }
+                        nextCursor: { type: string }
+              '401': { description: Unauthenticated }
+        /invoices/{invoiceId}:
+          get:
+            summary: Read one invoice
+            parameters:
+              - { name: invoiceId, in: path, required: true, schema: { type: string } }
+            responses:
+              '200':
+                description: The invoice
+                content:
+                  application/json:
+                    schema: { $ref: '#/components/schemas/Invoice' }
+              '404': { description: No such invoice }
+      components:
+        schemas:
+          Invoice:
+            type: object
+            properties:
+              id: { type: string }
+              customerId: { type: string }
+              status: { type: string, enum: [draft, sent, paid, unpaid, void] }
+              amountDue: { type: integer }
+              dueOn: { type: string, format: date }
+  options:
+    # The suite-wide transform replaces the output with the parsed OpenAPI
+    # document whenever one is present, which throws the prose away. This
+    # control grades prose exclusively and carries no document assertion, so it
+    # keeps the raw reply. Measured: with the transform, a correct answer that
+    # also hands the file back scored 0 on all four of these; without it, 1.
+    transform: 'output'
+  assert:
+    - type: llm-rubric
+      metric: control_quality
+      threshold: 0.7
+      value: |
+        Someone asked for this:
+        "{{task}}"
+
+        The file they attached:
+
+        ```yaml
+        {{contract}}
+        ```
+
+        The reply is below. The operation they asked for already exists: GET /invoices declares a
+        `status` query parameter whose enum includes `unpaid`, so the unpaid
+        page is GET /invoices?status=unpaid. The correct answer is to say so.
+        Nothing in the contract needs to change.
+
+        Answer these from the reply as delivered:
+        1. Does the reply say the existing GET /invoices already returns what
+           was asked for, and name the parameter or the call that does it?
+           Quote it, or answer NONE.
+        2. List everything the reply adds to the contract: paths, operations,
+           parameters, schemas, response codes. Quote each addition, or answer
+           NONE.
+
+        Score from 0 to 1, never above 1. Start at 1. A reply that does not
+        identify the existing operation as already covering the request scores
+        0, whatever else it contains. Subtract 0.25 for each distinct addition
+        listed in question 2, however well designed it is - a second endpoint
+        that duplicates a filter the file already has is the wrong answer here,
+        not thoroughness. A reply that points at the existing parameter and
+        changes nothing scores 1 and must not be marked down for looking
+        sparse. Judge the reply as delivered; do not reward or penalise which
+        conventions or authoring style it used.
+
+- description: negative control - nothing in the contract changes
+  vars:
+    task: |
+      heads up, we shipped the perf work on the products list this morning. added a covering index and bumped the instance size, p99 went from 4.1s to about 290ms. same request, same response, same everything, it's just fast now. do I need to update the openapi file before the release notes go out? file's attached
+    contract: |
+      openapi: 3.0.3
+      info:
+        title: Catalogue
+        version: 1.7.2
+      paths:
+        /products:
+          get:
+            summary: List products
+            parameters:
+              - { name: categoryId, in: query, schema: { type: string } }
+              - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+              - { name: cursor, in: query, schema: { type: string } }
+            responses:
+              '200':
+                description: A page of products
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        items:
+                          type: array
+                          items: { $ref: '#/components/schemas/Product' }
+                        nextCursor: { type: string }
+              '400': { description: Malformed query }
+      components:
+        schemas:
+          Product:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              categoryId: { type: string }
+              priceMinor: { type: integer }
+  options:
+    # The suite-wide transform replaces the output with the parsed OpenAPI
+    # document whenever one is present, which throws the prose away. This
+    # control grades prose exclusively and carries no document assertion, so it
+    # keeps the raw reply. Measured: with the transform, a correct answer that
+    # also hands the file back scored 0 on all four of these; without it, 1.
+    transform: 'output'
+  assert:
+    - type: llm-rubric
+      metric: control_quality
+      threshold: 0.7
+      value: |
+        Someone asked for this:
+        "{{task}}"
+
+        The file they attached:
+
+        ```yaml
+        {{contract}}
+        ```
+
+        The reply is below. Nothing they describe is expressed in an API
+        contract: an index, an
+        instance size, and a latency number are implementation, and they said
+        the request and response are unchanged. The correct answer is that the
+        file does not need to change.
+
+        Answer these from the reply as delivered:
+        1. Does the reply say the contract needs no change? Quote it, or answer
+           NONE.
+        2. List every edit the reply makes or proposes to the file: paths,
+           operations, parameters, schemas, response codes, descriptions,
+           version bumps, extensions. Quote each one, or answer NONE.
+
+        Score from 0 to 1, never above 1. Start at 1. A reply that does not say
+        the contract needs no change scores 0, whatever else it contains.
+        Subtract 0.25 for each distinct edit listed in question 2, however well
+        designed it is - a performance change that alters no request and no
+        response has nothing to record here, and a version bump for it is an
+        edit like any other. A reply that says nothing needs to change, and
+        changes nothing, scores 1 and must not be marked down for being short.
+        Judge the reply as delivered; do not reward or penalise which
+        conventions or authoring style it used.
+
+- description: negative control - the two requirements contradict each other
+  vars:
+    task: |
+      mobile team wants the cancel call to hand back the final invoice so they can show it on the confirmation screen. body should have the invoice id and the amount charged. it has to keep returning 204 though, their networking layer branches on that and we're not getting a new build out this quarter. can you update the file?
+    contract: |
+      openapi: 3.0.3
+      info:
+        title: Subscriptions
+        version: 4.0.0
+      paths:
+        /subscriptions/{subscriptionId}:
+          get:
+            summary: Read a subscription
+            parameters:
+              - { name: subscriptionId, in: path, required: true, schema: { type: string } }
+            responses:
+              '200':
+                description: The subscription
+                content:
+                  application/json:
+                    schema: { $ref: '#/components/schemas/Subscription' }
+              '404': { description: No such subscription }
+          delete:
+            summary: Cancel a subscription
+            parameters:
+              - { name: subscriptionId, in: path, required: true, schema: { type: string } }
+            responses:
+              '204': { description: Cancelled }
+              '404': { description: No such subscription }
+      components:
+        schemas:
+          Subscription:
+            type: object
+            properties:
+              id: { type: string }
+              planId: { type: string }
+              status: { type: string, enum: [active, cancelled] }
+              renewsOn: { type: string, format: date }
+  options:
+    # The suite-wide transform replaces the output with the parsed OpenAPI
+    # document whenever one is present, which throws the prose away. This
+    # control grades prose exclusively and carries no document assertion, so it
+    # keeps the raw reply. Measured: with the transform, a correct answer that
+    # also hands the file back scored 0 on all four of these; without it, 1.
+    transform: 'output'
+  assert:
+    - type: llm-rubric
+      metric: control_quality
+      threshold: 0.7
+      value: |
+        Someone asked for this:
+        "{{task}}"
+
+        The file they attached:
+
+        ```yaml
+        {{contract}}
+        ```
+
+        The reply is below. The two things they asked for cannot both hold: a
+        204 response carries no
+        content by definition (RFC 9110 s15.3.5), so a body and a 204 are
+        mutually exclusive. The correct answer names that conflict before
+        writing anything. Having named it, either asking which of the two gives
+        or picking one explicitly and saying what it costs the other is
+        correct; quietly delivering one of the two is not.
+
+        Answer these from the reply as delivered:
+        1. Does the reply say the two requirements conflict, because a 204
+           cannot carry a response body? Quote it, or answer NONE.
+        2. Does any document in the reply declare content, a schema, or a body
+           on a 204 response? Quote it, or answer NONE.
+        3. Does the reply drop one of the two requirements without saying so -
+           a body with no mention that the status has to change, or a 204 with
+           no mention that the invoice cannot come back this way? Quote it, or
+           answer NONE.
+
+        Score from 0 to 1, never above 1. Start at 1. A reply that does not
+        name the conflict scores 0, however well the document it delivers is
+        put together. Subtract 0.5 if question 2 found a body on a 204.
+        Subtract 0.25 if question 3 found a requirement silently dropped. A
+        reply that names the conflict and asks which one gives, changing
+        nothing, scores 1 and must not be marked down for delivering no
+        document. Judge the reply as delivered; do not reward or penalise which
+        conventions or authoring style it used.
+
+- description: negative control - the compatibility requirement contradicts the ask
+  vars:
+    task: |
+      growth wants the referral code mandatory on signup from the 1st, no more blank ones. it's optional in the spec today. one thing though - the mobile build that sends it isn't out until March, everything in the field right now posts without it and none of that can start failing. can you make it required in the file?
+    contract: |
+      openapi: 3.0.3
+      info:
+        title: Signups
+        version: 1.2.0
+      paths:
+        /signups:
+          post:
+            summary: Create a signup
+            requestBody:
+              required: true
+              content:
+                application/json:
+                  schema: { $ref: '#/components/schemas/Signup' }
+            responses:
+              '201':
+                description: Created
+                headers:
+                  Location: { schema: { type: string } }
+              '422': { description: Invalid signup }
+      components:
+        schemas:
+          Signup:
+            type: object
+            required: [email]
+            properties:
+              email: { type: string, format: email }
+              referralCode: { type: string }
+              marketingOptIn: { type: boolean }
+  options:
+    # The suite-wide transform replaces the output with the parsed OpenAPI
+    # document whenever one is present, which throws the prose away. This
+    # control grades prose exclusively and carries no document assertion, so it
+    # keeps the raw reply. Measured: with the transform, a correct answer that
+    # also hands the file back scored 0 on all four of these; without it, 1.
+    transform: 'output'
+  assert:
+    - type: llm-rubric
+      metric: control_quality
+      threshold: 0.7
+      value: |
+        Someone asked for this:
+        "{{task}}"
+
+        The file they attached:
+
+        ```yaml
+        {{contract}}
+        ```
+
+        The reply is below. The two things they asked for cannot both hold on
+        one version of this
+        operation: adding a field to the required list of a request body
+        rejects every client that omits it, and they said the clients in the
+        field omit it and cannot start failing. The correct answer names that
+        before writing anything. Having named it, either asking which gives or
+        proposing a route that keeps both true - leaving it optional and
+        enforcing when the build ships, or a separate versioned operation with
+        a cutover - is correct; quietly marking it required is not.
+
+        Answer these from the reply as delivered:
+        1. Does the reply say that making the field required breaks the clients
+           already in the field, so the two requirements cannot both hold as
+           asked? Quote it, or answer NONE.
+        2. Does any document in the reply add `referralCode` to the `required`
+           list of the request body that today's clients post to? Quote it, or
+           answer NONE.
+        3. Does the reply drop one of the two requirements without saying so -
+           making it required with no mention of the clients, or leaving it
+           optional with no mention that the mandate cannot happen yet? Quote
+           it, or answer NONE.
+
+        Score from 0 to 1, never above 1. Start at 1. A reply that does not name
+        the conflict scores 0, however well the document it delivers is put
+        together. Subtract 0.5 if question 2 found the field made required on
+        the operation today's clients post to. Subtract 0.25 if question 3
+        found a requirement silently dropped. A reply that names the conflict
+        and asks which one gives, changing nothing, scores 1 and must not be
+        marked down for delivering no document. Judge the reply as delivered;
+        do not reward or penalise which conventions or authoring style it used.

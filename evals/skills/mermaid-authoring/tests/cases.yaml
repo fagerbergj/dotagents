@@ -1,0 +1,386 @@
+# One case per diagram type in the skill's references/. The task never names a
+# diagram type or a Mermaid keyword: choosing the form is part of what is graded.
+# `allowed` lists every type a competent author could defend for that scenario.
+
+- description: sequenceDiagram - streaming chat exchange
+  vars:
+    task: |
+      need something for the design doc showing how one chat turn actually moves through our stack. user types a message, browser POSTs it to the api, api kicks off a worker job. the browser also opens a separate streaming connection - that's the bit people keep getting confused about. then the worker's tokens come back out through the api and keep landing in the browser until the reply is finished.
+    rubric: |
+      Per UML 2.5.1 (OMG formal/2017-12-05) §17.1 (basic trace model, partial ordering of occurrences) and §17.3 (Lifelines), an interaction reads as messages between lifelines in time order: the submission and the streaming channel are two arrows a reader can tell apart without being told which is which, and the token messages read as repeating or continuing rather than a single message.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [sequenceDiagram, zenuml] }
+      metric: diagram_choice
+
+- description: flowchart - release publishing decisions
+  vars:
+    task: |
+      People keep asking what actually happens when they run the publish job, so I'd like a picture for the release runbook. The first thing it does is check the version - malformed version, it errors out and nothing else runs. Otherwise it runs the test suite, and a failure there also stops with an error. Only once both checks are clean does it push the package and cut the release tag.
+    rubric: |
+      Per ISO 5807:1985 (confirmed 2019): both decisions are drawn in the decision symbol, every branch leaving a decision carries the condition that takes it, both failure paths reach a terminal symbol, and publish and tag are reachable only through both pass branches.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [flowchart, graph] }
+      metric: diagram_choice
+
+# The exclusion between this case and the release-publishing flowchart above is
+# deliberate: state-vs-process is the judgment under test. Cross-listing the two
+# would make either answer right for both, leaving only syntax measured.
+- description: stateDiagram - order lifecycle
+  vars:
+    task: |
+      Support keeps escalating orders they think are stuck, and half the time they aren't. Can I get something showing the statuses an order can be in and what moves it between them? Orders start as draft; submitting puts them in pending payment. Charge goes through, they're paid - declined and they drop back to draft. Paid ones ship, then get delivered. Oh, and anything paid or still pending can be cancelled, and that's the end of the line, nothing comes back from there.
+    rubric: |
+      Per UML 2.5.1 §14: every transition is labelled with the trigger that fires it, an initial pseudostate marks where an order begins, and cancelled is a final state with no outgoing transition.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [stateDiagram-v2, stateDiagram] }
+      metric: diagram_choice
+
+- description: erDiagram - store schema and cardinality
+  vars:
+    task: |
+      new backend hire starts monday and i'd like to hand her something better than the migrations folder. storefront data is basically: customers place orders, an order has a bunch of line items, each line item points at exactly one product, and every product sits in one category. include the important columns for each - ids, names, prices, that sort of thing.
+    rubric: |
+      Per Chen's entity-relationship model (Chen, ACM TODS 1(1), 1976), which marks multiplicity as 1/M/N on the connecting line, and the fork notation Everest introduced as the "inverted arrow" (Everest, Fifth Texas Conference on Computing Systems, 1976), later known as the crow's foot: every relationship line carries a maximum cardinality at both ends so a reader can state which side is "many", each entity lists at least its identifying attribute, and the line-item-to-product end reads as exactly one product.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [erDiagram, classDiagram] }
+      metric: diagram_choice
+
+- description: classDiagram - payment processor object model
+  vars:
+    task: |
+      I'm writing up the payment library's internals for the wiki and want the shape of the code drawn out. There's an abstract PaymentMethod carrying an amount and a charge operation; CreditCard and BankTransfer both extend it and each add fields of their own (card number and expiry, account and routing numbers). PaymentProcessor owns a collection of payment methods and exposes process(). Put types and visibility on the members - the audience is engineers, they'll want them.
+    rubric: |
+      Per UML 2.5.1: generalisation from the abstract type to both subtypes reads as "is a" (§9.2.4, §9.9.7); the processor-to-methods relationship reads as ownership rather than a plain association (§11.5.4); and every member carries a visibility marker and a type (§9.5.4, with VisibilityKind at §7.8.24).
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [classDiagram] }
+      metric: diagram_choice
+
+- description: gantt - documentation release schedule
+  vars:
+    task: |
+      docs release plan for the team channel please. drafting is 2026-08-03 through 2026-08-05, tech review eats the two days straight after that, corrections take one more day, and we publish on 2026-08-10. publishing isn't work though, it's just the day it goes live.
+    rubric: |
+      Per PMI's milestone list, where a milestone is a point in the schedule with zero duration (PMBOK Guide, 6th ed., 2017, §6.2.3.3), publication is drawn as a point on 2026-08-10 and not as a bar occupying working time; the three tasks occupy their stated spans in the stated order.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [gantt] }
+      metric: diagram_choice
+
+- description: timeline - project history by year
+  vars:
+    task: |
+      For the README I'd like a short visual history of the project. It started in 2019, shipped its first stable release in 2021, and 2023 brought both the corporate sponsorship and the plugin system. This year, 2026, we finished the rewrite and hit 1.0. None of it depends on anything else and none of it has a duration - a reader should just glance and see what happened when.
+    rubric: |
+      Each year carries its events in chronological order, 2023 shows both at the same point, and nothing implies duration or dependency.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [timeline, gantt] }
+      metric: diagram_choice
+
+- description: gitGraph - branch and merge history
+  vars:
+    task: |
+      contributor guide needs a picture of how we branch. main, then develop is cut off main. two feature branches come off develop and merge back in after a couple of commits each. at release time develop goes back into main, and we tag that commit v1.0.0.
+    rubric: |
+      Branch points, per-branch commits and each merge back into its parent are visible in order, and the tag sits on the commit that merged develop into main.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [gitGraph, gitgraph] }
+      metric: diagram_choice
+
+- description: journey - checkout experience and satisfaction
+  vars:
+    task: |
+      Forwarding what Dana wrote up after the usability sessions: "shoppers sail through finding the product and adding it to the cart, then hit account creation and payment details and visibly deflate, and by the confirmation screen they're mostly just relieved it's over."
+
+      I want that rendered for the exec deck.
+    rubric: |
+      Per NN/g journey mapping (nngroup.com/articles/journey-mapping-101): one actor in one scenario, actions grouped into named journey phases, every action carrying a value on one shared emotion scale, and the ups and downs reading as a trend rather than isolated numbers.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [journey] }
+      metric: diagram_choice
+
+- description: mindmap - onboarding topic breakdown
+  vars:
+    task: |
+      what does a new engineer need to have learned by the end of month one? want that one question broken out into four areas - getting set up locally, the codebase itself, how deploys happen, and how the team works - each with two or three things under it.
+    rubric: |
+      One centre, exactly four branches, each with its own two or three leaves, no leaf attached to the centre directly.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [mindmap, flowchart, graph] }
+      metric: diagram_choice
+
+- description: pie - traffic share by source
+  vars:
+    task: |
+      last quarter's traffic split, one slide, board deck. organic search 45%, direct 25%, referral 15%, social 10%, paid 5%. it's a "here's how the whole thing divides up" picture, not a trend.
+    rubric: |
+      A reader can rank the five sources by eye without reading a number, and the slices read as parts of one whole rather than five separate quantities.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [pie] }
+      metric: diagram_choice
+
+- description: quadrantChart - feature scoring on two axes
+  vars:
+    task: |
+      Prioritisation session Thursday, want something to put on the wall. Six things we're weighing up: SSO, dark mode, bulk export, an audit log, a mobile app, inline comments. Put each of them against how much effort it takes and how much value it returns. The corners are the useful part - name the four regions so people can point at the quick wins and the money pits by name instead of arguing about where the line is.
+    rubric: |
+      Both axes named with the quantity and the direction it increases, all four regions carrying a name a reader can point at, each of the six features readable against both axes.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [quadrantChart] }
+      metric: diagram_choice
+
+- description: xychart - monthly revenue trend
+  vars:
+    task: |
+      revenue by month, h1 2026, jan through jun: 32k, 28k, 41k, 47k, 44k, 58k. investors are asking about the trajectory so make the shape of it obvious, and label what the numbers actually are (usd thousands) so nobody has to ask me again.
+    rubric: |
+      The value axis is labelled with its unit so no reader has to ask what the numbers are, and the six months run in calendar order so the shape of the series is the trend, not an artefact of ordering.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [xychart, xychart-beta] }
+      metric: diagram_choice
+
+- description: radar-beta - one candidate across skill dimensions
+  vars:
+    task: |
+      Hiring debrief for a candidate. I'd rather the panel saw the profile at a glance than read another list of numbers, so: five assessment areas, all scored out of ten - coding 9, systems design 8, testing 7, communication 6, operations 5. Same scale on every area, and draw it as one closed shape so the strong and weak sides jump out. It's going in a GitHub issue, so anything current mermaid draws is fine.
+    rubric: |
+      All five areas are drawn against one shared scale with the same maximum, so the visual distance between coding and operations is proportional to the four-point gap, and the profile reads as one closed shape.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [radar-beta, radar] }
+      metric: diagram_choice
+
+- description: sankey - signup funnel volumes
+  vars:
+    task: |
+      funnel numbers for the growth review and i want the drop-off to look as bad as it is. 10,000 visitors a month. 3,000 start a signup, 7,000 just leave. of the 3,000 who start, 2,100 verify their email and 900 give up. of those 2,100, 1,400 finish onboarding and 700 stall out. i want the drop-off to be the thing you see first, not something you work out from the labels.
+    rubric: |
+      Per Sankey's flow convention (1898), band width is proportional to volume: the largest single loss is the widest band leaving its stage, so a reader sees where people are lost before reading a number.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [sankey, sankey-beta] }
+      metric: diagram_choice
+
+- description: requirementDiagram - auth requirements and verification
+  vars:
+    task: |
+      The auditors are asking us to show our auth controls with traceability, so this needs to be precise rather than pretty. Two controls. Sessions must expire after 30 minutes - high risk, and we demonstrate it with an automated test. Credentials must be stored hashed - that one's a physical control and it gets verified by inspection. Each needs its id and both of those attributes visible on its face. Then show which components actually satisfy each one (the session service and the user store), and that the hashing control is derived from our password policy.
+    rubric: |
+      Per OMG SysML 1.6, where «requirement» carries id and text (§16.3.2.1) and risk and verifyMethod come from the informative «extendedRequirement» (Annex E, §E.3.2, Table E-3): each requirement shows its id, risk, and verification method on its own face; satisfy runs from the implementing element to the requirement; derive runs between the derived requirement and its parent.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [requirementDiagram] }
+      metric: diagram_choice
+
+- description: C4Context - system context for a review
+  vars:
+    task: |
+      Design review Monday and I want to open with the widest possible picture of the internet banking platform - no internals at all, just what it sits between. The personal banking customer uses it. It reads account data out of the existing mainframe. It sends notifications through a third-party email provider. What matters most is that it's immediately obvious which of those boxes are ours and which ones we only talk to.
+    rubric: |
+      Per the C4 model's System Context level (c4model.com/diagrams/system-context): scope is exactly one software system with no internals shown, the person and both external systems appear around it, our system is visually distinguished from the ones we only talk to, and every relationship says what flows and why.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [C4Context, flowchart, graph] }
+      metric: diagram_choice
+
+- description: architecture-beta - grouped cloud deployment
+  vars:
+    task: |
+      can you draw up our aws setup for the onboarding doc? public subnet has the load balancer and a couple of web boxes, then the app server and rds are locked away in the private one. s3 sits outside all of it. mainly want it obvious which stuff is in which subnet, and draw the hops too - lb to web, web to app, app to rds and to s3.
+    rubric: |
+      Each subnet is an enclosure holding exactly its stated members, object storage sits outside both, and all four hops are directed links between the right pairs.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [architecture-beta, flowchart, graph] }
+      metric: diagram_choice
+
+- description: block - dashboard layout arrangement
+  vars:
+    task: |
+      Trying to describe the admin dashboard layout to you without opening Figma. Header runs the full width across the top. Under it, a narrow sidebar on the left; the rest is the main area, and that's split into a wide reporting panel plus a narrower stats panel beside it. Footer at the bottom, full width again. This is purely about where things sit and how wide they are relative to each other - nothing here is a process.
+    rubric: |
+      Header and footer each span full width; the sidebar is visibly narrower than the main area beside it; the reporting panel visibly wider than the stats panel; and nothing implies one region follows another.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [block, block-beta] }
+      metric: diagram_choice
+
+- description: packet - protocol header field layout
+  vars:
+    task: |
+      For the protocol spec. Our message header is 32 bits wide. Version is bits 0-3, message type 4-7, flags 8-15, and payload length takes the rest, 16-31. Implementers need to see at a glance which bits belong to which field and how wide each field is next to the others.
+    rubric: |
+      Per the IETF packet-header convention (e.g. RFC 791 §3.1): the row is 32 bits wide and each field's drawn width is proportional to its bit count, so a reader sees payload length occupying half the header.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [packet, packet-beta] }
+      metric: diagram_choice
+
+- description: kanban - sprint board state
+  vars:
+    task: |
+      standup is async this week so i want a snapshot of the board for our github wiki, which is on current mermaid. backlog has three tickets nobody's picked up. two in progress - one on Maya, one on Tom, put their names on. one sitting in review. two shipped this week. it's just where everything sits right now, not how work moves through.
+    rubric: |
+      Every column holds exactly its stated items, the two owner names sit on the two in-progress items, and nothing implies movement between columns.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [kanban] }
+      metric: diagram_choice
+
+- description: treeView-beta - repository directory layout
+  vars:
+    task: |
+      Quick one for CONTRIBUTING.md: show a newcomer the layout of this repo. At the root there's package.json and README.md, plus src and tests. src holds a components folder, a utils folder and an index file; tests mirrors that same structure. It should read the way a file explorer shows things, nested, with files obviously not folders.
+    rubric: |
+      Depth matches exactly - src and tests siblings under the root, components and utils inside src - and a reader can tell a file from a folder unaided.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [treeView-beta, treeView, flowchart, graph] }
+      metric: diagram_choice
+
+- description: venn-beta - overlapping user cohorts
+  vars:
+    task: |
+      we keep arguing about whether our mobile users and our paying users are the same people. they're mostly not. three groups: people who use the mobile app, people who pay for a subscription, people who've invited a teammate. plenty sit in two of those, and there's a small core in all three - that core is the group i actually want everyone staring at.
+    rubric: |
+      Per Venn's construction (Venn, Philosophical Magazine, 1880): three sets drawn so all seven regions exist - three exclusive, three pairwise, one central - with the central region present and distinguishable whether or not it is labelled.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [venn-beta, venn] }
+      metric: diagram_choice
+
+- description: cynefin-beta - sorting incidents by decision domain
+  vars:
+    task: |
+      Something for the incident-response training deck. Four incidents from last year, sorted by what each one actually took to get through, with the groupings named on the picture so people can argue about which one a new incident belongs in. The log volume filled a disk - we've done that one fifty times, the runbook is three lines. A checkout query went slow and Priya spent a day reading query plans before she found the missing index. The queue backed up and took three unrelated services with it, in a way nobody had seen or predicted, and we tried six things before one of them helped. And the Thursday outage during the breach, where we were pulling things offline by the minute and only reconstructed what happened the following week.
+    rubric: |
+      Per Snowden and Boone, "A Leader's Framework for Decision Making" (HBR, Nov 2007), whose four contexts are Simple, Complicated, Complex and Chaotic: the domains are named on the picture, and each incident sits in the domain matching how it was resolved - a three-line runbook belongs in the simple domain of best practice, a day of expert analysis in Complicated, six experiments against an unforeseen interaction in Complex, acting first during an unfolding breach in Chaotic. Which label that first domain carries is not graded; the renderer chooses it.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [cynefin-beta, cynefin, quadrantChart] }
+      metric: diagram_choice
+
+- description: ishikawa-beta - root causes of failed deploys
+  vars:
+    task: |
+      Postmortem Friday on the deploys that keep failing. Before we sit down I'd like the candidate causes laid out feeding into that one problem, grouped by the kind of cause they are. What I've got so far: the release checklist lives in someone's head, two people have ever run a rollback, the build agents drift from each other, secrets get rotated without warning, nobody reads the pipeline output until it's red, and the staging cluster is a third the size of prod. Guesses are fine at this stage; the point is to walk in with something to argue with rather than a blank whiteboard.
+    rubric: |
+      Per Ishikawa's cause-and-effect method (Ishikawa, "Guide to Quality Control", Asian Productivity Organization, 1976): one stated effect at the head, causes grouped under named categories, and each specific cause still readable as the concrete thing reported rather than collapsed into its category name.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [ishikawa-beta, ishikawa, mindmap, flowchart, graph] }
+      metric: diagram_choice
+
+- description: eventmodeling - order fulfilment event flow
+  vars:
+    task: |
+      New joiners keep asking how order fulfilment hangs together on the event-sourced side, so I'd like it drawn once and linked from the handbook. A customer's place-order action writes down an order-placed fact, and that fact updates the order-summary view the customer then reads. Later a warehouse pick action writes an items-picked fact, which updates the shipping view.
+    rubric: |
+      Per Event Modeling (Dymitruk, eventmodeling.org): a command, the event it records, and the read model it updates are three visually distinct kinds of thing; every event reads as a past-tense fact; and the picture runs along one time axis in the order the steps happen.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [eventmodeling, sequenceDiagram, flowchart, graph] }
+      metric: diagram_choice
+
+- description: swimlane-beta - cross-team expense approval
+  vars:
+    task: |
+      Finance is fed up with expense claims bouncing around and nobody knowing whose desk a claim is sitting on. Can you document it so ownership is unmistakable? The employee submits the claim. Their manager either approves it or rejects it straight back. Approved, it goes to finance, who check the receipts and then either pay it or send it back to the employee to correct and resubmit. Three groups involved, and it's the handovers between them that people lose track of.
+    rubric: |
+      Per BPMN 2.0 (OMG formal/2011-01-03) pools and lanes: every activity sits inside exactly one lane named for its owner, each handover is visible as a flow crossing a lane boundary, and both rejection flows are drawn and labelled with the condition that takes them.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [swimlane-beta, swimlane, flowchart, graph] }
+      metric: diagram_choice
+
+- description: railroad-ebnf-beta - CLI grammar
+  vars:
+    task: |
+      The manual page for our deploy command needs a picture of what it'll actually accept. It's the literal word deploy, then an environment name which you have to give, then zero or more flags where each flag is either --dry-run or --force, and optionally a target path at the end. A reader should see straight away what's mandatory, what can repeat, and what they're free to leave off.
+    rubric: |
+      Per Wirth's syntax-diagram convention (introduced in "The Programming Language Pascal", Berichte der Fachgruppe Computer-Wissenschaften Nr. 1, ETH Zürich, November 1970, and popularised by Jensen and Wirth, "PASCAL User Manual and Report", LNCS vol. 18, 1974): the mandatory sequence reads left to right along the main path, the optional target is a bypass around it, and the flag group is drawn as a loop so a reader sees it may repeat and may be omitted.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [railroad-ebnf-beta, railroad, flowchart, graph] }
+      metric: diagram_choice
+
+- description: zenuml - nested service call interaction
+  vars:
+    task: |
+      trying to explain to the new team why a profile fetch touches four services. client hits the gateway, gateway asks the auth service to validate the token, and only if that comes back valid does it call the profile service. profile service checks its cache first and goes to the database on a miss, then everything returns back up the chain. the nesting is what i want visible - which call is inside which, and where each one returns.
+    rubric: |
+      Per UML 2.5.1 §17.5 (Occurrences, including ExecutionSpecification) and §17.6 (Fragments): each nested call is visibly inside the call that made it and its return is visible at the level it was made from; the database call sits under a condition a reader can identify as the cache miss.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [zenuml, sequenceDiagram] }
+      metric: diagram_choice
+
+# Version tolerance. The skill's description claims diagrams that "actually
+# render on the target platform"; every case above renders on a current mermaid,
+# so nothing tests it. Each of these two names an older or pinned target where
+# the type a current renderer would make obvious is exactly the wrong pick, and
+# `allowed` holds only what the stated version can draw.
+
+- description: version tolerance - board snapshot for a lagging wiki
+  vars:
+    task: |
+      Sprint snapshot to paste onto our GitLab wiki - fair warning, our GitLab is a few releases behind and the newer diagram types I've tried on it just come out as empty space, so whatever you give me has to be something an older renderer can draw. Four columns: waiting, being worked on, in review, done this week. Two or three tickets under each, and put the owner's name on the two that are being worked on - Maya and Tom. It's a picture of where things sit today, not how work moves.
+    rubric: |
+      Every column holds its items with owners where stated, and it reads as current state rather than a process.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [flowchart, graph] }
+      metric: diagram_choice
+
+- description: version tolerance - cause brainstorm in an old IDE preview
+  vars:
+    task: |
+      Prep for Friday's postmortem on our flaky CI. This lives in a markdown file I'll be reading in my IDE's own preview pane, which is stuck on some mermaid 10 build - anything newer than that just shows up blank for me, so it has to be something that old will draw. Suspects so far: the shared runner box runs out of memory, plenty of tests assume they're alone on the machine, nobody owns the pipeline, the retry button quietly hides failures, and the staging database drifts from prod. Lay them out feeding into that one problem, grouped by the kind of cause they are.
+    rubric: |
+      The suspects are grouped by kind, and every group feeds the one stated problem.
+  assert:
+    - type: javascript
+      value: file://assertions/mermaid.cjs:usesDiagramType
+      config: { allowed: [mindmap, flowchart, graph] }
+      metric: diagram_choice

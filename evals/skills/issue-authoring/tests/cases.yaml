@@ -1,0 +1,395 @@
+# Each case is a raw report in the voice of whoever filed it - a Slack one-liner,
+# a forwarded ticket, a retro board, a paste. The task never names a tracker
+# field, a section, or an authoring rule: turning the mess into something
+# startable and finishable is what is graded. `report` is the only input the
+# graders treat as fact.
+#
+# `rubric` is the case's own property, graded on its own axis by the
+# case_fidelity assertion in promptfooconfig.yaml. Every rubric closes with the
+# same paragraph: it holds the judge off headings and template shape, and subtracts
+# a fixed amount per specific the reply supplied that the report never did.
+
+- description: GitHub - vague bug complaint with no reproduction
+  vars:
+    tracker: GitHub Issues
+    source: Dropped in the support channel just now.
+    report: |
+      export button does nothing again no spinner no error nothing happened twice today steph got it yesterday too cant get it to do it on demand chrome
+    rubric: |
+      Quote the text stating what the export button does now, and the text stating
+      what it should do instead. Answer NONE for either if absent. Then quote the text
+      stating that nobody can trigger the failure on demand; answer NONE if the reply
+      instead presents an ordered reproduction recipe as though the failure were
+      reliably triggerable. Full credit requires all three: a current-versus-expected
+      gap in observable terms, the unreliable reproduction carried forward as a fact
+      about what is known, and at least one completion condition a person could settle
+      by watching the system rather than by forming an opinion. Subtract 0.3 if the
+      reply supplies a cause, a trigger, or a repro sequence the report does not
+      contain. The reporter's own words being reused verbatim is a point in the
+      reply's favour, not against it.
+
+      Judge only what the text says, never which headings, sections, labels, or template it
+      uses; an issue with no headings at all can score full marks.
+
+      Before scoring, list each identifier, version, path, error code, date, duration, user
+      count or named system in the reply and check it against the raw report above character
+      by character, including inside unpunctuated lowercase runs. A token that appears
+      anywhere in the report is not an invention. A number the reply proposes as a
+      completion condition or acceptance threshold is not an invention either - it is a
+      target being set, not a fact being claimed. Count only factual claims about the
+      existing system that the report does not contain; call that count I.
+
+      Score from 0 to 1, never above 1: score the case requirements above, then subtract
+      0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
+  assert:
+    # One report, one work item, unless the report genuinely held several.
+    - &bounded
+      type: javascript
+      value: file://assertions/issue.cjs:oneBoundedIssue
+      metric: bounded_scope
+
+- description: Jira - crash pasted from a forwarded support ticket
+  vars:
+    tracker: Jira
+    source: Support forwarded this and asked if we know what it is.
+    report: |
+      fwd from support - any idea what this is? they get it every night since tuesday
+
+          [nightly] tenant=acme start=02:00:12
+          Error: ENOENT: no such file or directory, open '/var/lib/billing/templates/invoice_default.hbs'
+              at renderInvoice (src/billing/render.js:88:19)
+              at processTenant (src/billing/nightly.js:142:7)
+          [nightly] tenant=acme aborted, dashboard got a 500
+
+          $ billing-api --version
+          3.7.1
+
+      stopped when they put 3.6.4 back on
+    rubric: |
+      Quote the text that names the failing run, the text that names the missing file,
+      the text that ties the failure to one release and its absence to the earlier
+      release, and the text that names what the customer sees. Answer NONE for each
+      that is absent. Then quote the text stating who is affected and what the
+      consequence of leaving it is; answer NONE if the reply never says why this
+      matters. Full credit requires all five present and none of them altered -
+      subtract 0.3 if a rolled-back release is described as a fix, and 0.3 if a root
+      cause is asserted rather than observed.
+
+      Judge only what the text says, never which headings, sections, labels, or template it
+      uses; an issue with no headings at all can score full marks.
+
+      Before scoring, list each identifier, version, path, error code, date, duration, user
+      count or named system in the reply and check it against the raw report above character
+      by character, including inside unpunctuated lowercase runs. A token that appears
+      anywhere in the report is not an invention. A number the reply proposes as a
+      completion condition or acceptance threshold is not an invention either - it is a
+      target being set, not a fact being claimed. Count only factual claims about the
+      existing system that the report does not contain; call that count I.
+
+      Score from 0 to 1, never above 1: score the case requirements above, then subtract
+      0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
+  assert: [*bounded]
+
+- description: Linear - feature wish written as the solution
+  vars:
+    tracker: Linear
+    source: Our PM sent this over DM.
+    report: |
+      hey - can we get a dropdown next to the search box on the project list to filter by team? multi select ideally. sarah brought it up in the QBR again. we're at 60-odd projects now and everyone only ever cares about their own four or five
+    rubric: |
+      Quote the text describing the problem people have - that they cannot find the
+      projects they care about among all the ones that exist. Answer NONE if the reply
+      opens with the mechanism instead. Then quote the text that marks the filter
+      control as the requester's suggestion; answer NONE if the reply states that
+      control as the required design. Subtract 0.35 if the requested widget is the
+      subject of the ticket rather than the underlying difficulty, because a reader
+      then cannot weigh any other way of solving it; subtract 0.2 if the suggested
+      control is presented as settled. Full credit needs the problem as the subject,
+      the suggestion preserved and labelled as the requester's, and completion
+      conditions that describe what a person can do afterwards rather than which
+      control was built.
+
+      Judge only what the text says, never which headings, sections, labels, or template it
+      uses; an issue with no headings at all can score full marks.
+
+      Before scoring, list each identifier, version, path, error code, date, duration, user
+      count or named system in the reply and check it against the raw report above character
+      by character, including inside unpunctuated lowercase runs. A token that appears
+      anywhere in the report is not an invention. A number the reply proposes as a
+      completion condition or acceptance threshold is not an invention either - it is a
+      target being set, not a fact being claimed. Count only factual claims about the
+      existing system that the report does not contain; call that count I.
+
+      Score from 0 to 1, never above 1: score the case requirements above, then subtract
+      0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
+  assert: [*bounded]
+
+- description: Azure DevOps - performance gripe with no numbers in it
+  vars:
+    tracker: Azure DevOps
+    source: Came up in standup and I said I would write it down.
+    report: |
+      reporting dashboard is so slow now. it was fine before. maybe since the two big accounts came on? people literally go make coffee while it loads. nobody has actually timed it, we just all know
+    rubric: |
+      The report contains no measurement of any kind. Quote every number, duration,
+      threshold, or target in the reply and say for each whether the report supplied
+      it; subtract 0.5 if the reply asserts a current load time as fact, and 0.5 if it
+      asserts a target load time as an established figure rather than as a threshold
+      still to be agreed. Then quote the text that makes establishing the current
+      behaviour part of the work - a measurement to take, a baseline to capture, a
+      question to answer first. Answer NONE if the reply jumps to a fix. Full credit
+      requires: the slow page described as the people affected experience it, no
+      invented figure anywhere, and completion stated in a way that stays checkable
+      without a number nobody has yet - for example that a baseline now exists, or
+      that a named threshold is agreed once measured.
+
+      Judge only what the text says, never which headings, sections, labels, or template it
+      uses; an issue with no headings at all can score full marks.
+
+      Before scoring, list each identifier, version, path, error code, date, duration, user
+      count or named system in the reply and check it against the raw report above character
+      by character, including inside unpunctuated lowercase runs. A token that appears
+      anywhere in the report is not an invention. A number the reply proposes as a
+      completion condition or acceptance threshold is not an invention either - it is a
+      target being set, not a fact being claimed. Count only factual claims about the
+      existing system that the report does not contain; call that count I.
+
+      Score from 0 to 1, never above 1: score the case requirements above, then subtract
+      0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
+  assert: [*bounded]
+
+- description: GitHub - one braindump that is really three unrelated asks
+  vars:
+    tracker: GitHub Issues
+    source: A maintainer posted this the day before going on leave.
+    report: |
+      dumping this before i go, sorry. dark mode - the css variables are all there already, someone just has to wire up the toggle and remember the choice. editor blows up on safari if you paste an image, marco saw it too, we never dug in. and the install page still tells you to run the bootstrap script we deleted in the spring, that one is two minutes
+    rubric: |
+      The report holds three unrelated asks. For each of the three, quote the text in
+      the reply that carries its own specifics - the existing style variables and
+      remembering the choice; the paste failure in one browser and the second person
+      who saw it; the stale bootstrap instruction and how small it is. Answer NONE for
+      any ask whose details have been dropped or merged into another. Then check
+      independence: could each of the three be finished and shipped without either of
+      the others shipping first? Subtract 0.3 if any two are combined into one unit of
+      work, and 0.3 if the split is by activity or by layer rather than by outcome.
+      Full credit requires three separately finishable items, each keeping the detail
+      that belongs to it, and none acquiring detail from the others.
+
+      Judge only what the text says, never which headings, sections, labels, or template it
+      uses; an issue with no headings at all can score full marks.
+
+      Before scoring, list each identifier, version, path, error code, date, duration, user
+      count or named system in the reply and check it against the raw report above character
+      by character, including inside unpunctuated lowercase runs. A token that appears
+      anywhere in the report is not an invention. A number the reply proposes as a
+      completion condition or acceptance threshold is not an invention either - it is a
+      target being set, not a fact being claimed. Count only factual claims about the
+      existing system that the report does not contain; call that count I.
+
+      Score from 0 to 1, never above 1: score the case requirements above, then subtract
+      0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
+  assert:
+    - type: javascript
+      value: file://assertions/issue.cjs:oneBoundedIssue
+      config: { min: 2, max: 3 }
+      metric: bounded_scope
+
+- description: Jira - NEGATIVE CONTROL, nothing here to write an issue from
+  vars:
+    tracker: Jira
+    source: Account management forwarded this, in full.
+    report: |
+      FYI - customer says it didn't work and they are not happy. can someone take a look today? thanks
+    rubric: |
+      This report names no product, no behaviour, no failure, and no customer. A fresh
+      implementer could not say what is broken or what would have to become true.
+      Score 0 for any reply that delivers a ticket as though it could be worked, no
+      matter how well written or how carefully hedged - a plausible-looking write-up
+      here is a fabrication, and completion criteria for a problem nobody has
+      identified are the clearest form of it. Score 0 if the reply invents a product
+      area, a symptom, a severity, or a customer. Full credit requires the reply to
+      say plainly that this cannot be written up yet, and to ask at least two specific
+      questions that would unblock it. Quote the sentence that states the gap and
+      quote each question asked; answer NONE if the reply never says the report is
+      insufficient.
+
+      Judge only what the text says, never which headings, sections, labels, or template it
+      uses; an issue with no headings at all can score full marks.
+
+      Before scoring, list each identifier, version, path, error code, date, duration, user
+      count or named system in the reply and check it against the raw report above character
+      by character, including inside unpunctuated lowercase runs. A token that appears
+      anywhere in the report is not an invention. A number the reply proposes as a
+      completion condition or acceptance threshold is not an invention either - it is a
+      target being set, not a fact being claimed. Count only factual claims about the
+      existing system that the report does not contain; call that count I.
+
+      Score from 0 to 1, never above 1: score the case requirements above, then subtract
+      0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
+
+- description: Linear - half-remembered bug, specifics genuinely uncertain
+  vars:
+    tracker: Linear
+    source: Posted in the engineering channel a week after the fact.
+    report: |
+      meant to write this up ages ago. staging i think? two tuesdays back maybe. i was uploading one of the big supplier sheets and got an error page, 500 or 502, honestly cant remember which. tried again and it went straight through. might have been mid deploy. probably worth someone checking whether we dropped anything
+    rubric: |
+      Four things in this report are explicitly uncertain: which environment, which
+      day, which of two status codes, and whether a deploy was running. Go through
+      them one at a time. For each, quote the reply's wording and say whether it is
+      presented as uncertain or as settled fact. Each one resolved into a claim the
+      report does not support costs 0.25, to a floor of 0. Full credit requires all
+      four still marked as unknown and the suggested check - whether anything was lost
+      - stated as work someone can carry out. A reply that is vague everywhere is not
+      the same as one that is precise about what is and is not known; reward the
+      second, not the first.
+
+      Judge only what the text says, never which headings, sections, labels, or template it
+      uses; an issue with no headings at all can score full marks.
+
+      Before scoring, list each identifier, version, path, error code, date, duration, user
+      count or named system in the reply and check it against the raw report above character
+      by character, including inside unpunctuated lowercase runs. A token that appears
+      anywhere in the report is not an invention. A number the reply proposes as a
+      completion condition or acceptance threshold is not an invention either - it is a
+      target being set, not a fact being claimed. Count only factual claims about the
+      existing system that the report does not contain; call that count I.
+
+      Score from 0 to 1, never above 1: score the case requirements above, then subtract
+      0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
+  assert: [*bounded]
+
+- description: Azure DevOps - open question nobody has looked into yet
+  vars:
+    tracker: Azure DevOps
+    source: Copied off yesterday's retro board.
+    report: |
+      - monday am the job queue backs up for about an hour then clears on its own
+      - been like this a month at least
+      - ops bounce the workers, nobody knows if that is what fixes it
+      - theories on the board: the weekly report batch / cache cold after sunday maintenance / autoscaler too slow to react
+      - nobody has actually looked
+    rubric: |
+      Nobody has investigated this, so the work is to find something out, not to
+      change something. Quote the sentence stating the question to be answered; answer
+      NONE if the reply instead commits to a fix. Then quote each of the three
+      theories and say whether it is still marked as an unproven theory; subtract 0.35
+      if the reply picks one and builds the ticket around it. Then quote the text
+      naming what the team will hold when the work is done - a finding, an answer, a
+      decision, a recommendation. Answer NONE if the reply never says what the output
+      is. Full credit requires the question stated, all three theories intact and
+      unpicked, and a named artifact or decision as the end state.
+
+      Judge only what the text says, never which headings, sections, labels, or template it
+      uses; an issue with no headings at all can score full marks.
+
+      Before scoring, list each identifier, version, path, error code, date, duration, user
+      count or named system in the reply and check it against the raw report above character
+      by character, including inside unpunctuated lowercase runs. A token that appears
+      anywhere in the report is not an invention. A number the reply proposes as a
+      completion condition or acceptance threshold is not an invention either - it is a
+      target being set, not a fact being claimed. Count only factual claims about the
+      existing system that the report does not contain; call that count I.
+
+      Score from 0 to 1, never above 1: score the case requirements above, then subtract
+      0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
+  assert: [*bounded]
+
+- description: GitHub - install docs send a real user down the wrong path
+  vars:
+    tracker: GitHub Issues
+    source: A user left this on an old thread.
+    report: |
+      followed the getting started page, doesn't work. it says copy config.example.yml to config.yml then run setup - but setup overwrites config.yml so everything you put in it is gone. took me an hour to work out you have to run setup first and edit after. love the tool otherwise
+    rubric: |
+      Quote the text describing what the page currently instructs, and the text
+      describing what it should instruct instead. Answer NONE for either if absent.
+      Subtract 0.3 if the subject of the reply is the setup tool's overwriting
+      behaviour rather than the ordering the page documents - the report is about the
+      instructions, and nothing in it says the tool's behaviour is wrong. Full credit
+      requires the wrong ordering as the subject, the corrected ordering the user
+      worked out recorded as what the page should say, and a completion condition
+      someone could settle by following the page as written. The user's own phrasing
+      reused directly counts in the reply's favour.
+
+      Judge only what the text says, never which headings, sections, labels, or template it
+      uses; an issue with no headings at all can score full marks.
+
+      Before scoring, list each identifier, version, path, error code, date, duration, user
+      count or named system in the reply and check it against the raw report above character
+      by character, including inside unpunctuated lowercase runs. A token that appears
+      anywhere in the report is not an invention. A number the reply proposes as a
+      completion condition or acceptance threshold is not an invention either - it is a
+      target being set, not a fact being claimed. Count only factual claims about the
+      existing system that the report does not contain; call that count I.
+
+      Score from 0 to 1, never above 1: score the case requirements above, then subtract
+      0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
+  assert: [*bounded]
+
+- description: Jira - a wish that came out of a daily annoyance
+  vars:
+    tracker: Jira
+    source: One of our designers said this while I watched her work.
+    report: |
+      every single time i log a session i type today's date in again. every time. eight or nine of those a day and it is always today, sometimes yesterday if i am catching up. it is not a big thing but it is a thousand paper cuts, and i have put the wrong month in more than once without noticing
+    rubric: |
+      Quote the text stating what she does now and how often, and the text stating the
+      consequence she reported - that this has produced wrong dates she did not
+      notice. Answer NONE for either if absent; subtract 0.2 if the reply keeps the
+      repetition but drops the wrong dates, because it then loses the reason the work
+      is worth doing. Then quote the completion conditions and say for each whether a
+      person could settle it by observing the system. A condition resting on someone's
+      satisfaction or on the experience feeling better is not one. Full credit
+      requires both facts preserved, the value stated as consequence rather than as
+      convenience, and at least one condition that is checkable. Do not credit an
+      invented time saving or an invented error rate.
+
+      Judge only what the text says, never which headings, sections, labels, or template it
+      uses; an issue with no headings at all can score full marks.
+
+      Before scoring, list each identifier, version, path, error code, date, duration, user
+      count or named system in the reply and check it against the raw report above character
+      by character, including inside unpunctuated lowercase runs. A token that appears
+      anywhere in the report is not an invention. A number the reply proposes as a
+      completion condition or acceptance threshold is not an invention either - it is a
+      target being set, not a fact being claimed. Count only factual claims about the
+      existing system that the report does not contain; call that count I.
+
+      Score from 0 to 1, never above 1: score the case requirements above, then subtract
+      0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
+  assert: [*bounded]
+
+- description: Linear - flaky test everyone has learned to rerun
+  vars:
+    tracker: Linear
+    source: This has been sitting in the CI channel for weeks.
+    report: |
+      can we PLEASE do something about test_checkout_applies_promo. red about one run in five, only on CI, never locally. everyone just hits rerun now which is exactly how we are going to miss a real one. gut feel is a timing thing in the fixture but i have not actually looked
+    rubric: |
+      This is internal work, so it earns its place only if the reply states the
+      consequence. Quote the text naming the risk that habitual reruns will hide a
+      genuine failure; answer NONE if absent, and subtract 0.3 in that case, because
+      the ticket then reads as maintenance with no stated reason to do it. Quote the
+      text stating the failure is intermittent and that it happens in continuous
+      integration but not locally. Quote the reply's wording of the timing hypothesis
+      and say whether it is still marked as a guess; subtract 0.35 if it is asserted
+      as the cause. Full credit requires the consequence stated, both facts about the
+      failure pattern preserved, the guess still a guess, and completion expressed as
+      an observable run outcome rather than as the test being fixed.
+
+      Judge only what the text says, never which headings, sections, labels, or template it
+      uses; an issue with no headings at all can score full marks.
+
+      Before scoring, list each identifier, version, path, error code, date, duration, user
+      count or named system in the reply and check it against the raw report above character
+      by character, including inside unpunctuated lowercase runs. A token that appears
+      anywhere in the report is not an invention. A number the reply proposes as a
+      completion condition or acceptance threshold is not an invention either - it is a
+      target being set, not a fact being claimed. Count only factual claims about the
+      existing system that the report does not contain; call that count I.
+
+      Score from 0 to 1, never above 1: score the case requirements above, then subtract
+      0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
+  assert: [*bounded]

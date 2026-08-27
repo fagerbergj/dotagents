@@ -1,0 +1,1048 @@
+# One case per point on the size range - a one-line icon swap through an
+# eleven-file refactor - because "scaled to the size of the change" is the claim
+# under test. Every diff is a real commit from a working repository with the
+# author's own commit message and PR title stripped: the model writes from the
+# diff and one line of a developer's context, never from the author's wording.
+#
+# `maxWords` is a ceiling on the whole answer (title + description) and is
+# house-calibrated, not derived from any published standard: it exists because a
+# template dumped on a one-line diff is a failure this suite has actually seen.
+# There is no floor - nothing published endorses a minimum length, and brevity
+# that fits the change is the judges' call. Length alone cannot see padding that
+# fits under the ceiling; the `pr_quality` restatement criterion catches that.
+
+- description: ui-icon-swap-one-line
+  vars:
+    note: 'tiny one - the trash can was the odd control out, everything else in the app removes with an X'
+    diff: |
+      diff --git a/frontend/src/components/MemoryEntry.tsx b/frontend/src/components/MemoryEntry.tsx
+      index 95567ba..94bf1bb 100644
+      --- a/frontend/src/components/MemoryEntry.tsx
+      +++ b/frontend/src/components/MemoryEntry.tsx
+      @@ -151,7 +151,7 @@ export function MemoryEntry({ memory, onForget }: MemoryEntryProps) {
+                   title="Forget this memory"
+                   className="w-7 h-7 flex items-center justify-center rounded text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                 >
+      -            <span aria-hidden="true">🗑</span>
+      +            <span aria-hidden="true">✕</span>
+                 </button>
+               )}
+             </div>
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 105 }
+      metric: proportionality
+    # Shared unchanged across every real case - individually anchored so each
+    # case can append it to its own distinct proportionality config above.
+    # what_and_why is gone: 19 of its 20 rows sat at exactly 1.00 and every
+    # question it asked is asked again by items 1-3 below.
+    - &pr_quality
+      type: llm-rubric
+      # A rubric only ever sees {{output}} and {{rubric}}, and this suite disables
+      # templating, so a {{note}} in the value below reaches the judge as those
+      # eight literal characters. Carry it in a tag of its own instead.
+      rubricPrompt:
+        - role: user
+          content: |
+            <AuthorNote>{{note}}</AuthorNote>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        The author's own note about the change is in <AuthorNote> above.
+
+        A reviewer is about to review a code change and has seen nothing of it
+        but this pull request. Judge the pull request as delivered: do not
+        reward or penalise how it was built, which features it used, or whether
+        it followed any particular authoring convention.
+
+        Answer each of the six below with a quote from the pull request, or
+        NONE. Answer all six before scoring.
+
+        1. What the change does and why it was made, with a first line that says
+           specifically what is being done, written as though it were an order.
+           "Fix bug" is NONE.
+        2. The problem the change solves. Where it claims an optimisation or a
+           trade-off, quote the number behind the claim; an asserted improvement
+           with no number is NONE.
+        3. Something the diff does not already show. Restating the changed file
+           list, narrating the hunks, or paraphrasing the code back is NONE,
+           however well written.
+        4. A claim specific to this change that the reviewer could check, rather
+           than a statement true of changes in general.
+        5. How the change was verified, concretely enough that the reviewer
+           could repeat it. Treat this as a house standard rather than
+           conformance to anything published.
+        6. Detail matched to the size of the change: quote either the section
+           that earns its length on a large change, or - on a one-line change -
+           the whole description, which counts as satisfying this item when it
+           is short. This is also a house standard, and a short description of a
+           small change is not a fault on its own.
+
+        Score from 0 to 1, never above 1: award 0.167 for each of the six you
+        answered with a quote, and nothing for each NONE.
+      threshold: 0.7
+      metric: pr_quality
+
+- description: vendored-pin-bump
+  vars:
+    note: 'pulling the newer dotagents in, nothing of ours changed'
+    diff: |
+      diff --git a/.agents/vendor/plugins.yaml b/.agents/vendor/plugins.yaml
+      index 8af0db2..1e8bd89 100644
+      --- a/.agents/vendor/plugins.yaml
+      +++ b/.agents/vendor/plugins.yaml
+      @@ -4,7 +4,7 @@
+       plugins:
+         - name: dotagents
+           url: https://github.com/fagerbergj/dotagents
+      -    ref: 3c58752bd0218943716cecbaa3da52333aaa2177
+      +    ref: dc452ce4abf593c32d5afcc70d72f6b96db0c0f6
+           path: .agents/vendor/dotagents
+         - name: ponytail
+           url: https://github.com/DietrichGebert/ponytail
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 105 }
+      metric: proportionality
+    - *pr_quality
+
+- description: dockerfile-missing-file
+  vars:
+    note: 'every worker spawn is dying on ERR_MODULE_NOT_FOUND since 0.43.0 - the shim imports a file that never made it into the image'
+    diff: |
+      diff --git a/Dockerfile b/Dockerfile
+      index 8c4fb1a..433a651 100644
+      --- a/Dockerfile
+      +++ b/Dockerfile
+      @@ -99,7 +99,7 @@ COPY --from=backend /go/pkg/mod /usr/local/go/pkg/mod
+       # (--no-session).
+       COPY --from=pi /opt/pi/node_modules /usr/local/lib/pi/node_modules
+       RUN ln -s /usr/local/lib/pi/node_modules/.bin/pi /usr/local/bin/pi
+      -COPY tools/pi-acp/pi-acp.mjs tools/pi-acp/mcp-client.mjs /usr/local/lib/pi-acp/
+      +COPY tools/pi-acp/pi-acp.mjs tools/pi-acp/mcp-client.mjs tools/pi-acp/otel.mjs /usr/local/lib/pi-acp/
+       COPY --from=frontend /usr/local/bin/node /usr/local/bin/node
+       COPY --from=frontend /usr/local/lib/node_modules /usr/local/lib/node_modules
+       RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 125 }
+      metric: proportionality
+    - *pr_quality
+
+- description: dependency-bump
+  vars:
+    note: 'routine bump, dependabot has been nagging about it for a week'
+    diff: |
+      diff --git a/frontend/package-lock.json b/frontend/package-lock.json
+      index 3c4bdd2..7386167 100644
+      --- a/frontend/package-lock.json
+      +++ b/frontend/package-lock.json
+      @@ -8,7 +8,7 @@
+             "name": "quack-ui",
+             "version": "0.1.0",
+             "dependencies": {
+      -        "highlight.js": "11.11.1",
+      +        "highlight.js": "11.12.0",
+               "mermaid": "^11.16.1",
+               "react": "^19.2.5",
+               "react-dom": "^19.2.8",
+      @@ -6089,9 +6089,9 @@
+             }
+           },
+           "node_modules/highlight.js": {
+      -      "version": "11.11.1",
+      -      "resolved": "https://registry.npmjs.org/highlight.js/-/highlight.js-11.11.1.tgz",
+      -      "integrity": "sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==",
+      +      "version": "11.12.0",
+      +      "resolved": "https://registry.npmjs.org/highlight.js/-/highlight.js-11.12.0.tgz",
+      +      "integrity": "sha512-nbfWpyRMcMrPMmDwJB+dhX/eiaPKtc2RB+0QZskqJ3WjRA/FDS0e9hZrx8EC/lbEv8gXy98FcDbNa/dspAaJMg==",
+             "license": "BSD-3-Clause",
+             "engines": {
+               "node": ">=12.0.0"
+      @@ -7387,6 +7387,15 @@
+               "url": "https://github.com/sponsors/wooorm"
+             }
+           },
+      +    "node_modules/lowlight/node_modules/highlight.js": {
+      +      "version": "11.11.2",
+      +      "resolved": "https://registry.npmjs.org/highlight.js/-/highlight.js-11.11.2.tgz",
+      +      "integrity": "sha512-oaXMACAU0kzOMXBjWpNcX+vlwSBCIAiZ9BHa7gA15NOTtT2L/l8OSZDuqS2XppOhZBPJ7hm4o8ep2kyuip2uEQ==",
+      +      "license": "BSD-3-Clause",
+      +      "engines": {
+      +        "node": ">=12.0.0"
+      +      }
+      +    },
+           "node_modules/lru-cache": {
+             "version": "11.5.2",
+             "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-11.5.2.tgz",
+      diff --git a/frontend/package.json b/frontend/package.json
+      index 6e1a754..f8cb6a3 100644
+      --- a/frontend/package.json
+      +++ b/frontend/package.json
+      @@ -15,7 +15,7 @@
+           "knip": "knip"
+         },
+         "dependencies": {
+      -    "highlight.js": "11.11.1",
+      +    "highlight.js": "11.12.0",
+           "mermaid": "^11.16.1",
+           "react": "^19.2.5",
+           "react-dom": "^19.2.8",
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 105 }
+      metric: proportionality
+    - *pr_quality
+
+- description: flaky-test-timeout-fix
+  vars:
+    note: 'these two go red in CI and green on my laptop every single time, it is the mermaid import being slow when the whole suite runs at once'
+    diff: |
+      diff --git a/frontend/src/components/AgentParts.mermaid.test.ts b/frontend/src/components/AgentParts.mermaid.test.ts
+      index 0537bbf..3fb6eb2 100644
+      --- a/frontend/src/components/AgentParts.mermaid.test.ts
+      +++ b/frontend/src/components/AgentParts.mermaid.test.ts
+      @@ -11,6 +11,11 @@ import { AssistantText } from './AgentParts'
+       ;(SVGElement.prototype as unknown as { getBBox: () => DOMRect }).getBBox = () =>
+         ({ x: 0, y: 0, width: 100, height: 20, top: 0, right: 0, bottom: 0, left: 0, toJSON: () => '' }) as DOMRect
+      
+      +// Must exceed waitFor's own budget below, or vitest kills the test while
+      +// waitFor still thinks it has time - mermaid's ~1MB import is genuinely slow
+      +// under full-suite concurrency.
+      +const mermaidTestTimeout = 20_000
+      +
+       async function waitFor(check: () => boolean, timeoutMs = 8000) {
+         const start = Date.now()
+         while (!check()) {
+      @@ -47,7 +52,7 @@ describe('AssistantText mermaid wiring', () => {
+           mount('Here:\n\n```mermaid\nflowchart TD\n  A --> B\n```\n')
+           await waitFor(() => host!.querySelector('[data-testid="mermaid-diagram"] svg') != null)
+           expect(host!.querySelector('[data-testid="mermaid-diagram"] svg')).not.toBeNull()
+      -  })
+      +  }, mermaidTestTimeout)
+      
+         it('does not attempt to render an unclosed (streaming) mermaid block', async () => {
+           mount('Here:\n\n```mermaid\nflowchart TD\n  A --> B')
+      @@ -60,7 +65,7 @@ describe('AssistantText mermaid wiring', () => {
+           // Falls back to the plain streaming code block - the fence content is still visible as text.
+           expect(host!.querySelector('pre')).not.toBeNull()
+           expect(host!.textContent).toContain('flowchart TD')
+      -  })
+      +  }, mermaidTestTimeout)
+      
+         it('renders normal markdown untouched when there is no mermaid block', () => {
+           mount('**bold** text and a [link](https://example.com)')
+      diff --git a/frontend/src/components/MermaidDiagram.test.ts b/frontend/src/components/MermaidDiagram.test.ts
+      index 0ad47b9..e6213a5 100644
+      --- a/frontend/src/components/MermaidDiagram.test.ts
+      +++ b/frontend/src/components/MermaidDiagram.test.ts
+      @@ -11,6 +11,11 @@ import { MermaidDiagram } from './MermaidDiagram'
+       ;(SVGElement.prototype as unknown as { getBBox: () => DOMRect }).getBBox = () =>
+         ({ x: 0, y: 0, width: 100, height: 20, top: 0, right: 0, bottom: 0, left: 0, toJSON: () => '' }) as DOMRect
+      
+      +// Must exceed waitFor's own budget below, or vitest kills the test while
+      +// waitFor still thinks it has time - mermaid's ~1MB import is genuinely slow
+      +// under full-suite concurrency.
+      +const mermaidTestTimeout = 20_000
+      +
+       async function waitFor(check: () => boolean, timeoutMs = 8000) {
+         const start = Date.now()
+         while (!check()) {
+      @@ -46,7 +51,7 @@ describe('MermaidDiagram', () => {
+      
+           expect(host.querySelector('[data-testid="mermaid-diagram"] svg')).not.toBeNull()
+           expect(host.textContent).not.toContain('Diagram failed to render')
+      -  })
+      +  }, mermaidTestTimeout)
+      
+         it('falls back to the source without throwing when the diagram is invalid', async () => {
+           // @ts-expect-error react act environment flag
+      @@ -66,5 +71,5 @@ describe('MermaidDiagram', () => {
+           expect(host.querySelector('[data-testid="mermaid-diagram"]')).toBeNull()
+           expect(host.querySelector('pre')).not.toBeNull() // CopyablePre fallback shows the raw source
+           expect(host.textContent).toContain('this is not @@@ %%% a diagram')
+      -  })
+      +  }, mermaidTestTimeout)
+       })
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 160 }
+      metric: proportionality
+    - *pr_quality
+
+- description: wire-compat-fix
+  vars:
+    note: 'if we ever roll a deploy back the old binary re-sends every steer someone already got, putting the old field back on the wire'
+    diff: |
+      diff --git a/internal/dag/control.go b/internal/dag/control.go
+      index 15f6792..04a35cc 100644
+      --- a/internal/dag/control.go
+      +++ b/internal/dag/control.go
+      @@ -65,6 +65,19 @@ func (m *queuedMsg) UnmarshalJSON(b []byte) error {
+       	return nil
+       }
+      
+      +// MarshalJSON also writes the legacy Delivered bool so a row written here and
+      +// read back by an OLDER binary (a rollback) is not seen as still-queued and
+      +// re-delivered to the node.
+      +func (m queuedMsg) MarshalJSON() ([]byte, error) {
+      +	return json.Marshal(struct {
+      +		ID        string
+      +		Text      string
+      +		Status    MsgStatus
+      +		Delivered bool
+      +		CreatedAt time.Time
+      +	}{m.ID, m.Text, m.Status, m.Status != MsgQueued, m.CreatedAt})
+      +}
+      +
+       func newMsgID() string {
+       	b := make([]byte, 8)
+       	_, _ = rand.Read(b)
+      diff --git a/internal/dag/control_test.go b/internal/dag/control_test.go
+      index b30afb6..0705806 100644
+      --- a/internal/dag/control_test.go
+      +++ b/internal/dag/control_test.go
+      @@ -528,3 +528,34 @@ func TestQueuedMsg_StatusTransitions(t *testing.T) {
+       		}
+       	})
+       }
+      +
+      +// A row written by this binary must stay correct when an OLDER binary reads it
+      +// back after a rollback: without the legacy bool it would look still-queued and
+      +// be re-delivered to the node.
+      +func TestQueuedMsg_MarshalKeepsLegacyDeliveredForRollback(t *testing.T) {
+      +	for _, tc := range []struct {
+      +		status MsgStatus
+      +		want   bool
+      +	}{{MsgQueued, false}, {MsgForwarded, true}, {MsgDrained, true}} {
+      +		b, err := json.Marshal(queuedMsg{ID: "m1", Text: "hi", Status: tc.status})
+      +		if err != nil {
+      +			t.Fatalf("marshal(%s): %v", tc.status, err)
+      +		}
+      +		var old struct {
+      +			ID        string
+      +			Text      string
+      +			Delivered bool
+      +		}
+      +		if err := json.Unmarshal(b, &old); err != nil {
+      +			t.Fatalf("old-binary unmarshal(%s): %v", tc.status, err)
+      +		}
+      +		if old.Delivered != tc.want {
+      +			t.Errorf("status %s -> old Delivered = %v, want %v (rollback would re-deliver)", tc.status, old.Delivered, tc.want)
+      +		}
+      +		// And the new shape must still round-trip through our own decoder.
+      +		var back queuedMsg
+      +		if err := json.Unmarshal(b, &back); err != nil || back.Status != tc.status {
+      +			t.Errorf("round-trip(%s) = %q, err %v", tc.status, back.Status, err)
+      +		}
+      +	}
+      +}
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 175 }
+      metric: proportionality
+    - *pr_quality
+
+- description: otel-multi-exporter-feature
+  vars:
+    note: 'we want traces going to langfuse and metrics going to the collector and one endpoint cannot do both'
+    diff: |
+      diff --git a/config/quack.yaml b/config/quack.yaml
+      index e826b54..3459e1d 100644
+      --- a/config/quack.yaml
+      +++ b/config/quack.yaml
+      @@ -301,16 +301,22 @@ server:
+      
+       # OTel tracing/metrics - emission-only (Tempo/Grafana, the home-server
+       # monitoring stack, own trace/metric viewing; quack keeps no local store of
+      -# its own). enabled defaults to true; otlp_endpoint is what actually ships
+      -# spans/metrics anywhere - unset, providers are built but nothing exports.
+      +# its own). enabled defaults to true; `exporters` is what actually ships
+      +# anything - with none listed, providers are built but nothing exports.
+       observability:
+         otel:
+           enabled: ${QUACK_OTEL_ENABLED}             # unset ⇒ true
+      -    otlp_endpoint: ${QUACK_OTEL_OTLP_ENDPOINT} # unset ⇒ providers built, nothing exported
+      -    # otlp_endpoint: http://otel-collector:4318  # the deployed home-server collector
+      +    # Each exporter names one OTLP destination and the signals sent to it, so a
+      +    # trace backend and a metrics collector can be different systems. The signal
+      +    # path (/v1/traces etc) is always appended, so a base URL carrying a path -
+      +    # Langfuse's /api/public/otel - works like any other.
+      +    exporters:
+      +      - endpoint: ${QUACK_OTEL_OTLP_ENDPOINT}  # e.g. http://otel-collector:4318
+      +        signals: [traces, metrics]             # add `logs` to ALSO ship slog via OTLP (needs a collector logs pipeline; default is stdout only)
+      +    #  - endpoint: http://langfuse:3008/api/public/otel
+      +    #    signals: [traces]                     # Langfuse ingests traces only
+           sample: 1.0                                # trace sample ratio in (0,1]
+           environment: ${QUACK_OTEL_ENVIRONMENT}     # unset ⇒ production; deployment.environment.name on every span
+      -    # logs: true   # ALSO ship slog via OTLP - needs a collector logs pipeline (default: stdout only)
+           # capture_content: true # ALSO put user prompts and model responses (plus ACP tool-call args/output) on span attributes (default: off) - ships raw content to the OTLP endpoint
+           # trace_url_template: "https://tracing.example.com/trace/{trace_id}"  # unset ⇒ no deep link rendered in the UI
+         # The replay ledger (.quack/replay-log.md): every gen_ai.* log event, appended
+      diff --git a/internal/otelobs/provider.go b/internal/otelobs/provider.go
+      index 3c528d1..b96a7d3 100644
+      --- a/internal/otelobs/provider.go
+      +++ b/internal/otelobs/provider.go
+      @@ -58,14 +58,16 @@ type Providers struct {
+       // posts to / instead, which loses telemetry silently - and the deployed
+       // endpoint is path-less (http://otel-collector:4318). An endpoint that already
+       // names a path is left alone.
+      +// signalURL appends the OTLP signal path to an endpoint. It appends
+      +// unconditionally - a base URL that carries a path (Langfuse's
+      +// /api/public/otel) still needs /v1/traces on the end, and the old
+      +// path-detection rule made such endpoints unusable for every signal (#1045).
+      +// An endpoint already ending in the signal path is left alone so an
+      +// explicitly-specified full URL does not double up.
+       func signalURL(endpoint, path string) string {
+       	trimmed := strings.TrimRight(endpoint, "/")
+      -	if i := strings.Index(trimmed, "://"); i >= 0 {
+      -		if strings.Contains(trimmed[i+3:], "/") {
+      -			return endpoint
+      -		}
+      -	} else if strings.Contains(trimmed, "/") {
+      -		return endpoint
+      +	if strings.HasSuffix(trimmed, path) {
+      +		return trimmed
+       	}
+       	return trimmed + path
+       }
+      @@ -100,22 +102,27 @@ func Init(ctx context.Context, cfg config.ObservabilityConfig, ledgerStore ledge
+       	}
+       	mpOpts := []metric.Option{metric.WithResource(res)}
+       	var shutdowns []func(context.Context) error
+      -	if cfg.Otel.OTLPEndpoint != "" {
+      -		texp, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(signalURL(cfg.Otel.OTLPEndpoint, "/v1/traces")))
+      -		if err != nil {
+      -			return nil, nil, fmt.Errorf("otelobs: otlp trace exporter: %w", err)
+      +	// One exporter per destination per signal: a trace backend and a metrics
+      +	// collector are usually different systems (#1045).
+      +	for _, e := range cfg.Otel.Exporters {
+      +		if e.Wants(config.SignalTraces) {
+      +			texp, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(signalURL(e.Endpoint, "/v1/traces")))
+      +			if err != nil {
+      +				return nil, nil, fmt.Errorf("otelobs: otlp trace exporter (%s): %w", e.Endpoint, err)
+      +			}
+      +			bsp := sdktrace.NewBatchSpanProcessor(texp)
+      +			tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(bsp))
+      +			shutdowns = append(shutdowns, bsp.Shutdown)
+       		}
+      -		bsp := sdktrace.NewBatchSpanProcessor(texp)
+      -		tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(bsp))
+      -		shutdowns = append(shutdowns, bsp.Shutdown)
+      -
+      -		mexp, err := otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(signalURL(cfg.Otel.OTLPEndpoint, "/v1/metrics")))
+      -		if err != nil {
+      -			return nil, nil, fmt.Errorf("otelobs: otlp metric exporter: %w", err)
+      +		if e.Wants(config.SignalMetrics) {
+      +			mexp, err := otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(signalURL(e.Endpoint, "/v1/metrics")))
+      +			if err != nil {
+      +				return nil, nil, fmt.Errorf("otelobs: otlp metric exporter (%s): %w", e.Endpoint, err)
+      +			}
+      +			periodic := metric.NewPeriodicReader(mexp)
+      +			mpOpts = append(mpOpts, metric.WithReader(periodic))
+      +			shutdowns = append(shutdowns, periodic.Shutdown)
+       		}
+      -		periodic := metric.NewPeriodicReader(mexp)
+      -		mpOpts = append(mpOpts, metric.WithReader(periodic))
+      -		shutdowns = append(shutdowns, periodic.Shutdown)
+       	}
+       	tp := sdktrace.NewTracerProvider(tpOpts...)
+       	otel.SetTracerProvider(tp)
+      diff --git a/internal/serve/serve.go b/internal/serve/serve.go
+      index cddae1d..07f9301 100644
+      --- a/internal/serve/serve.go
+      +++ b/internal/serve/serve.go
+      @@ -381,7 +381,7 @@ func buildFromConfig(ctx context.Context, cfg *config.Config, port int, reconcil
+       	})
+       	slog.SetDefault(slog.New(otelobs.WrapHandler(slog.Default().Handler())))
+       	otelobs.SetCaptureContent(cfg.Observability.Otel.Content)
+      -	if cfg.Observability.Otel.IsEnabled() && cfg.Observability.Otel.OTLPEndpoint != "" && !cfg.Observability.Otel.Content {
+      +	if cfg.Observability.Otel.IsEnabled() && len(cfg.Observability.Otel.Exporters) > 0 && !cfg.Observability.Otel.Content {
+       		slog.Info("span content capture is off (observability.otel.capture_content) - generation spans export with no prompt/response text", "component", "otelobs")
+       	}
+      
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 280 }
+      metric: proportionality
+    - *pr_quality
+
+- description: delivered-bool-to-status-enum
+  vars:
+    note: 'that delivered bool has meant two different things since the live-steer work and I keep getting it wrong, making it an enum'
+    diff: |
+      diff --git a/frontend/src/components/DagNode.test.ts b/frontend/src/components/DagNode.test.ts
+      index 0a4e94f..0a8b796 100644
+      --- a/frontend/src/components/DagNode.test.ts
+      +++ b/frontend/src/components/DagNode.test.ts
+      @@ -336,3 +336,3 @@ describe('DagNode - queued-message badge counts only parked (undelivered) messag
+         it('shows no badge once every queued message has been delivered (live or boundary)', () => {
+      -    const out = withQueue([{ id: 'm1', text: 'focus on cost', delivered: true, created_at: '' }])
+      +    const out = withQueue([{ id: 'm1', text: 'focus on cost', status: 'drained', delivered: true, created_at: '' }])
+           expect(out).not.toContain('✉')
+      @@ -342,4 +342,4 @@ describe('DagNode - queued-message badge counts only parked (undelivered) messag
+           const out = withQueue([
+      -      { id: 'm1', text: 'delivered live', delivered: true, created_at: '' },
+      -      { id: 'm2', text: 'still parked', delivered: false, created_at: '' },
+      +      { id: 'm1', text: 'delivered live', status: 'forwarded', delivered: true, created_at: '' },
+      +      { id: 'm2', text: 'still parked', status: 'queued', delivered: false, created_at: '' },
+           ])
+      diff --git a/internal/dag/control.go b/internal/dag/control.go
+      index cd8c6f2..15f6792 100644
+      --- a/internal/dag/control.go
+      +++ b/internal/dag/control.go
+      @@ -24,3 +24,12 @@ type NodeStateStore interface {
+      
+      -// queuedMsg: one message in a running node's queue. Delivered messages are kept but immutable.
+      +// MsgStatus is a queued steer message's lifecycle state.
+      +type MsgStatus string
+      +
+      +const (
+      +	MsgQueued    MsgStatus = "queued"    // accepted, nothing has picked it up yet
+      +	MsgForwarded MsgStatus = "forwarded" // injected into the live round (native BeforeModelCallback or ACP stdin)
+      +	MsgDrained   MsgStatus = "drained"   // consumed at a gate boundary (the slow path)
+      +)
+      +
+      +// queuedMsg: one message in a running node's queue. Non-queued messages are kept but immutable.
+       type queuedMsg struct {
+      @@ -28,3 +37,3 @@ type queuedMsg struct {
+       	Text      string
+      -	Delivered bool
+      +	Status    MsgStatus
+       	CreatedAt time.Time
+      @@ -32,2 +41,28 @@ type queuedMsg struct {
+      
+      +// UnmarshalJSON derives Status from a legacy row that only has the old
+      +// Delivered bool: true meant "drained" for the vast majority of historical
+      +// rows (the gate-boundary path predates live delivery, #1029/#1042).
+      +func (m *queuedMsg) UnmarshalJSON(b []byte) error {
+      +	var shape struct {
+      +		ID        string
+      +		Text      string
+      +		Status    MsgStatus
+      +		Delivered *bool
+      +		CreatedAt time.Time
+      +	}
+      +	if err := json.Unmarshal(b, &shape); err != nil {
+      +		return err
+      +	}
+      +	m.ID, m.Text, m.CreatedAt = shape.ID, shape.Text, shape.CreatedAt
+      +	switch {
+      +	case shape.Status != "":
+      +		m.Status = shape.Status
+      +	case shape.Delivered != nil && *shape.Delivered:
+      +		m.Status = MsgDrained
+      +	default:
+      +		m.Status = MsgQueued
+      +	}
+      +	return nil
+      +}
+      +
+       func newMsgID() string {
+      @@ -90,3 +125,3 @@ func (c *nodeControl) PeekQueued() string {
+       	for _, m := range c.queue {
+      -		if !m.Delivered {
+      +		if m.Status == MsgQueued {
+       			out = append(out, m.Text)
+      @@ -102,4 +137,4 @@ func (c *nodeControl) TakeQueued() string {
+       	for _, m := range c.queue {
+      -		if !m.Delivered {
+      -			m.Delivered = true
+      +		if m.Status == MsgQueued {
+      +			m.Status = MsgDrained
+       			out = append(out, m.Text)
+      @@ -206,3 +241,8 @@ func (c *nodeControl) enqueue(text string) queuedMsg {
+       	c.mu.Unlock()
+      -	delivered := live != nil && live(text)
+      +	// liveSteer is ACP-only (native rounds inject via steerCallback's own peek+dedupe),
+      +	// so a native round's steer stays "queued" here even after that callback injects it.
+      +	status := MsgQueued
+      +	if live != nil && live(text) {
+      +		status = MsgForwarded
+      +	}
+      
+      @@ -210,3 +250,3 @@ func (c *nodeControl) enqueue(text string) queuedMsg {
+       	defer c.mu.Unlock()
+      -	m := &queuedMsg{ID: newMsgID(), Text: text, Delivered: delivered, CreatedAt: time.Now().UTC()}
+      +	m := &queuedMsg{ID: newMsgID(), Text: text, Status: status, CreatedAt: time.Now().UTC()}
+       	c.queue = append(c.queue, m)
+      @@ -239,3 +279,3 @@ func (c *nodeControl) restore() {
+       	for i := range msgs {
+      -		if !msgs[i].Delivered {
+      +		if msgs[i].Status == MsgQueued {
+       			m := msgs[i]
+      @@ -252,3 +292,3 @@ func (c *nodeControl) editQueued(id, text string) bool {
+       		if m.ID == id {
+      -			if m.Delivered {
+      +			if m.Status != MsgQueued {
+       				return false
+      @@ -268,3 +308,3 @@ func (c *nodeControl) removeQueued(id string) bool {
+       		if m.ID == id {
+      -			if m.Delivered {
+      +			if m.Status != MsgQueued {
+       				return false
+      @@ -554,3 +594,4 @@ func (e *Executor) NodeQueue(chatID, nodeID string) []QueuedMessage {
+      
+      -// QueuedMessage is the REST/SSE-facing shape.
+      +// QueuedMessage is the REST/SSE-facing shape. Delivered is derived (true for
+      +// forwarded and drained) for old wire consumers; Status carries the detail.
+       type QueuedMessage struct {
+      @@ -558,2 +599,3 @@ type QueuedMessage struct {
+       	Text      string
+      +	Status    MsgStatus
+       	Delivered bool
+      @@ -563,3 +605,3 @@ type QueuedMessage struct {
+       func toQueuedMessage(m queuedMsg) QueuedMessage {
+      -	return QueuedMessage{ID: m.ID, Text: m.Text, Delivered: m.Delivered, CreatedAt: m.CreatedAt}
+      +	return QueuedMessage{ID: m.ID, Text: m.Text, Status: m.Status, Delivered: m.Status != MsgQueued, CreatedAt: m.CreatedAt}
+       }
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 260 }
+      metric: proportionality
+    - *pr_quality
+
+- description: race-gate-plus-race-fix
+  vars:
+    note: 'turning -race on in CI, plus the one test it broke the second I did'
+    diff: |
+      diff --git a/.github/workflows/ci.yaml b/.github/workflows/ci.yaml
+      index 637d0ff..c9d96c9 100644
+      --- a/.github/workflows/ci.yaml
+      +++ b/.github/workflows/ci.yaml
+      @@ -40,2 +40,4 @@ jobs:
+             - run: go test ./...
+      +      # Without -race the concurrency regression guards (#1016, #1032) pass vacuously.
+      +      - run: go test -race ./...
+      
+      diff --git a/Makefile b/Makefile
+      index 7349e6d..1fa6a96 100644
+      --- a/Makefile
+      +++ b/Makefile
+      @@ -32,2 +32,6 @@ test: plugins
+      
+      +## test-race: run Go tests under the race detector (what CI gates on)
+      +test-race: plugins
+      +	go test -race ./...
+      +
+       ## vet: go vet
+      diff --git a/internal/server/rest/livetail_test.go b/internal/server/rest/livetail_test.go
+      index 771e6f4..1418126 100644
+      --- a/internal/server/rest/livetail_test.go
+      +++ b/internal/server/rest/livetail_test.go
+      @@ -4,4 +4,6 @@ import (
+       	"context"
+      +	"net/http"
+       	"net/http/httptest"
+       	"strings"
+      +	"sync"
+       	"testing"
+      @@ -13,7 +15,49 @@ import (
+      
+      +// syncRecorder guards httptest.ResponseRecorder, whose bytes.Buffer is not safe
+      +// for the concurrent write/read these live-tail tests do (handler goroutine
+      +// writes while the test polls). Only the live tests need it.
+      +// Not embedded: promoted Result/Code/Header would bypass mu and race the
+      +// handler goroutine silently.
+      +type syncRecorder struct {
+      +	mu  sync.Mutex
+      +	rec *httptest.ResponseRecorder
+      +}
+      +
+      +func newSyncRecorder() *syncRecorder {
+      +	return &syncRecorder{rec: httptest.NewRecorder()}
+      +}
+      +
+      +func (s *syncRecorder) Header() http.Header {
+      +	s.mu.Lock()
+      +	defer s.mu.Unlock()
+      +	return s.rec.Header()
+      +}
+      +
+      +func (s *syncRecorder) Write(p []byte) (int, error) {
+      +	s.mu.Lock()
+      +	defer s.mu.Unlock()
+      +	return s.rec.Write(p)
+      +}
+      +
+      +func (s *syncRecorder) WriteHeader(code int) {
+      +	s.mu.Lock()
+      +	defer s.mu.Unlock()
+      +	s.rec.WriteHeader(code)
+      +}
+      +
+      +func (s *syncRecorder) Flush() {
+      +	s.mu.Lock()
+      +	defer s.mu.Unlock()
+      +	s.rec.Flush()
+      +}
+      +
+      +func (s *syncRecorder) body() string {
+      +	s.mu.Lock()
+      +	defer s.mu.Unlock()
+      +	return s.rec.Body.String()
+      +}
+      +
+       // waitForBody polls the recorder's accumulated body until it contains want, or
+      -// fails the test after a short timeout. httptest.ResponseRecorder's bytes.Buffer
+      -// isn't safe for concurrent read/write, but this package writes+reads only
+      -// strings, in a tight poll loop - fine for a test racing a background writer.
+      -func waitForBody(t *testing.T, rec *httptest.ResponseRecorder, want string) {
+      +// fails the test after a short timeout.
+      +func waitForBody(t *testing.T, rec *syncRecorder, want string) {
+       	t.Helper()
+      @@ -21,3 +65,3 @@ func waitForBody(t *testing.T, rec *httptest.ResponseRecorder, want string) {
+       	for {
+      -		if strings.Contains(rec.Body.String(), want) {
+      +		if strings.Contains(rec.body(), want) {
+       			return
+      @@ -26,3 +70,3 @@ func waitForBody(t *testing.T, rec *httptest.ResponseRecorder, want string) {
+       		case <-deadline:
+      -			t.Fatalf("timed out waiting for %q in body:\n%s", want, rec.Body.String())
+      +			t.Fatalf("timed out waiting for %q in body:\n%s", want, rec.body())
+       		case <-time.After(5 * time.Millisecond):
+      @@ -50,3 +94,3 @@ func TestSubscribeLiveTail(t *testing.T) {
+       	req = req.WithContext(ctx)
+      -	rec := httptest.NewRecorder()
+      +	rec := newSyncRecorder()
+       	done := make(chan struct{})
+      @@ -131,3 +175,3 @@ func TestSubscribeLiveReconnectByLastEventID(t *testing.T) {
+       	req = req.WithContext(ctx)
+      -	rec := httptest.NewRecorder()
+      +	rec := newSyncRecorder()
+       	done := make(chan struct{})
+      @@ -139,4 +183,4 @@ func TestSubscribeLiveReconnectByLastEventID(t *testing.T) {
+       	waitForBody(t, rec, "id: 2")
+      -	if strings.Contains(rec.Body.String(), "id: 1\n") {
+      -		t.Errorf("reconnect from seq 1 must not resend seq 1 (dup); body:\n%s", rec.Body.String())
+      +	if strings.Contains(rec.body(), "id: 1\n") {
+      +		t.Errorf("reconnect from seq 1 must not resend seq 1 (dup); body:\n%s", rec.body())
+       	}
+      diff --git a/internal/stream/yieldctx.go b/internal/stream/yieldctx.go
+      index 43b3919..d3f0396 100644
+      --- a/internal/stream/yieldctx.go
+      +++ b/internal/stream/yieldctx.go
+      @@ -8,4 +8,5 @@ type yieldCtxKey struct{}
+       // SSE events up through the outer SSE stream without going through the ADK
+      -// session event pipeline. The function must be called from one goroutine at a
+      -// time (the ADK runner dispatches tools synchronously).
+      +// session event pipeline. fn MUST already serialize its callers: concurrent DAG
+      +// nodes call it from their own goroutines (dag/graph.go's onQueued, vetting's
+      +// stage spans), and an unsynchronized fn panics the process (#1016, #1032).
+       func WithYield(ctx context.Context, fn func(SSEEvent)) context.Context {
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 260 }
+      metric: proportionality
+    - *pr_quality
+
+# Constructed context: the real revert (f4be7da) records no rationale beyond
+# "This reverts commit 76b7f6a", so the note says exactly that much. An author
+# who invents a reason here is fabricating, which is the point of the case.
+- description: revert-turn-input-stamp
+  vars:
+    note: 'backing #871 out for now, no clean story for it yet and I would rather not sit on it'
+    diff: |
+      diff --git a/internal/serve/extensions.go b/internal/serve/extensions.go
+      index 53eb5ae..b0451f8 100644
+      --- a/internal/serve/extensions.go
+      +++ b/internal/serve/extensions.go
+      @@ -370,11 +370,8 @@ func newExtDispatch(name string, orchRef *atomic.Pointer[orchestrator.Orchestrat
+       		ensureExtChatTitle(runCtx, st, chatID, req.Chat.Title, req.Chat.Origin)
+      
+       		turnID := uuid.NewString()
+      -		dispatchMsg := composeDispatchMessage(req)
+       		if err := st.SaveTurn(runCtx, chatID, turnID); err != nil {
+       			slog.Warn("extension dispatch: save turn failed", "component", "ext."+name, "chat", chatID, "err", err)
+      -		} else if err := st.SetTurnInput(runCtx, chatID, turnID, dispatchMsg); err != nil {
+      -			slog.Warn("extension dispatch: save turn input failed", "component", "ext."+name, "chat", chatID, "err", err)
+       		}
+      
+       		attachments := make([]*genai.Part, 0, len(req.Ask.Attachments))
+      @@ -425,7 +422,7 @@ func newExtDispatch(name string, orchRef *atomic.Pointer[orchestrator.Orchestrat
+       			runCtx = tools.WithContextItems(runCtx, toDagContextItems(req.Ask.ContextItems))
+       		}
+       		runCtx = tools.WithPlanOnly(runCtx, req.Run.ReadOnly)
+      -		go driveExtensionRun(runCtx, name, orch, st, hub, extHolder, userID, chatID, turnID, dispatchMsg, attachments, req.Run.Timeout)
+      +		go driveExtensionRun(runCtx, name, orch, st, hub, extHolder, userID, chatID, turnID, composeDispatchMessage(req), attachments, req.Run.Timeout)
+       		return nil
+       	}
+       }
+      diff --git a/internal/server/rest/handler.go b/internal/server/rest/handler.go
+      index d3b0071..d79291d 100644
+      --- a/internal/server/rest/handler.go
+      +++ b/internal/server/rest/handler.go
+      @@ -506,11 +506,8 @@ func (h *Handler) SendChatMessage(w http.ResponseWriter, r *http.Request, chatID
+       	}
+      
+       	go func() {
+      -		ctx := context.Background()
+      -		if err := h.store.SaveTurn(ctx, chatID, turnID); err != nil {
+      +		if err := h.store.SaveTurn(context.Background(), chatID, turnID); err != nil {
+       			slog.Warn("save turn failed", "component", "rest", "chat", chatID, "err", err)
+      -		} else if err := h.store.SetTurnInput(ctx, chatID, turnID, body.Content); err != nil {
+      -			slog.Warn("save turn input failed", "component", "rest", "chat", chatID, "err", err)
+       		}
+       	}()
+      
+      diff --git a/internal/store/store.go b/internal/store/store.go
+      index 9a7b8d4..0192fa1 100644
+      --- a/internal/store/store.go
+      +++ b/internal/store/store.go
+      @@ -76,11 +76,6 @@ type ChatTurn struct {
+       	ReasoningTokens  int32 `json:"reasoning_tokens,omitempty"`
+       	TotalTokens      int32 `json:"total_tokens,omitempty"`
+       	CachedTokens     int32 `json:"cached_tokens,omitempty"`
+      -	// Input is the turn's trigger text, stamped at dispatch time by SetTurnInput -
+      -	// before the run's first session event exists, so a run still queued on the
+      -	// worker semaphore has something to show. GetTurnsWithContent falls back to
+      -	// the session walk for turns that predate this column.
+      -	Input string `json:"-"`
+       }
+      
+       // GithubSnapshot stores the full GitHub state fetched at a github-origin
+      @@ -780,15 +775,6 @@ func (s *Store) SaveTurn(ctx context.Context, chatID, turnID string) error {
+       	return s.db.WithContext(ctx).Create(t).Error
+       }
+      
+      -// SetTurnInput persists the turn's trigger text at dispatch time (both
+      -// rest.SendChatMessage and an extension's Dispatch call this right after
+      -// SaveTurn), before the run's first session event exists.
+      -func (s *Store) SetTurnInput(ctx context.Context, chatID, turnID, input string) error {
+      -	return s.db.WithContext(ctx).Model(&ChatTurn{}).
+      -		Where("id = ? AND chat_id = ?", turnID, chatID).
+      -		Update("input", input).Error
+      -}
+      -
+       // TurnUsage is the orchestrator's own per-turn token usage (DAG turns credit
+       // tokens per-node on DagNode instead).
+       type TurnUsage struct {
+      @@ -943,15 +929,9 @@ func (s *Store) GetTurnsWithContent(ctx context.Context, appName, userID, chatID
+       			// walk below.
+       			PromptTokens: t.PromptTokens, CompletionTokens: t.CompletionTokens,
+       			ReasoningTokens: t.ReasoningTokens, TotalTokens: t.TotalTokens, CachedTokens: t.CachedTokens,
+      -			// Stamped by SetTurnInput at dispatch time - present even for a turn
+      -			// that's still queued, before any session event exists. Turns that
+      -			// predate that stamp fall back to the session walk below.
+      -			UserText: t.Input,
+       		}
+       		if i < len(groups) {
+      -			if tc.UserText == "" {
+      -				tc.UserText = groups[i].userText
+      -			}
+      +			tc.UserText = groups[i].userText
+       			tc.AsstText = groups[i].asstText
+       			tc.AsstThink = groups[i].asstThink
+       			tc.ToolCalls = groups[i].toolCalls
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 140 }
+      metric: proportionality
+    - *pr_quality
+
+# Negative controls. Five changes whose honest description is a sentence or two:
+# there is no design story, no risk, and nothing to verify beyond the thing still
+# building. The instinct - a full problem/approach/verification write-up - visibly
+# overshoots, and what it overshoots into is invention, so `restraint` counts
+# claims rather than measuring length. Length is `proportionality`'s job and is
+# deliberately not scored twice.
+- description: trivial-callsite-fixup
+  vars:
+    note: 'signature changed under me, fixing the one call site so the package builds again'
+    diff: |
+      diff --git a/internal/server/rest/sidebar_cost_test.go b/internal/server/rest/sidebar_cost_test.go
+      index 2789a6a..05e4a27 100644
+      --- a/internal/server/rest/sidebar_cost_test.go
+      +++ b/internal/server/rest/sidebar_cost_test.go
+      @@ -52,7 +52,7 @@ func newTestHandlerWithSessionSpy(t *testing.T) (*Handler, *sessionGetSpy) {
+       		func(string) vetting.Config { return vetting.Config{Threshold: 0.6} }, nil)
+       	planner := dag.NewPlanner(nil, nil, nil)
+       	orch := orchestrator.New(st.Sessions, stubModel{}, "You are a test duck.", planner, ex, nil, nil, nil)
+      -	return NewHandler(st, orch, nil, nil, nil, nil, "test"), spy
+      +	return NewHandler(st, orch, nil, nil, nil, nil, "test", nil, nil), spy
+       }
+      
+       // listChatsQueries runs ListChats and returns how many SELECT queries it issued.
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 55 }
+      metric: proportionality
+
+    # pr_quality is written to reward a complete what/why/verification write-up
+    # and is deliberately not aliased in here - scoring a control against it
+    # outnumbers this one criterion. Anchored so the four sibling controls below
+    # share the identical wording; each brings its own proportionality ceiling.
+    - &restraint
+      type: llm-rubric
+      # Step 2 below marks each claim against the diff or the note, so the judge
+      # needs both. Without this it sees neither and every claim collapses to
+      # NEITHER. Values are substituted, not re-parsed, so a diff containing its
+      # own {{ is safe here.
+      rubricPrompt:
+        - role: user
+          content: |
+            <AuthorNote>{{note}}</AuthorNote>
+            <Diff>{{diff}}</Diff>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        The author's note is in <AuthorNote> above and the change itself is in
+        <Diff>.
+
+        Judge the pull request as delivered: do not reward or penalise how it was
+        built or which authoring convention it followed.
+
+        Work through these in order, then score.
+
+        1. List every claim the description makes, one per line, each quoted. A
+           claim is any statement about what the change does, why it was made,
+           what it affects, what was run, or what the reader should expect. The
+           title is always at least one claim. Write the total as T.
+        2. Against each quoted claim write exactly one of:
+             DIFF    - the diff shows it
+             NOTE    - the author's note says it
+             NEITHER - neither the diff nor the note contains it. An invented
+                       risk, a design rationale this change does not have, a
+                       test command or a test result the author cannot have run,
+                       or a file, symbol or identifier absent from the change all
+                       count as NEITHER.
+        3. Write the number of claims marked NEITHER as U.
+
+        Score from 0 to 1, never above 1: (T - U) / T.
+
+        Counting an unrun test command or an unreproducible verification claim as
+        NEITHER is this repository's own position, not conformance to any
+        published standard: no widely cited guidance on change descriptions asks
+        one to state how the change was verified. A description that says nothing
+        at all about verification therefore loses nothing here.
+
+        Headings, sections and formatting are not scored. Length is not scored
+        here - it is measured elsewhere - so a two-sentence answer and a
+        five-paragraph answer face exactly the same arithmetic, and brevity is
+        never a deduction.
+      threshold: 0.7
+      metric: restraint
+
+- description: go-module-bump
+  vars:
+    note: 'patch bump from dependabot, nothing of ours calls the driver directly'
+    diff: |
+      diff --git a/go.mod b/go.mod
+      index 57834fc..ab1c124 100644
+      --- a/go.mod
+      +++ b/go.mod
+      @@ -49,7 +49,7 @@ require (
+       	google.golang.org/adk/v2 v2.2.0
+       	google.golang.org/genai v1.67.0
+       	gopkg.in/yaml.v3 v3.0.1
+      -	gorm.io/driver/postgres v1.6.0
+      +	gorm.io/driver/postgres v1.6.2
+       	gorm.io/gorm v1.31.2
+       )
+ 
+      diff --git a/go.sum b/go.sum
+      index a3e46b8..93ea53a 100644
+      --- a/go.sum
+      +++ b/go.sum
+      @@ -421,8 +421,8 @@ gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EV
+       gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+       gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
+       gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+      -gorm.io/driver/postgres v1.6.0 h1:2dxzU8xJ+ivvqTRph34QX+WrRaJlmfyPqXmoGVjMBa4=
+      -gorm.io/driver/postgres v1.6.0/go.mod h1:vUw0mrGgrTK+uPHEhAdV4sfFELrByKVGnaVRkXDhtWo=
+      +gorm.io/driver/postgres v1.6.2 h1:BvXQ/cNUg63q5TFNg672DmDcowZSFrNLkkA3Xe6GXq4=
+      +gorm.io/driver/postgres v1.6.2/go.mod h1:0c4fQA44XhOklXDkgtuKqysHCycTa5i9e3EIpDGCwXk=
+       gorm.io/driver/sqlite v1.6.0 h1:WHRRrIiulaPiPFmDcod6prc4l2VGVWHz80KspNsxSfQ=
+       gorm.io/driver/sqlite v1.6.0/go.mod h1:AO9V1qIQddBESngQUKWL9yoH93HIeA1X6V633rBwyT8=
+       gorm.io/gorm v1.31.2 h1:3o8FXNo9v9S858gil+3LlZA1LkCOzgb4g5BL64FgaCo=
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 60 }
+      metric: proportionality
+    - *restraint
+
+- description: error-string-typo
+  vars:
+    note: 'someone in the tracker spotted adminstrator in the pause-jobs error text - one letter, the thee two clauses along is still there'
+    diff: |
+      diff --git a/app/cmd/upload/run.go b/app/cmd/upload/run.go
+      index 41d870c..a34a171 100644
+      --- a/app/cmd/upload/run.go
+      +++ b/app/cmd/upload/run.go
+      @@ -180,7 +180,7 @@ func (upCmd *UpCmd) run(ctx context.Context, adapter adapters.Reader, app *app.A
+       	if app.Client().PauseImmichBackgroundJobs {
+       		err := upCmd.pauseJobs(ctx, app)
+       		if err != nil {
+      -			return fmt.Errorf("Can't pause immich background jobs: %wpass an adminstrator key with the flag --admin-api-key or disable the pause with thee flag --pause-immich-jobs=FALSE", err)
+      +			return fmt.Errorf("Can't pause immich background jobs: %wpass an administrator key with the flag --admin-api-key or disable the pause with thee flag --pause-immich-jobs=FALSE", err)
+       		}
+       	}
+       	defer func() { _ = upCmd.finishing(ctx, app) }()
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 60 }
+      metric: proportionality
+    - *restraint
+
+- description: generated-types-regen
+  vars:
+    note: 'regenerated the client types off the same spec - the generator emits reasoning_tokens in a different position now, no schema change'
+    diff: |
+      diff --git a/frontend/src/generated/types.gen.ts b/frontend/src/generated/types.gen.ts
+      index 1580194..09aa71f 100644
+      --- a/frontend/src/generated/types.gen.ts
+      +++ b/frontend/src/generated/types.gen.ts
+      @@ -110,9 +110,9 @@ export type DagNodeState = {
+           model?: string;
+           prompt_tokens?: number;
+           completion_tokens?: number;
+      -    reasoning_tokens?: number;
+           total_tokens?: number;
+           finish_reason?: string;
+      +    reasoning_tokens?: number;
+           server_duration_ms?: number;
+           self_refined?: boolean;
+           judge_rounds?: number;
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 60 }
+      metric: proportionality
+    - *restraint
+
+- description: config-default-flip
+  vars:
+    note: 'the shipped config still defaults web_search to searxng, which needs a url nobody sets on the no-docker path; exa works with no key'
+    diff: |
+      diff --git a/config/quack.yaml b/config/quack.yaml
+      index e55ed53..0da4e02 100644
+      --- a/config/quack.yaml
+      +++ b/config/quack.yaml
+      @@ -79,7 +79,7 @@ agents:
+       # internal/tools/backends.go.
+       tools:
+         web_search:
+      -    kind: searxng                 # searxng (needs url) | exa. empty ⇒ searxng
+      +    kind: exa                     # searxng (needs url) | exa. empty ⇒ searxng
+           url: ${QUACK_SEARXNG_URL}           # SearXNG JSON API, e.g. http://searxng:8080; unused by kind: exa
+           # exa is keyless via Exa's hosted MCP by default (the no-docker path). Add an
+           # api_key to use Exa's REST API instead (structured JSON, more robust):
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 70 }
+      metric: proportionality
+    - *restraint

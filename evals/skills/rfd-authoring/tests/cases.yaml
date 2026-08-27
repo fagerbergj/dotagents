@@ -1,0 +1,580 @@
+# Each task is how a colleague would actually write it - partial context, facts
+# out of order, an aside or two. No task names an artifact, a section, or a
+# rule, and none of them enumerate the directions: working out what is even on
+# the table is part of what is graded.
+#
+# Seven exploratory cases share one assertion block (anchored on the first).
+# Five negative controls cover the boundary the description draws - a decision
+# already made, a change too small to discuss, a proposal ready for sign-off, an
+# explanation of how something already works, and a mandate with no discretion.
+# Six review cases cover the description's "and review" half: five drafts that
+# hide a settled preference, and one that is honestly open. Both control_quality
+# and finds_the_decision used to ride on three cases and one respectively, where
+# run-to-run noise exceeds any delta they could report.
+
+- description: ill-defined problem - CI slowdown with competing theories
+  vars:
+    task: |
+      ok so CI. it was 9 minutes when i joined, i timed one this morning, 25. ben swears it's the integration suite, chidi reckons it's the shared runners, and someone was on about docker layer caching in standup. we also build three packages now where we used to build one, which nobody has mentioned. anyway ben and chidi are both off poking at this separately and i'm fairly sure they haven't spoken. can we get everyone looking at the same thing before one of them burns a sprint on the wrong end of it
+    rubric: |
+      The slowdown, the competing theories, and the two uncoordinated investigations are all present and concrete. More than one explanation is still genuinely live at the end of the document - not one cause asserted with the others noted and dropped.
+  assert: &exploratory
+    # Both graders are llm-rubric. g-eval scores each criterion in isolation,
+    # which cannot carry the "quote the supporting text or answer NONE"
+    # discipline these need, and its verdict regex silently zeroes a
+    # pretty-printed reply.
+    - type: llm-rubric
+      value: |
+        Judge only what the document says, never how it is laid out or which headings it
+        uses. A document that does these things in flowing prose scores exactly as well as
+        one with sections.
+
+        The Joyent/MNX RFD process (github.com/TritonDataCenter/rfd, "Contents of an RFD")
+        tells an author what an initial RFD should address, and RFC 3 - quoted as the RFD
+        charter by both Joyent and Oxide - holds that "explicit questions without any
+        attempted answers are all acceptable". For each of the five below, quote the
+        supporting text from the document, or answer NONE:
+
+        - The problem stated so that it is not, in Joyent's words, "described in terms of
+          the solution": a reader can restate what is wrong without naming a fix.
+        - The principles and constraints that bound any solution - what must stay true
+          whichever direction is taken.
+        - Who is affected and how they would notice: operators, users, developers, or
+          whoever is currently absorbing the problem.
+        - At least two directions still live at the end, or an explicit statement that the
+          direction is unknown. A direction disposed of in a single clause is not live.
+        - At least one explicit question whose answer would change what happens next,
+          specific enough that a named person could answer it.
+
+        Score from 0 to 1, never above 1: the number of the five genuinely present and
+        supported by the colleague's note, divided by five. Any figure,
+        identifier, system name, team name, or measurement in the document that does not
+        appear in the colleague's note is invented, and each invention cancels one
+        satisfied criterion. Do not credit a document for a section named after a
+        criterion that it leaves empty.
+
+        The colleague's note: "{{task}}"
+        Situation-specific facts this document must carry: {{rubric}}
+      threshold: 0.7
+      metric: framing_quality
+    - type: llm-rubric
+      value: |
+        Oxide Computer's RFD 1 rules that the prediscussion and discussion states
+        "shouldn't be used for ideas that have been committed to, organizationally or
+        otherwise; by the time an idea represents the consensus or direction, it should be
+        in the published state." The colleague's note - "{{task}}" - describes a situation
+        where no direction has been settled. Apply Oxide's rule to the document below.
+
+        Ignore hedging vocabulary entirely. "We might", "one option is", "leaning towards",
+        "nothing is decided yet" and "thoughts?" are not evidence that a document is open;
+        the arrangement of the material is. For each of these five tells, quote the text
+        that shows it, or answer NONE:
+
+        1. Asymmetric evidence: one direction arrives with a benchmark, a spike, a
+           prototype, a cost or a track record, and the others arrive with none.
+        2. Asymmetric weight: one direction gets sustained treatment and the rest get a
+           clause each.
+        3. Disposal rather than assessment: a direction is ruled out by assertion, with no
+           test, measurement or missing fact named that would settle it.
+        4. The next step is implementation work on one direction, rather than work that
+           would tell the reader which direction to take.
+        5. The questions ask for assent rather than for information that could change the
+           outcome.
+
+        A document may legitimately name a direction if the colleague's note gives it
+        grounds to. Score the five tells on whether the material is arranged to foreclose
+        discussion, not on whether a direction appears. A document that names a direction,
+        says what evidence would overturn it, and gives the alternatives a fair test avoids
+        tells 1, 3 and 5.
+
+        Score from 0 to 1, never above 1: 0.2 for each of the five tells the document
+        avoids. A document showing three or more has chosen, whatever it says about itself.
+      threshold: 0.6
+      metric: stays_open
+
+- description: opportunity with no obvious solution - mobile conversion gap
+  vars:
+    task: |
+      Something I keep chewing on. Phones are about half our traffic now, and those sessions convert at roughly a third of the desktop rate — I pulled that number twice because I didn't believe it the first time. What I can't tell you is why. The checkout form is genuinely painful on a small screen. Our pages are heavy. It's also entirely possible people browse on the phone and then buy on a laptop later and there's nothing wrong at all. Worth saying: nobody here owns mobile, which may be half the story. I think there's something real to go after and I can't tell you what the work is.
+    rubric: |
+      The size of the gap, the candidate causes, and the absence of an owner are stated. The possibility that nothing is wrong survives alongside the others, and the work is not presented as already scoped.
+  assert: *exploratory
+
+- description: technical question - identity for a second backend service
+  vars:
+    task: |
+      Second service goes in next quarter, the ingest one. It has to know who's calling before it does anything with the payload. Right now the monolith reads the sessions table directly, and that table is already our hottest read by some distance. The new thing sits in a different network segment and ships on its own cadence, so it won't be deploying in lockstep with the monolith. And a good chunk of what hits it isn't a person at all — the batch loader has no session anywhere. I don't want to be working this out in December.
+    rubric: |
+      The current session-table read, the new service's constraints (separate segment, independent cadence, hot table, sessionless batch traffic), and more than one live direction the author had to work out for themselves all appear, with none declared the winner.
+  assert: *exploratory
+
+- description: may not be worth solving - flaky nightly job
+  vars:
+    task: |
+      the reconciliation job again. fails about one night in twenty, same timeout every time, on-call reruns it and it goes green. it's been doing this since before i joined so call it a year. came up in retro on tuesday, second time this quarter. might be a five minute fix, might be a rewrite, might also just be fine to keep rerunning it and stop putting it in retro
+    rubric: |
+      The failure rate and the manual rerun workaround are concrete, and living with it stays a real candidate at the end rather than being raised and dismissed.
+  assert: *exploratory
+
+- description: ill-defined problem - analytics retention with no owner
+  vars:
+    task: |
+      We have never deleted a single analytics event. Ever. Storage is about four thousand a month now and it climbs every month — I only spotted it because finance asked about the line item. I've asked legal twice what we're actually required to keep and got nothing back either time. And support pulled an event from 2024 last month to close a dispute, so it isn't dead weight either. Nobody owns this. It comes up, everyone nods, nothing happens, and then it comes up again in three months.
+    rubric: |
+      The cost trend, the support need, the missing legal answer, and the absence of an owner stay distinguishable rather than merged into one problem statement, and the document does not settle on a retention rule the author has no basis to pick yet.
+  assert: *exploratory
+
+- description: technical question - three repos that have drifted apart
+  vars:
+    task: |
+      three repos, split apart two years ago, and they've drifted properly now. different lint configs, three copies of the same http client (one still on the old retry logic), CI written three different ways. we fixed a bug in one copy last month and it's still sitting there live in the other two. two of the three ship on their own cadence and the third has an outside contributor i'd rather not scare off. every time this comes up we lose the thread by friday.
+    rubric: |
+      The concrete drift, the bug that only got fixed in one copy, and the constraints (independent release cadence, the outside contributor) are present, and more than one direction the author had to work out for themselves is still live at the end.
+  assert: *exploratory
+
+- description: opportunity with unclear shape - one complaint, several causes
+  vars:
+    task: |
+      support keeps forwarding me tickets that say "search doesn't find things". so i sat down with a batch of them. some are stemming — you search invoices, it misses invoice. some are people looking for filters we've never had, date range mostly. and one was a document that never got indexed at all, which is its own separate horror. same sentence in every ticket, three completely different problems underneath. there's something here, i just don't think the ticket text is telling us what to build.
+    rubric: |
+      The three distinct failure kinds behind the same complaint are preserved rather than collapsed into a single cause or a single fix.
+  assert: *exploratory
+
+- description: negative control - already decided, only needs recording
+  vars:
+    task: |
+      Two meetings on the queue and we came out the other side on postgres, off redis. Priya's got the migration branch open already and the cutover is booked for the 14th. It was all verbal though — Ben missed the second one entirely and got caught up on it in the hallway. I keep thinking about whoever inherits this in a year, finding a job queue running in postgres of all places.
+    rubric: |
+      The reply should infer that the choice is already made and that what is missing is a durable record of the reasoning. It should not reopen the choice, invent uncertainty about the cutover, or ask the team to reconsider postgres.
+  assert:
+    # These three controls are judged on their own terms, not against
+    # framing_quality above - that is written for an open document and would
+    # penalise a correct decline for having no framing to give. Anchored so the
+    # other two controls reuse the identical wording.
+    - &control_rubric
+      type: llm-rubric
+      value: |
+        A colleague wrote this to you: "{{task}}"
+
+        Nothing in this situation is actually undecided. The correct answer is the compact
+        thing the note calls for - a record, a decision request, a plan, an explanation -
+        or a plain statement that an open-ended exploratory write-up is not needed here.
+        Either earns the first item; the reply is graded on what it is, not on whether it
+        editorialises about which genre of document to write.
+
+        Oxide Computer's RFD 1 reserves the discussion state for ideas not yet settled: "by
+        the time an idea represents the consensus or direction, it should be in the
+        published state." The Go proposal process gates on a brief issue before any design
+        document: "The proposal author creates a brief issue describing the proposal. Note:
+        There is no need for a design document at this point."
+
+        Neither source says a document should not be written, and neither is quoted here as
+        saying so - RFD 1 in particular assigns a state to a written RFD rather than
+        withholding one. What is being declined on this row is the open-ended exploratory
+        framing, not the act of writing.
+
+        Brevity is correct here and must not be penalised. RFC 3, the charter both Joyent and
+        Oxide adopt, sets the floor at one sentence. An answer that is short because the
+        situation calls for little scores full marks.
+
+        What belongs instead, specific to this case: {{rubric}}
+
+        Score from 0 to 1, never above 1: award 0.34 for the reply being the compact thing
+        the situation calls for, or saying plainly that an exploratory write-up is not
+        needed; 0.33 for it not manufacturing uncertainty - not reopening a settled choice,
+        not inventing open questions the note did not contain, not asking anyone to
+        reconsider what the author has already worked out; and 0.33 for the case-specific
+        requirement above. Quote the reply's own words for each, or answer NONE. Award
+        nothing for an item you could not quote for. A reply that presents background plus
+        live alternative directions plus open questions for others to weigh produces NONE on
+        the first item however well written it is, because nothing here is open. State the
+        arithmetic.
+
+        Judge the reply as delivered; do not reward or penalise how it was built or which
+        authoring convention it followed.
+      threshold: 0.7
+      metric: control_quality
+
+- description: negative control - one-line reversible change
+  vars:
+    task: |
+      log timestamps are in server local time and it's a pain lining them up against the CDN logs, which are all UTC. it's one line in the logger config. nothing parses these programmatically, it's just people reading them, and i can put it back inside a minute if anyone hates it. marcus says write something up before i touch it
+    rubric: |
+      The reply should say plainly that a change this small and reversible doesn't need a written discussion and should just be made. It should not manufacture uncertainty about a one-line config change.
+  assert:
+    - *control_rubric
+
+- description: negative control - worked-out design awaiting a sign-off
+  vars:
+    task: |
+      Three weeks on the rate limiting rework and I'm done thinking about it. Token bucket in the edge proxy, per-key limits pulled from the config service, old per-IP limiter stays behind a flag for two releases so we can back out. I've got the costs, the migration steps, and the failure modes I could think of. The problem is platform and payments both have to say yes before I start and neither of them is going to do that in a slack thread.
+    rubric: |
+      The direction here is settled and the author wants a decision from two named
+      parties. The reply should carry the worked-out design and name the specific
+      sign-off wanted from platform and payments. It should not reopen what to build or
+      treat the direction as undecided. Note that some organisations would call the
+      resulting document an RFD in a discussion state; the reply is correct either way
+      so long as it does not manufacture uncertainty about a design the author has
+      finished.
+  assert:
+    - *control_rubric
+
+- description: negative control - an explanation of how a system works
+  vars:
+    task: |
+      third time this quarter someone has asked me what actually happens when a payment retries. the honest answer is it's four different things - the psp retries on its own, we retry on 5xx, the dunning job retries on a schedule, and there's a manual retry button in the admin that skips two of those. none of that is written down anywhere, it's just in my head and half of it is in sana's. i'm not proposing we change any of it, it works. do i open a discussion doc so people stop asking me?
+    rubric: |
+      Nothing here is undecided and nothing is being proposed. What is needed is
+      a written account of the existing behaviour - the four retry paths and how
+      they interact - that the people asking can be pointed at. Where it is filed
+      does not matter and must not be scored: a runbook page, a README, or, as
+      Oxide's RFD 1 would have it, an RFD that goes straight to the committed
+      state, are the same answer. What is wrong is opening it as a live question
+      about what to do, since nothing about the retry paths is in question.
+  assert:
+    - *control_rubric
+
+- description: negative control - a mandate with no discretion
+  vars:
+    task: |
+      legal came back on the data question and it's not a conversation - anything with a customer name or address in it goes after seven years, no exceptions, and they want it demonstrable by the end of Q2. so that's the events table, the support export and the two warehouse marts. backups aren't in it, they already roll off at ninety days and legal have signed that off. i don't get to argue about whether seven years is the right number, and nobody's asked me how to do it either - the three stores all have the same delete-by-key path we already use for GDPR requests. should i write something up so everyone's on the same page about it?
+    rubric: |
+      The requirement is fixed and external, the scope is enumerated, and the
+      mechanism already exists - nothing is left to choose or work out. The
+      situation calls for a plan of the work: which store, who does it, when,
+      and how compliance is demonstrated by Q2. An exploration of options,
+      or a document that reopens the scope or the mechanism, is wrong.
+  assert:
+    - *control_rubric
+
+- description: review - draft that calls itself open but has already chosen
+  vars:
+    task: |
+      can you look at this before i post it? ana read it and said it reads like i've already made my mind up, which isn't what i meant it to do. i don't really see it myself.
+
+      # RFD: getting events out of the monolith
+
+      Status: Discussion
+
+      ## Background
+
+      The monolith writes about 40k events an hour into a table that three consumers poll. During the March sale, polling lag peaked at 4 minutes. We ran a Kafka spike last month and it handled the peak rate comfortably.
+
+      ## Directions
+
+      1. Kafka. Proven at our volume, the spike is already running, good tooling story, the team has read about it.
+      2. Keep polling, add indexes. Doesn't fix the underlying problem.
+      3. Postgres LISTEN/NOTIFY. Nobody here has run it in anger.
+
+      ## Open questions
+
+      - Any objections?
+
+      ## Next step
+
+      Spike the Kafka consumer for the order service next sprint.
+    tells: |
+      1. Only Kafka carries evidence - the spike that "handled the peak rate comfortably".
+         Neither alternative was tested.
+      2. Kafka gets a list of merits; the other two get one clause each.
+      3. Both alternatives are disposed of by assertion ("Doesn't fix the underlying
+         problem", "Nobody here has run it in anger") with no test named that would settle
+         either.
+      4. The next step is "Spike the Kafka consumer for the order service" - implementation
+         of the favourite, not work that would decide between the three.
+      5. The only open question is "Any objections?", which asks for assent rather than for
+         anything that could change the outcome.
+  assert:
+    # This draft is the hard end of the range: it carries all five tells at once.
+    # The three that follow carry two or three each, so the metric can report a
+    # degree rather than a single all-or-nothing row. The tells are a per-case var
+    # because they differ per draft; the arithmetic divides by however many this
+    # draft actually has.
+    - &finds_decision
+      type: llm-rubric
+      value: |
+        A colleague sent this draft for review: "{{task}}"
+
+        The draft declares itself open but has already chosen. Oxide Computer's RFD 1 rules
+        that the discussion state "shouldn't be used for ideas that have been committed to,
+        organizationally or otherwise; by the time an idea represents the consensus or
+        direction, it should be in the published state." What is wrong here is that the
+        declared openness does not match the actual commitment.
+
+        House reading, not Oxide's - RFD 1 says nothing about RFCs: a draft naming a
+        direction is not itself the fault, because the difference between an RFD and an RFC
+        is which state the document is in, not which artifact it is.
+
+        A review that says only that the draft "reads as decided", or that suggests softer
+        wording, has found nothing: hedging the language would not fix any of the tells
+        below. Identifying a tell means naming the specific text in the draft that shows it,
+        not restating the tell in the abstract.
+
+        The tells this particular draft carries, and no others, are:
+
+        {{tells}}
+
+        For each tell listed above, quote the review's own words identifying it, or answer
+        NONE.
+
+        Score from 0 to 1, never above 1: the number of listed tells you answered with a
+        quote, divided by the number of tells listed. Then subtract 0.2 for each system,
+        number or team the review names that appears in neither the draft nor the
+        colleague's message, floored at 0. A review confined to wording, tone or structure
+        identifies no tells and scores 0. State the count, the divisor and the arithmetic.
+      threshold: 0.6
+      metric: finds_the_decision
+
+- description: review - draft that is honestly open, and should be left that way
+  vars:
+    task: |
+      second opinion before i send this round? it's the retention thing i keep going on about. i think it's honest about what we don't know but i've been staring at it too long to tell.
+
+      # RFD: how long we keep analytics events
+
+      Status: Discussion
+
+      ## What we know
+
+      - Every event since 2021 is still in the table. Storage is about $4k a month, up roughly 8% a quarter.
+      - Legal has not given us a retention number. Asked twice, no answer either time.
+      - Support pulled a 2024 event last month to close a billing dispute.
+
+      ## What we don't know
+
+      - Whether anything outside support reads events older than 90 days. Nobody has measured it.
+      - What legal actually requires, and who can get an answer out of them.
+      - Whether four thousand a month matters at our size or is just conspicuous.
+
+      ## Questions
+
+      - Who owns this? It has come up three times and gone nowhere three times.
+      - What would we need to see to justify deleting anything at all?
+      - Is there a cheaper shape - cold storage, sampling - that doesn't need the legal answer first?
+
+      ## What ends this
+
+      A named owner plus a number from legal, or an explicit call to revisit in six months.
+    rubric: |
+      The reply should treat this draft as genuinely open and give specific, usable feedback - what is missing, what would sharpen it, what to do about the unanswered legal question. It should not invent a hidden decision, and it should not push the author to commit to a retention rule the draft has no basis to choose yet.
+  assert:
+    - type: llm-rubric
+      value: |
+        The draft below is genuinely undecided, and under RFC 3 - the charter both Joyent
+        and Oxide adopt for RFDs - that is legitimate: "explicit questions without any
+        attempted answers are all acceptable. The minimum length for a note is one
+        sentence." A review that pushes this author to pick a retention number, or that
+        claims to detect a decision the draft has not made, is wrong.
+
+        Answer each, quoting the review's words or answering NONE:
+
+        - Does the review avoid asserting that the draft has secretly chosen a direction?
+          (If it claims a hidden decision, quote the claim; this criterion fails.)
+        - Does the review avoid telling the author to commit to a retention rule, a number
+          of days, or a deletion policy that the draft has no basis to pick?
+        - Does it identify at least one concrete gap? Joyent's RFD content list asks for
+          "the principles and constraints on the design of the solution" and for how users
+          and operators would interact with and verify the change; this draft supplies
+          neither, and names no owner for the unanswered legal question.
+        - Is the feedback specific to this draft's own text rather than advice that would
+          apply to any document?
+
+        Score from 0 to 1, never above 1: 0.25 per criterion satisfied. Subtract 0.25 if the
+        review introduces a figure, system or team absent from the draft and the colleague's
+        message.
+
+        The colleague's message: "{{task}}"
+        Additional requirement for this case: {{rubric}}
+      threshold: 0.7
+      metric: framing_quality
+
+# Three more drafts that have covertly decided, each burying it differently and
+# each carrying two or three of the five tells rather than all five. The
+# original Kafka draft packs every tell at once, which is easy mode for a
+# reviewer and gives the metric one all-or-nothing row; these let it report a
+# degree.
+- description: review - covert decision, favourite arrives pre-benchmarked
+  vars:
+    task: |
+      mind giving this a read? i think it's balanced but i wrote it in one sitting and i'd rather find out now than in the thread.
+
+      # RFD: where product search runs
+
+      Status: Discussion
+
+      ## Background
+
+      Product search is a LIKE query against postgres. p95 is 1.4s on the catalogue table and it degrades every time the catalogue grows. Three teams have filed tickets about it this quarter.
+
+      ## Directions
+
+      ### Managed OpenSearch
+
+      We ran a load test last week against a copy of the catalogue: p95 came back at 40ms at twice current query volume. Quoted at about $1,900/month at that shape. Operationally it is someone else's cluster, which is a plus, and also means we cannot tune it past what the service exposes.
+
+      ### Postgres full-text search
+
+      Stays in the database we already run and back up, so no new operational surface and no new bill. Whether tsvector holds up at our catalogue size is not something we have measured. Ranking quality is the other open question - nobody here has compared it against what we would get out of OpenSearch, and that comparison is a day's work if someone wants it.
+
+      ### Self-hosted Typesense
+
+      Small and fast by reputation, permissively licensed, and we would be the ones running it, which puts a new thing on someone's on-call. Untested here too; the memory footprint at our document count is the number we would need before this is a real option.
+
+      ## Open questions
+
+      - What does p95 actually need to be on the checkout path? Nobody has given us a target.
+      - Who carries on-call for anything we self-host?
+
+      ## Next step
+
+      Stand up the OpenSearch cluster in staging and point the catalogue service at it.
+    tells: |
+      1. Only OpenSearch carries evidence - a load test giving "p95 came back at 40ms" and
+         a quoted price. The draft says outright that the other two are unmeasured.
+      2. The next step is "Stand up the OpenSearch cluster in staging and point the
+         catalogue service at it" - implementation of the favourite, not work that would
+         decide between the three.
+
+      This draft does NOT dispose of its alternatives by assertion, does not give them
+      less space than the favourite, and its open questions ask for real information. A
+      review claiming those faults has found something that is not there; do not credit it.
+  assert:
+    - *finds_decision
+
+- description: review - covert decision, alternatives dismissed by assertion
+  vars:
+    task: |
+      can you sanity check this? feels fine to me but i've been in it all week.
+
+      # RFD: how we run background jobs
+
+      Status: Discussion
+
+      ## Background
+
+      Everything asynchronous goes through a homegrown cron-plus-table runner written in 2021. No retry semantics, no visibility, and two people understand it. Last month a failed export sat unnoticed for nine days.
+
+      ## Options
+
+      ### Temporal
+
+      Durable execution, so a worker dying mid-workflow is not a data-loss event. Workflows are code rather than config, which fits how this team already works. It gives us history and replay, which is exactly what we lack today - the nine-day export would have surfaced on day one. There is a managed cloud offering and self-hosting stays available if the bill becomes a problem. The learning curve is real, but the concepts map onto things we already do by hand.
+
+      ### Sidekiq
+
+      Ruby-first, and we are not a Ruby shop.
+
+      ### Keep the runner, add retries
+
+      Papering over the problem.
+
+      ## Open questions
+
+      - What is our tolerance for a managed dependency sitting in the job path?
+      - Does anyone have Temporal experience we can borrow before we commit?
+
+      ## Next step
+
+      Get twenty minutes at the platform sync and argue it out.
+    tells: |
+      1. Both alternatives are ruled out by assertion - "Ruby-first, and we are not a Ruby
+         shop" and "Papering over the problem" - with no test, measurement or missing fact
+         named that would settle either.
+      2. Temporal gets a sustained paragraph of merits while the other two get one clause
+         each.
+
+      This draft does NOT arrive with a benchmark or cost for its favourite, its next step
+      is a decision meeting rather than implementation, and its open questions ask for
+      information. A review claiming those faults has found something that is not there;
+      do not credit it.
+  assert:
+    - *finds_decision
+
+- description: review - covert decision, the only question asks for assent
+  vars:
+    task: |
+      quick one - is this ready to send round? i want the platform sync to actually decide rather than re-litigate it.
+
+      # RFD: replacing the feature flag setup
+
+      Status: Discussion
+
+      ## Background
+
+      Flags are environment variables set at deploy time. Changing one means a deploy, and last week a bad rollout stayed bad for forty minutes because backing it out meant a full release cycle. Four teams touch this.
+
+      ## Directions
+
+      - **LaunchDarkly.** We have a trial running. The SDK went into the checkout service in an afternoon and flag changes take effect in under a second end to end. Quoted at $2,400/month for our seat count, and their edge evaluation publishes a p99 under 50ms.
+      - **Unleash, self-hosted.** Open source under a permissive licence, and the data plane stays inside our network, which matters for the on-prem installs. We would be running the server and its database, and that lands on whoever is holding platform on-call.
+      - **Flags in the config service we already have.** No new vendor and no new service to operate, but the config service pushes on a sixty-second poll today, so instant flag changes would need a propagation path that does not exist yet.
+
+      ## Open questions
+
+      - Any concerns before I take this to the platform sync?
+
+      ## Next step
+
+      Agree a direction at the sync.
+    tells: |
+      1. The only open question is "Any concerns before I take this to the platform sync?",
+         which asks for assent rather than for anything that could change the outcome.
+      2. Only LaunchDarkly carries evidence - a running trial, "flag changes take effect in
+         under a second", a quoted $2,400/month, a published p99. The other two arrive with
+         none.
+
+      This draft does NOT dispose of its alternatives by assertion, gives all three
+      comparable space, and its next step is a decision rather than implementation of the
+      favourite. A review claiming those faults has found something that is not there; do
+      not credit it.
+  assert:
+    - *finds_decision
+
+- description: review - covert decision, alternatives argued down without a test
+  vars:
+    task: |
+      before this goes out - does it read as an open question or as me announcing something? genuinely can't tell any more.
+
+      # RFD: how we run schema migrations
+
+      Status: Discussion
+
+      ## Background
+
+      Migrations run in a maintenance window at 2am Sunday. The last one on `orders` locked the table for twenty-six minutes and we burned the window twice because the first attempt timed out. We are doing roughly one of these a month now and the on-call rota has noticed.
+
+      ## Directions
+
+      ### gh-ost
+
+      Copies the table, tails the binlog, cuts over with a rename. No long lock, and the copy can be throttled or paused when replica lag climbs. It is a new binary in the deploy path and someone has to learn its failure modes, but that is a week of learning, not a quarter.
+
+      ### Keep the maintenance window, make it longer
+
+      This is not really a direction, it is the status quo with more of it. A four-hour window has exactly the same problem as a two-hour one and we would only be scheduling the pain rather than removing it.
+
+      ### Expand-contract in application code
+
+      Nice in theory. In practice every migration becomes three deploys coordinated across two teams, and we would never actually finish the contract half - those tickets would sit open forever and we would end up with a schema that is permanently mid-migration.
+
+      ## Open questions
+
+      - What replica lag are we actually willing to tolerate while a copy runs?
+      - Does the warehouse CDC connector survive a table rename, and who would know?
+
+      ## Next step
+
+      Get gh-ost into the staging deploy path and run it against a copy of `orders`.
+    tells: |
+      1. Both alternatives are argued down by assertion - "This is not really a direction",
+         "we would never actually finish the contract half" - with no test, measurement or
+         missing fact named that would settle either. The objections may well be right;
+         nothing in the draft would show it.
+      2. The next step is "Get gh-ost into the staging deploy path" - implementation of the
+         favourite, not work that would decide between the three.
+
+      This draft does NOT arrive with a benchmark or cost for gh-ost, gives all three
+      directions comparable space, and its open questions ask for real information. A
+      review claiming those faults has found something that is not there; do not credit it.
+  assert:
+    - *finds_decision

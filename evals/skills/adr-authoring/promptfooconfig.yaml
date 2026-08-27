@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: ADR authoring skill effectiveness
+
+# Both arms run the same tasks. Arm labels come from the skill's frontmatter
+# version, so bumping metadata.version in SKILL.md relabels the comparison.
+# skill-next stays out until a SKILL.next.md exists - lib/arms.js falls back to
+# the current skill, so the arm would just be a duplicate run of skill-current.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # Custom provider, not `openai:chat:*`: same OpenAI-compatible call, plus a
+  # `load_resource` tool over the skill's own directory so the skill arm can
+  # follow SKILL.md's instructions to read its bundled files. The tool exists
+  # only when the prompt supplies `skillDir` (see prompts/arms.js), so the
+  # baseline arm sends no `tools` key and is called exactly as before.
+  - id: file://../../lib/skill-tools.js
+    label: deepseek-v4-flash+resources
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      # One reference plus one example ADR, 5.3 KB together - the budget is a ceiling
+      # on a runaway loop, not a rationing of two small files.
+      maxToolCalls: 4
+      maxResourceBytes: 8192
+
+defaultTest:
+  options:
+    # The single-line-JSON rubricPrompt override lives on each g-eval assertion
+    # in tests/cases.yaml (as &singleLineJsonRubric), not here. promptfoo's own
+    # `validate config` accepts an object-shaped rubricPrompt on an assertion,
+    # but rejects that same shape under defaultTest.options/test.options - the
+    # schema there only allows a string, string[], or {role,content}[]. Putting
+    # it here would fail validate outright even though eval-time g-eval code
+    # reads exactly this {evaluate, steps} shape.
+    # The llm-swap gateway returns reasoning as message content; strip it so the
+    # graders see the answer, not the leak. There is no fence to anchor on here,
+    # so drop <think> blocks and any preamble before the document's first
+    # heading - a response that correctly declines has no heading and survives
+    # whole.
+    transform: file://../../lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        # Forces the judge to emit single-line JSON. g-eval extracts its verdict with
+        # /{.+}/, which cannot cross newlines: a pretty-printed reply is discarded and
+        # the row silently scores 0. Prompt instructions alone did not stop it. Use
+        # json_object, not json_schema - the latter makes promptfoo pre-parse the reply
+        # into an object, which g-eval then rejects as 'not a string'.
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+    # g-eval lives per-case in tests/cases.yaml, not here. A correct decline
+    # has no status, no consequences, and no document to judge by these
+    # criteria - scoring it against a rubric written for a settled record
+    # penalises the negative controls for being right. Judging is per-case:
+    # the record-quality anchor on the positive cases keeps this wording
+    # unchanged; the negative controls get their own.
+
+tests:
+  - file://tests/*.yaml
