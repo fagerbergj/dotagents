@@ -1,7 +1,12 @@
 // Real pull requests as eval input. A case names a fixture; this resolves it to
-// the diff that PR actually made and a checkout of the tree it was opened
-// against, so a reviewer can open the surrounding code rather than judging from
-// hunks alone - which is the whole claim review-code makes.
+// the diff that PR made and a checkout of the tree AS PROPOSED, so a reviewer can
+// open the surrounding code rather than judging from hunks alone - which is the
+// whole claim review-code makes.
+//
+// The head tree, not the base one. A reviewer reads and cites the code the change
+// is asking for: files the PR adds do not exist at the base, and citing a line it
+// appends is not a fabrication. Resolving against base marked three of nine rows
+// as invented citations when every one of them was real.
 //
 // Both SHAs are pinned. `refs/pull/<n>/head` moves under a force-push, so the
 // ref is how the objects are reached and the pinned head is what is verified
@@ -43,7 +48,7 @@ function materialise(f, log = () => {}) {
   fs.writeFileSync(p.patch, git(p.git, ['diff', `${f.base}..${head}`]));
   fs.rmSync(p.tree, { recursive: true, force: true });
   fs.mkdirSync(p.tree, { recursive: true });
-  execFileSync('bash', ['-c', `git -C ${JSON.stringify(p.git)} archive ${f.base} | tar -x -C ${JSON.stringify(p.tree)}`]);
+  execFileSync('bash', ['-c', `git -C ${JSON.stringify(p.git)} archive ${head} | tar -x -C ${JSON.stringify(p.tree)}`]);
   log(`  ${f.name}: ${f.repo}#${f.pr} ${f.base.slice(0, 7)}..${head.slice(0, 7)}`);
 }
 

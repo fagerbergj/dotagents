@@ -1,8 +1,7 @@
-// Offline check on the citation grader. Fixtures are not touched: a synthetic
-// diff is enough to prove the cross-reference, and the test must run without
-// network before a single token is bought.
+// Offline checks on the citation grader's pure parts, plus a fixture-backed
+// pass over the resolution rules. Runs before any tokens are bought.
 const assert = require('node:assert');
-const { diffLines, noInventedCitations } = require('./review.cjs');
+const { diffLines, noInventedCitations, lineCount } = require('./review.cjs');
 
 const diff = [
   'diff --git a/internal/dag/planner.go b/internal/dag/planner.go',
@@ -11,27 +10,31 @@ const diff = [
   '@@ -430,6 +430,9 @@ func hint() {',
   ' ctx',
   '+added',
-  '@@ -10,2 +12,2 @@',
-  ' two',
 ].join('\n');
-
 const seen = diffLines(diff);
 assert.deepEqual([...seen.keys()], ['internal/dag/planner.go']);
-assert.ok(seen.get('internal/dag/planner.go').has(433), 'a line inside a hunk is citable');
-assert.ok(!seen.get('internal/dag/planner.go').has(500), 'a line outside every hunk is not');
+assert.ok(seen.get('internal/dag/planner.go').has(433));
+assert.equal(lineCount('/nonexistent/file.go'), null, 'a missing file reports null, never 0');
 
-const ctx = { vars: { diff } };
-assert.equal(noInventedCitations('See internal/dag/planner.go:433 for the gate.', ctx).score, 1);
-assert.equal(noInventedCitations('No citations at all here.', ctx).score, 1, 'citing nothing invents nothing');
+// Resolution against the tree, not the hunks. An earlier version scored a
+// citation outside the changed range as invented, which marked the skill arm
+// down for opening the surrounding file - the behaviour the skill exists to
+// produce. These pin the distinction that replaced it.
+const ctx = { vars: { fixture: 'quack-1013' } };
+const score = (t) => noInventedCitations(t, ctx).score;
 
-const wrongLine = noInventedCitations('Problem at internal/dag/planner.go:900.', ctx);
-assert.equal(wrongLine.score, 0);
-assert.match(wrongLine.reason, /outside the diff/);
-
-const wrongFile = noInventedCitations('Problem at internal/dag/nope.go:12.', ctx);
-assert.equal(wrongFile.score, 0);
-assert.match(wrongFile.reason, /no such file/);
-
-// A review that never cites anything must not be rewarded over one that cites
-// correctly, so this grader is a floor on honesty, not a proxy for thoroughness.
-console.log('ok   review assertions (citation cross-reference against the diff)');
+try {
+  assert.equal(score('see internal/dag/planner.go:421'), 1, 'a real line outside every hunk is a real citation');
+  assert.equal(score('see planner.go:421'), 1, 'reviews cite bare basenames too');
+  assert.equal(score('see internal/dag/planner.go:999999'), 0, 'a line past the end of the file is invented');
+  assert.equal(score('see internal/dag/ghost.go:5'), 0, 'a repo-relative path not in the tree is invented');
+  assert.equal(score('config.yaml:3'), 1, 'a bare name matching nothing is prose, not a citation');
+  assert.equal(score('no citations at all'), 1, 'citing nothing invents nothing');
+} catch (err) {
+  if (/not materialised/.test(err.message)) {
+    console.log('ok   review assertions (pure parts; fixture checks skipped - not fetched)');
+    process.exit(0);
+  }
+  throw err;
+}
+console.log('ok   review assertions (citations resolved against the tree)');

@@ -54,7 +54,13 @@ providers:
       # this skill claims to add - a tighter budget would buy a cheaper run by
       # measuring less of the thing under test.
       maxToolCalls: 40
-      maxResourceBytes: 98304
+      # 64 KB is still eight to ten real Go files - a substantial read, not a
+      # token-shaped one. It was 192 KB, where one row cost 1.02M tokens against
+      # the baseline's 3.4k, because every round resends every file already read.
+      # Noise, not read depth, is what this suite is short of: nine cases at a
+      # shallower read separate the arms where three at a deep one could not, so
+      # the budget buys n instead of depth.
+      maxResourceBytes: 65536
 
 defaultTest:
   options:

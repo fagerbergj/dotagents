@@ -19,5 +19,47 @@
     "pr": 1055,
     "base": "733464f54670f2b79a1985e327539ce97cda7c43",
     "head": "cf334d511798d9c920bd14b1588ab168de55b534"
+  },
+  {
+    "name": "quack-1062",
+    "repo": "fagerbergj/quack",
+    "pr": 1062,
+    "base": "e29b9a45b8218cfc24094691cb8d8c918a6bfa8c",
+    "head": "fc54ee1861cbf6d5cf9e8373cb36b45698f11a26"
+  },
+  {
+    "name": "quack-1057",
+    "repo": "fagerbergj/quack",
+    "pr": 1057,
+    "base": "733464f54670f2b79a1985e327539ce97cda7c43",
+    "head": "9a1598b6ee95fd16f9c2b1a7fb37607d931dd2e4"
+  },
+  {
+    "name": "quack-1056",
+    "repo": "fagerbergj/quack",
+    "pr": 1056,
+    "base": "733464f54670f2b79a1985e327539ce97cda7c43",
+    "head": "d30c87d548ef524fd5907888723cc3cdc05d0328"
+  },
+  {
+    "name": "quack-1054",
+    "repo": "fagerbergj/quack",
+    "pr": 1054,
+    "base": "733464f54670f2b79a1985e327539ce97cda7c43",
+    "head": "4f323009c96374bfb3babe31cf350b133b6d2573"
+  },
+  {
+    "name": "quack-1053",
+    "repo": "fagerbergj/quack",
+    "pr": 1053,
+    "base": "733464f54670f2b79a1985e327539ce97cda7c43",
+    "head": "de4af0c02c0bc06a6774b28f1bb6cddd628527ce"
+  },
+  {
+    "name": "quack-1021",
+    "repo": "fagerbergj/quack",
+    "pr": 1021,
+    "base": "2f6229e43004f70ecec5741f1d591b1eef48a571",
+    "head": "cf360abc1b4c41d0ea5d7096f193dab5871105f0"
   }
 ]

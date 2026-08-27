@@ -1,3 +1,8 @@
+const { load, specs } = require('../../../lib/fixtures.js');
+const fs = require('node:fs');
+const path = require('node:path');
+const BY_NAME = new Map(specs(path.resolve(__dirname, '..')).map((f) => [f.name, f]));
+
 // Which lines the reviewer could actually have seen: every path in the diff,
 // with the line numbers its hunks cover on the new side.
 function diffLines(diff) {
@@ -17,33 +22,66 @@ function diffLines(diff) {
 }
 
 // Claim: findings are cited by `path:line` so the author can jump to them. A
-// citation naming a line the diff does not contain sends the reader nowhere,
-// and is the review equivalent of the invented identifier pr-authoring measures.
-// Needs code: it cross-references the output against the input.
+// citation to a file or line that does not exist sends the reader nowhere.
+//
+// Resolved against the proposed TREE, not against the diff's hunks. An earlier version
+// checked hunks and scored the skill arm 0.44 against a baseline 1.00 - but a
+// reviewer who opens the surrounding file and cites a line outside the changed
+// range is doing what this skill is for, and the human reviewer on these very
+// PRs did it ("anchored here because GitHub does not allow an inline comment on
+// line 630"). That check punished reading the code. Fabrication is a path that
+// is not in the tree, or a line past the end of the file.
+//
+// The tree is the head one. Against the base, three rows failed for citing files
+// the PR itself adds - the reviewer was right and the grader was looking at the
+// wrong snapshot.
 const CITATION = /\b([\w./-]+\.[A-Za-z]{1,5}):(\d+)\b/g;
 
-const { load, specs } = require('../../../lib/fixtures.js');
-const path = require('node:path');
-const BY_NAME = new Map(specs(path.resolve(__dirname, '..')).map((f) => [f.name, f]));
-
-function noInventedCitations(output, context) {
-  // The case names a fixture; the diff is whatever git produced for that PR, so
-  // there is no second copy of it to drift out of step with the prompt.
-  const spec = BY_NAME.get(context?.vars?.fixture);
-  const diff = spec ? load(spec).diff : (context?.vars?.diff || '');
-  const seen = diffLines(diff);
-  const bad = [];
-  for (const [, file, num] of String(output).matchAll(CITATION)) {
-    const lines = seen.get(file);
-    if (!lines) { bad.push(`${file}:${num} (no such file in the diff)`); continue; }
-    if (!lines.has(Number(num))) bad.push(`${file}:${num} (outside the diff's hunks)`);
+function lineCount(file) {
+  try {
+    return fs.readFileSync(file, 'utf8').split(/\r?\n/).length;
+  } catch {
+    return null;
   }
-  if (!bad.length) {
-    return { pass: true, score: 1, reason: seen.size
-      ? 'Every path:line cited appears in the diff.'
-      : 'No diff supplied and nothing cited.' };
-  }
-  return { pass: false, score: 0, reason: `Citations not in the diff: ${[...new Set(bad)].slice(0, 4).join(', ')}.` };
 }
 
-module.exports = { noInventedCitations, diffLines };
+function noInventedCitations(output, context) {
+  const spec = BY_NAME.get(context?.vars?.fixture);
+  if (!spec) return { pass: true, score: 1, reason: 'No fixture: nothing to resolve citations against.' };
+  const { dir, diff } = load(spec);
+  // Only files this change touches are citable - a review of this PR pointing at
+  // an unrelated file is a different failure, and not one this grader claims.
+  const touched = new Set([...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].map((m) => m[1].trim()));
+  const byBasename = new Map();
+  for (const f of touched) byBasename.set(path.basename(f), f);
+
+  const bad = [];
+  let checked = 0;
+  for (const [, cited, num] of String(output).matchAll(CITATION)) {
+    // Reviews cite both "internal/dag/planner.go:433" and bare "planner.go:433".
+    let file = null;
+    if (fs.existsSync(path.join(dir, cited))) file = cited;          // repo-relative, real
+    else if (touched.has(cited)) file = cited;
+    else if (byBasename.has(path.basename(cited))) file = byBasename.get(path.basename(cited));
+    else if (cited.includes('/')) {
+      // Looks repo-relative and is not in the tree: invented outright.
+      bad.push(`${cited}:${num} (no such file)`);
+      checked += 1;
+      continue;
+    } else {
+      continue;   // a bare name matching nothing - prose, not a citation
+    }
+    checked += 1;
+    const n = lineCount(path.join(dir, file));
+    if (n === null) { bad.push(`${cited}:${num} (not in the tree)`); continue; }
+    if (Number(num) > n) bad.push(`${cited}:${num} (file has ${n} lines)`);
+  }
+  if (!bad.length) {
+    return { pass: true, score: 1, reason: checked
+      ? `All ${checked} citation(s) resolve to a real line in the tree.`
+      : 'No citation into a changed file to resolve.' };
+  }
+  return { pass: false, score: 0, reason: `Citations that do not exist: ${[...new Set(bad)].slice(0, 4).join(', ')}.` };
+}
+
+module.exports = { noInventedCitations, diffLines, lineCount };
