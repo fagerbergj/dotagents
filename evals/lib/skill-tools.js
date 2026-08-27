@@ -202,8 +202,12 @@ class SkillToolsProvider {
       const message = json.choices[0].message || {};
       const calls = message.tool_calls || [];
       if (!calls.length) {
+        // A `tools` key makes the gateway's tool-calling chat template prefix the
+        // reply with blank lines, and only the skill arm sends one - so untrimmed
+        // output leaves the arms differing by whitespace as well as by the skill.
+        const content = message.content ?? '';
         return {
-          output: message.content ?? '',
+          output: typeof content === 'string' ? content.trim() : content,
           tokenUsage: usage,
           metadata: { resourcesLoaded: loaded, toolRounds: round },
         };
