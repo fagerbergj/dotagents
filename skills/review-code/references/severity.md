@@ -8,6 +8,8 @@ The dividing line is not how strongly you feel. It is whether you can point at s
 A finding supported only by your preference is a `nit:`, however sure you are. A finding supported by an anchor below is `blocking:`, however small it looks.
 
 ## The anchors
+Calibrate before you reach for one. Google's standard is that a reviewer approves once the change **definitely improves overall code health**, even where it is not perfect - so on a well-made change the expected outcome is approve with comments, and a blocking finding is the exception you have to earn. Measured on ten real merged pull requests, this skill blocked all ten, including the five their own reviewer approved: the anchors below were wide enough that something always qualified.
+
 
 `blocking:` requires ONE of these, and the finding must say which:
 
@@ -15,9 +17,9 @@ A finding supported only by your preference is a `nit:`, however sure you are. A
 |---|---|---|
 | **defect** | Concrete inputs or state produce wrong output, a crash, or data loss | "This feels fragile" |
 | **security** | Auth flaw, unvalidated input, injection, PII or secret exposure | "I'd sanitise this differently" |
-| **design** | A *named* principle violated — SRP, coupling, complexity that can't be followed without explanation | "I'd have structured it differently" |
+| **design** | A *named* principle violated, **and** you can say which concrete future defect it invites | Naming a principle you could name about most code |
 | **scope** | The change does something its task never asked for | A pre-existing wart in adjacent code |
-| **tests** | New or changed behaviour ships with no test, or a test passes while what it claims to cover is broken | "I'd add more tests eventually" |
+| **tests** | The behaviour this change *exists to deliver* ships with no test, or a test passes while what it claims to cover is broken | An untested edge case, fallback, or guard alongside a tested main path - that is a `suggestion:` |
 
 There is deliberately no *intent* anchor.
 A human reviewer blocking on "I don't understand this" is healthy scepticism; an automated reviewer doing it would block on anything unfamiliar, at any hour, with nobody to argue back.
@@ -31,7 +33,7 @@ The author may ignore it. Never blocks.
 
 `question:` — you suspect a problem but aren't sure.
 Asking resolves it faster than demanding a change.
-An unresolved question **withholds approval but does not request changes** — see the verdict rules.
+A question does **not** withhold approval on its own: an automated reviewer verifying rather than trusting will always have one, so letting questions gate approval means never approving. Withhold only when the answer would land on a defect anchor above, and say so.
 
 `praise:` — summary only, never inline.
 

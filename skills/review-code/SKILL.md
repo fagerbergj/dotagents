@@ -11,7 +11,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Review code: understand → verify → categorize → structure
@@ -81,7 +81,7 @@ Don't scatter line-by-line comments. Deliver:
 
 1. **Summary** - a high-level, constructive takeaway that sets the tone and states your verdict (e.g. "Solid approach overall; two correctness issues to resolve before merge").
 2. **Blocking issues** first, then **suggestions**, then **nits** - grouped by severity so the author fixes what matters first. Praise stays in the summary, not in this list.
-3. **Verdict** - *request changes* if any blocking issue stands; *approve* once they're resolved. Favor approving a change that clearly improves code health over holding it hostage to nits - and if you approve with non-blocking comments, say explicitly that they're non-blocking.
+3. **Verdict** - **approve is the default.** A change that improves overall code health is approved even when it is not perfect and even with suggestions and nits outstanding; say explicitly that they are non-blocking. Withhold approval only for a finding that names one of the anchors in `references/severity.md`, and say which. Not being able to name one means the finding is not blocking, however sure you are.
 
 Cite findings by `path:line` so the author can jump straight to them. Write the summary and each finding following the shared style ruleset at `~/.agents/AGENTS.md` - concrete, no ceremony, no canned "great work!" filler.
 
