@@ -8,15 +8,15 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 
 | suite | table | measured against | merged as | source |
 |---|---|---|---|---|
-| `adr-authoring` | [adr-authoring.md](results/adr-authoring.md) | `047ae38` | `047ae38` | rerun |
+| `adr-authoring` | [adr-authoring.md](results/adr-authoring.md) | `5f77503` | `5f77503` | rerun |
 | `comment-authoring` | [comment-authoring.md](results/comment-authoring.md) | `047ae38` | `047ae38` | rerun |
-| `commit-authoring` | [commit-authoring.md](results/commit-authoring.md) | `047ae38` | `047ae38` | rerun |
-| `format-markdown` | [format-markdown.md](results/format-markdown.md) | `047ae38` | `047ae38` | rerun |
-| `issue-authoring` | [issue-authoring.md](results/issue-authoring.md) | `047ae38` | `047ae38` | rerun |
-| `mermaid-authoring` | [mermaid-authoring.md](results/mermaid-authoring.md) | `37abd5b` :warning: | `4a46ed5` | reused |
-| `pr-authoring` | [pr-authoring.md](results/pr-authoring.md) | `047ae38` | `047ae38` | rerun |
+| `commit-authoring` | [commit-authoring.md](results/commit-authoring.md) | `5f77503` | `5f77503` | rerun |
+| `format-markdown` | [format-markdown.md](results/format-markdown.md) | `5f77503` | `5f77503` | rerun |
+| `issue-authoring` | [issue-authoring.md](results/issue-authoring.md) | `5f77503` | `5f77503` | rerun |
+| `mermaid-authoring` | [mermaid-authoring.md](results/mermaid-authoring.md) | `5f77503` | `5f77503` | rerun |
+| `pr-authoring` | [pr-authoring.md](results/pr-authoring.md) | `5f77503` | `5f77503` | rerun |
 | `rest-api-authoring` | [rest-api-authoring.md](results/rest-api-authoring.md) | `d84b1b4` :warning: | `1dfd6c8` | reused |
-| `rfc-authoring` | [rfc-authoring.md](results/rfc-authoring.md) | `047ae38` | `047ae38` | rerun |
+| `rfc-authoring` | [rfc-authoring.md](results/rfc-authoring.md) | `5f77503` | `5f77503` | rerun |
 | `rfd-authoring` | [rfd-authoring.md](results/rfd-authoring.md) | `047ae38` | `047ae38` | rerun |
 
 :warning: means the numbers were produced against a different commit than the one that merged.
