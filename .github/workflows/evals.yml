@@ -153,7 +153,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: '24'   # current LTS; matches evals/package.json engines
           cache: npm
           cache-dependency-path: evals/package-lock.json
 
@@ -274,9 +274,7 @@ jobs:
             echo "## Eval results for \`${HEAD_SHA:0:7}\`"
             echo
             echo "> [!NOTE]"
-            echo "> **Informational only.** This job is not a required check and never fails a PR on a score. A negative delta below is a measurement, not a broken build. The job goes red only when a suite could not run at all."
-            echo
-            echo "Read the **reliability** column before the delta. A metric marked \`within noise\` moved less than its own noise floor, and diagnostic metrics - fewer than 5 cases - are folded away under each table, because at that case count a +0.50 and a +0.00 are the same measurement. Raw JSON and per-suite reports are in the [run artifacts]($RUN_URL)."
+            echo "> **This does not block your PR.** Weigh these results as part of deciding whether it should merge."
             echo
 
             for suite in $(printf '%s' "$SUITES" | jq -r '.[]'); do
