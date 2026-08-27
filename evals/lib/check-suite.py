@@ -93,8 +93,22 @@ def check(suite):
             walk_asserts(where, c.get('assert'), (c.get('vars') or {}))
     return errs, len(cases)
 
+# With no arguments this used to loop zero times and exit 0 - a gate that reports
+# success while checking nothing, which is the exact failure it exists to catch.
+# Default to every suite instead.
+targets = sys.argv[1:]
+if not targets:
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'skills')
+    targets = sorted(
+        os.path.join(root, d) for d in os.listdir(root)
+        if os.path.isfile(os.path.join(root, d, 'promptfooconfig.yaml'))
+    )
+    if not targets:
+        print(f'check-suite: no suites found under {os.path.normpath(root)}', file=sys.stderr)
+        sys.exit(1)
+
 bad = 0
-for suite in sys.argv[1:]:
+for suite in targets:
     errs, n = check(suite)
     name = os.path.basename(suite.rstrip('/'))
     if errs:
