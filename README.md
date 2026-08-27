@@ -12,6 +12,7 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 | `comment-authoring` | [comment-authoring.md](results/comment-authoring.md) | `eb3aabf` :warning: | `4668e62` | reused |
 | `commit-authoring` | [commit-authoring.md](results/commit-authoring.md) | `1463d6a` :warning: | `bdf07db` | reused |
 | `format-markdown` | [format-markdown.md](results/format-markdown.md) | `c80a6ae` :warning: | `86334f5` | reused |
+| `mermaid-authoring` | [mermaid-authoring.md](results/mermaid-authoring.md) | `37abd5b` :warning: | `4a46ed5` | reused |
 | `rest-api-authoring` | [rest-api-authoring.md](results/rest-api-authoring.md) | `d84b1b4` :warning: | `1dfd6c8` | reused |
 
 :warning: means the numbers were produced against a different commit than the one that merged.

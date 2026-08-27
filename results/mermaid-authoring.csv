@@ -1,0 +1,12 @@
+model,mode,metric,value,n,sd
+ci:deepseek-v4-flash,no-skill,diagram_choice,0.8065,31,
+ci:deepseek-v4-flash,skill@1.0,diagram_choice,0.9677,31,
+ci:deepseek-v4-flash,no-skill,mermaid_renders,0.9032,31,
+ci:deepseek-v4-flash,skill@1.0,mermaid_renders,0.9355,31,
+ci:deepseek-v4-flash,no-skill,semantic_quality,0.8871,31,
+ci:deepseek-v4-flash,skill@1.0,semantic_quality,0.9417,31,
+ci:deepseek-v4-flash,skill@1.0,semantic_quality!errors,1,0,
+ci:deepseek-v4-flash,no-skill,tokens p50,266,0,
+ci:deepseek-v4-flash,skill@1.0,tokens p50,19036,0,
+ci:deepseek-v4-flash,no-skill,tokens total,8208,0,
+ci:deepseek-v4-flash,skill@1.0,tokens total,547023,0,

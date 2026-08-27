@@ -4,3 +4,4 @@ published_at,suite,source,source_sha,merge_sha
 2026-08-27T05:20:48Z,adr-authoring,reused,8aec31382f4b37e268992113f12ed0e467615652,52387aa2bd82c03b00994fe134a10d8d8ab34aa7
 2026-08-27T11:15:49Z,rest-api-authoring,reused,d84b1b4334e1d811df861c0449b227ffb86db066,1dfd6c84d80ea0c1da3f96f9bede46676afa0c00
 2026-08-27T11:24:24Z,comment-authoring,reused,eb3aabf10d85e37e12ca52272538877ad0e68f55,4668e6230642f529fe55ea8b8ad6b17882e003c2
+2026-08-27T11:24:46Z,mermaid-authoring,reused,37abd5b1b51aa282f8076d1bb55cc8d8d367bc2b,4a46ed595266fd35afc4ef23b79dae66ef3d2600
