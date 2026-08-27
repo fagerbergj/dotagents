@@ -1,0 +1,296 @@
+# One case per situation an ADR either fits or does not.
+# Rubrics grade against ecADR (definition of done) and START (definition of ready),
+# published criteria the skill itself never teaches - so a document cannot score well
+# merely by matching the template the skill prescribes.
+- description: bounded decision - event store on Postgres
+  vars:
+    task: 'ok so the event log argument is finally over. Postgres, monthly partitions. Ravi is still not
+      thrilled about it - his whole case was that Dynamo scales writes out and we were touching 4k/s at
+      peak over black friday, which, fair enough. But nobody here has run Dynamo in anger and Marta''s
+      been running our PG cluster for years. We threw a load test at it last week and the box we already
+      pay for did 9k/s without complaining. So yes we hit a wall on one box eventually, we just decided
+      that''s future us''s problem rather than learning a new datastore now. Settled Thursday, two weeks
+      of arguing, please write it down so we don''t do it again in the spring.
+
+      '
+    must_carry: 'The write-rate numbers, the operational familiarity argument, and the single-box scaling
+      ceiling the team knowingly took on all survive into the document.
+
+      '
+  assert: &id001
+  - type: javascript
+    value: file://assertions/adr.cjs:carriesTaskSpecifics
+    metric: adr_context
+  # llm-rubric's stock user message is <Output>/<Rubric> only, so the case's own
+  # `task` never reached the judge and both source-note clauses below were inert -
+  # cached replies show it guessing that "source note" meant the document itself.
+  # The rubricPrompt puts the note in front of it. Object/message-list shape is
+  # legal on an assertion but not under defaultTest.options; and the case var that
+  # used to be called `rubric` is `must_carry` because llm-rubric binds `rubric`
+  # to the rubric text itself and would shadow it here.
+  - type: llm-rubric
+    rubricPrompt: &sourceNoteRubricPrompt
+    - role: system
+      content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else:
+        {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
+    - role: user
+      content: "<SourceNote>\n{{task}}\n</SourceNote>\n<Output>\n{{output}}\n</Output>\n<Rubric>\n{{rubric}}\n</Rubric>"
+    value: 'Judge only what the document says, never how it is laid out or which headings it uses. A record
+      that states these in flowing prose is exactly as good as one that uses sections.
+
+
+      The ecADR definition of done (adr.github.io/ad-practices) asks whether an architectural decision
+      record is complete. For each of the five, quote the supporting text or answer NONE:
+
+
+      - evidence: the record points at something that happened - a measurement, a load test, an incident,
+      an operational track record, a prior attempt - rather than only asserting the choice is right.
+      Evidence about the problem, or about an option that was rejected, counts.
+
+      - criteria: the record says what made this option preferable, whether or not it names the
+      alternatives.
+
+      - agreement: the record states its own standing, either a status word (Accepted, Proposed,
+      Superseded, Deferred, Blocked) or a sentence saying the team agreed. A named approver is not
+      required; a status word alone satisfies this.
+
+      - documentation of the outcome AND its rationale, not merely the outcome
+
+      - a realization or review plan: what happens next, or what would cause this to be revisited.
+      Migration or follow-up work counts; a bare restatement of the decision does not.
+
+
+      Score from 0 to 1, never above 1: the number of the five that are genuinely present and supported
+      by the source note above, divided by five.
+      Then, before scoring, list every figure, identifier, date, file path and named system the
+      document asserts as fact. Go through that list one at a time and answer IN NOTE or INVENTED
+      for each, quoting the source note where it is IN NOTE. Each INVENTED cancels one satisfied
+      criterion, floored at 0. A document that asserts nothing specific lists nothing and loses
+      nothing. Do not credit a document for containing sections named after these criteria while
+      leaving them empty.
+
+
+      Situation-specific facts a complete record must carry: {{must_carry}}'
+    threshold: 0.7
+    metric: semantic_quality
+- description: replaces an earlier choice - self-hosted RabbitMQ to managed SQS
+  vars:
+    task: 'Wanted to get this down before I forget it. We''re moving the job queue to SQS FIFO. This overturns
+      what we wrote back in 2023 when we picked self-hosted Rabbit - at the time we wanted the routing
+      topology and frankly nobody trusted a managed queue to hold ordering. Then March happened, the cluster
+      split brain, and it took about 40 minutes and one very unhappy on-call to work out how to reseat
+      a node, and we lost jobs in the middle of it. The 2023 reasoning wasn''t stupid. It''s just that
+      we''d now rather pay per message than keep a rota of people who can operate a broker at 3am. Whatever
+      you write, don''t bin the old note, people ask why we picked Rabbit constantly.
+
+      '
+    must_carry: 'The document makes clear this replaces the 2023 choice, keeps the original reasoning visible
+      rather than rewriting it as a mistake, and names the outage as the force that changed it.
+
+      '
+  assert: *id001
+- description: real tradeoff with a painful downside - monorepo merge
+  vars:
+    task: 'monorepo''s done, all six repos are in. reason was drift, we had FOUR versions of the auth
+      client live at one point and that CVE patch took three weeks to land everywhere. that bit''s fixed,
+      one PR does it now. cost is CI went 3 min -> 14 because everything rebuilds, blame is garbage across
+      the merge boundary, and neither contractor can clone it on their laptop without a partial checkout.
+      we knew all three going in and did it anyway. can you stick something in the repo so nobody relitigates
+      it in six months
+
+      '
+    must_carry: 'The version-drift problem, the CI slowdown, the lost history and the clone burden all appear,
+      and the downsides read as costs the team took on knowingly rather than being glossed over.
+
+      '
+  assert: *id001
+- description: written up after the fact - short-lived JWTs
+  vars:
+    task: 'I have now explained this four times so I''m handing it to you. Sometime last year, must be
+      eleven months ago, before the reorg, we ripped out server-side sessions and went to 15 minute JWTs
+      with the refresh token in an httpOnly cookie. The session table was the hottest thing in the database
+      and we were about to add a third region so it was only going to get worse. Nobody wrote a word of
+      it down at the time. Every new person asks the same two things: why do the tokens die so fast, and
+      if the whole point was to be stateless why is there a revocation list in Redis. The answer to both
+      is that we chose to live with a 15 minute window where a stolen token still works, and the Redis
+      list only exists for the compromised-account path.
+
+      '
+    must_carry: 'The document reconstructs why the change was made at the time, including the hot session
+      table and the third region, and presents the short expiry window as a deliberate choice - without
+      pretending it was written when the change happened.
+
+      '
+  assert: *id001
+- description: settled against a proposal - staying on ECS instead of Kubernetes
+  vars:
+    task: 'Platform review on the 14th - we said no to EKS. Worth saying up front that Priya''s case was
+      a good one, she put a month into it: better bin packing, we''d get the operators for free, and every
+      candidate we interview already knows k8s. The no is about us, not the technology. Four people run
+      the platform, ECS hasn''t paged anyone in seven months, and she costed the migration at two quarters
+      of platform time that we do not have. It''s not a never. If platform grows past eight people, or
+      someone signs us into a multi-cloud thing, it comes back on the table.
+
+      '
+    must_carry: 'The document captures that the move was considered seriously and turned down, the team-size
+      and migration-cost reasons, and the conditions that would reopen it.
+
+      '
+  assert: *id001
+- description: constraint-driven - separate EU deployment for data residency
+  vars:
+    task: 'legal killed the single region plan this morning. german contract says customer data cannot
+      leave the EU, not even transiently, no processing in us-east-1 at all, no wiggle room. we spent
+      a day looking at row level residency inside the one global db and it leaks anyway - analytics pulls
+      raw rows and so does the support tooling. so it''s a second full deployment in eu-central-1, its
+      own database, no shared customer data between the two. which means every schema migration runs twice
+      from now on and any cross region reporting is aggregates only, no raw rows. nobody''s happy but
+      there isn''t a version of this where legal moves.
+
+      '
+    must_carry: 'The legal constraint, the rejected row-level residency option, and the doubled migrations
+      plus aggregates-only reporting all appear.
+
+      '
+  assert: *id001
+- description: small bounded decision beside the code - UUIDv7 primary keys
+  vars:
+    task: 'quick one for the repo: new tables get uuidv7 primary keys from now on. bigint sequences were
+      leaking our row counts to customers through the api, and we kept round tripping to the db just to
+      reference a row we were about to insert. we tried v4 on the jobs table last year and the index locality
+      was awful, v7 keeps the time prefix so inserts stay at the tail of the btree. existing tables keep
+      their bigints, we''re not rewriting them. keys are 16 bytes instead of 8 now and you can''t read
+      them in logs, which is mildly annoying but fine.
+
+      '
+    must_carry: 'The row-count leak and the extra round trip, the failed UUIDv4 attempt, the limit to new
+      tables only, and the size and log-readability costs all appear.
+
+      '
+  assert: *id001
+- description: negative control - unresolved debate, nothing settled
+  vars:
+    task: 'the mobile api thing is still going round in circles. half of us want graphql because the home
+      screen fires eleven calls to render, the other half say rest is fine and the real problem is that
+      we never built a batch endpoint. nobody has measured whether the eleven calls are even what makes
+      it slow, which is sort of the whole issue. we agreed to spike both next quarter and look at numbers
+      then. also Dev, who has to live with whichever way it goes, is out until october. can you write
+      this up
+
+      '
+    must_carry: 'The response makes clear there is nothing settled to record here, rather than manufacturing
+      a choice between GraphQL and REST.
+
+      '
+  assert: &id002
+  # `carriesTaskSpecifics` used to run here at minimum 2. It grades the claim
+  # that a RECORD preserves its context, and on a row whose right answer is to
+  # write no record it graded nothing: a correct terse decline carried 0/4 of
+  # the note's specifics and failed, beside a rubric that says brevity must not
+  # be penalised. Only the rubric runs on the controls now, and its second
+  # criterion is what keeps a canned decline from scoring.
+  - type: llm-rubric
+    rubricPrompt: *sourceNoteRubricPrompt
+    value: 'Judge only what the response says, never its length or layout.
+
+
+      This situation is NOT ready for an architectural decision record. The START definition of ready
+      (ozimmer.ch) says a decision is ready only when all five hold: Stakeholders are known; Time - the
+      most responsible moment - has come; Alternatives are identified and understood; Requirements, context
+      and decision drivers are analysed; a Template has been chosen.
+
+
+      Answer each of the four below with a quote from the response, or NONE.
+
+
+      - the text refusing to record as settled anything this note does not settle. A plain
+      "there is nothing decided here yet" is that refusal; so is a record explicitly filed
+      as Proposed - not Accepted - that names what is still open; so is a record of a part
+      of the note that IS settled, filed as such, alongside the refusal for the rest
+
+      - the text naming, in substance, which readiness criterion is absent - unknown stakeholders,
+      unmeasured alternatives, a moment that has not arrived, unanalysed requirements - however it words
+      it
+
+      - the text saying what belongs in the repository instead
+
+      - list every decision, status, or figure the response asserts that the source note does not support,
+      or answer NONE
+
+
+      Score from 0 to 1, never above 1: award 0.34 for each of the first three answered with a quote,
+      then subtract 0.34 for each unsupported assertion listed under the fourth, floored at 0.
+
+
+      A record that presents an undecided matter as settled produces NONE on the first item however
+      well written - the confidence is the error, not the artifact. A Proposed record is not that:
+      Nygard''s original status field is "proposed if the project stakeholders haven''t agreed with it
+      yet, or accepted once it is agreed", and MADR lists proposed first among its status values, so a
+      record filed as Proposed that names the open question is a correct answer here and not a hedge.
+      Brevity is equally correct and must not be penalised: a two-sentence refusal that names what is
+      open scores the same as a Proposed record that does.
+
+
+      What this particular situation is missing: {{must_carry}}'
+    threshold: 0.7
+    metric: control_quality
+- description: negative control - sprawling multi-decision offsite
+  vars:
+    task: 'offsite braindump, three hours of it, sorry it''s a mess. queue has to change, we didn''t pick
+      what to. auth rework is happening for sure, Sam owns it, shape is tbd. frontend - everyone agrees
+      the current framework is a dead end, two people want React, Jo wants to stay and upgrade in place.
+      hiring two platform engineers in Q3, finance signed that one off. monitoring is a mess, someone
+      should own it, nobody volunteered. oh and we''re dropping IE, nobody objected. can you write this
+      up for the repo?
+
+      '
+    must_carry: 'The response identifies this as several unrelated matters at different stages and does not
+      fuse them into a single confident write-up.
+
+      '
+  assert: *id002
+- description: negative control - problem still being framed
+  vars:
+    task: 'nightly aggregation is getting out of hand, it was 40 minutes in january and last night it
+      was 3h10. theories on the table: shard the fact table, archive anything older than two years, or
+      move the whole thing onto a columnar store. nobody has profiled it so honestly all three are vibes.
+      it''s also not really anyone''s job, data eng says it''s platform and platform says it''s data eng.
+      can you put something in the repo about this?
+
+      '
+    must_carry: 'The response treats this as an unprofiled problem with no chosen direction and no owner,
+      rather than committing the repository to one of the three guesses.
+
+      '
+  assert: *id002
+- description: negative control - blocked on a fact nobody has
+  vars:
+    task: 'the archive tier thing stalled again. two designs on the table - either we soft delete and
+      let the vendor sweep it up on their schedule, or we keep a tombstone table and issue batch deletes
+      ourselves. which one is right depends entirely on whether Wasabi will take a batch delete of 50k
+      keys in one call and their docs do not say either way. Priya opened a support ticket on the 3rd
+      and there is still nothing back. we are not picking until they answer, because the tombstone table
+      is a fortnight of work we do not need if the batch call exists. can you get something in the repo
+      about this?
+
+      '
+    must_carry: 'The response makes clear the choice is waiting on an unanswered question to Wasabi and records
+      no preference between soft delete and the tombstone table.
+
+      '
+  assert: *id002
+- description: negative control - incident follow-ups at different stages
+  vars:
+    task: 'writing up the follow-ups from Tuesday''s outage while it''s fresh. the connection pool cap
+      is already raised and deployed, that was the hour-one hotfix. Marek wants the health check moved
+      off that pool entirely, which I like, but nobody has looked at what it costs us. someone floated
+      pulling the retry budget out of the client and into the gateway - that got no support and no argument
+      either, it just sat there. and there''s a question for legal about whether the 90 minute gap needs
+      a customer notice, which is not ours to answer. stick this in the repo?
+
+      '
+    must_carry: 'The response separates the shipped pool-cap hotfix, the uncosted health check idea, the retry-budget
+      suggestion nobody engaged with and the legal question, rather than fusing them into one record.
+
+      '
+  assert: *id002
