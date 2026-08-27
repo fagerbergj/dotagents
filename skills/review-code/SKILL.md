@@ -86,7 +86,7 @@ Don't scatter line-by-line comments. Deliver:
 
 Cite findings by `path:line` so the author can jump straight to them. Write the summary and each finding following the shared style ruleset at `~/.agents/AGENTS.md` - concrete, no ceremony, no canned "great work!" filler.
 
-**Check the project's AI policy before you post anything.** Submitting a review puts machine-written text under the user's name in someone else's project, so the project's rules govern rather than this skill. Look for `AI_POLICY.md`, `CONTRIBUTING.md`, or the equivalent in the target repo and follow what it says. 
+**Check the project's AI policy before you post anything.** Submitting a review puts machine-written text under the user's name in someone else's project, so the project's rules govern rather than this skill. Look for `AI_POLICY.md`, `CONTRIBUTING.md`, or the equivalent in the target repo and follow what it says.
 
 Absent a stated policy, hold to the same line: say what wrote the review, and let a human read it before it goes out.
 
