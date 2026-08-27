@@ -4,9 +4,10 @@ description: >
   The repeatable process for reviewing a code change: understand the change's
   intent before critiquing, read the diff AND the surrounding code, verify the
   change's claims and tests rather than trusting them, categorize each finding
-  by severity, and structure the written review. Load whenever the task is to
-  review a pull request, diff, branch, or proposed code change - before you
-  start reading the diff.
+  by severity, and structure the written review. Drafts the review and leaves
+  submitting it to a human, following the target project's stated AI policy on
+  disclosure. Load whenever the task is to review a pull request, diff, branch,
+  or proposed code change - before you start reading the diff.
 metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
