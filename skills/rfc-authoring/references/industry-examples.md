@@ -13,12 +13,11 @@ Use these examples to select a shape, not to assemble a maximal template. A repo
 - Summary
 - Motivation
 - Guide-level explanation
-- Reference-level explanation
-- Drawbacks
+- Reference-level explanation (optional)
+- Drawbacks (optional)
 - Rationale and alternatives
-- Prior art
+- Resources and Docs (optional)
 - Unresolved questions
-- Future possibilities
 
 **Process:** Early feedback precedes the RFC. Android technical stewards accept or reject it after the feedback phase; stakeholders provide input but are not all necessarily approvers.
 

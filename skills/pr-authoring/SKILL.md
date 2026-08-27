@@ -8,6 +8,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
+  version: "1.0.1"
 ---
 
 # PR Authoring
@@ -16,7 +17,7 @@ A pull request exists to **communicate with the reviewer**, and the author contr
 
 ## Title
 
-`type(scope): subject` - imperative, ≤50 chars, no period (`feat(auth): add Google OAuth2 sign-in`). It becomes the squash commit on the default branch, so it's permanent history, not a label. Reference the issue: end with `(closes #<n>)` or put `Closes #<n>` in the body. If you can't title the change in one line, it's too big - it should be more, smaller PRs.
+`type(scope): subject` - imperative, ≤50 chars, no period (`feat(auth): add Google OAuth2 sign-in`). It becomes the squash commit on the default branch, so it's permanent history, not a label. Reference the issue: end with `(closes #<n>)` or put `Closes #<n>` in the body - only when you have the number. With no issue to close, leave it out rather than shipping the placeholder. If you can't title the change in one line, it's too big - it should be more, smaller PRs.
 
 ## Template - repo's first, ours as fallback
 
@@ -34,8 +35,8 @@ Every description answers **what** changed, **why**, and **how to verify** it. W
 - **Why** - the problem and context (one paragraph). Without it the reviewer guesses.
 - **What** - the change at a glance. For several commits, a short list in reading order.
 - **How** - the approach and the one or two decisions touching architecture, existing behaviour, or downstream systems, with tradeoffs. Skip the obvious.
-- **Verification** - how you confirmed it works: tests added, commands run + result, steps to reproduce, screenshots for UI. Pre-empts the "did you test it?" round trip.
-- **Callouts / feedback wanted** - point the reviewer at the specific lines or decisions that most need their eyes ("the 5s timeout at handler.go:142 - right value?"). Telling the reviewer *what feedback you want* is the single most predictive thing for a good review.
+- **Verification** - how you confirmed it works: tests added, commands run + result, steps to reproduce, screenshots for UI. Pre-empts the "did you test it?" round trip. Report only what you actually ran and observed. If you did not run it, say what the reviewer should run, in the imperative - never assert a result you did not see, and never name a test, file, or command that is not in the diff. If nothing was run and nothing is worth running, omit the section.
+- **Callouts / feedback wanted** - point the reviewer at the specific lines or decisions that most need their eyes ("the 5s timeout on line 142 - right value?"). Name real lines from this diff, never an example filename. Telling the reviewer *what feedback you want* is the single most predictive thing for a good review.
 - **Out of scope** - for a feature, name the deliberate follow-ups; pre-empts "shouldn't this be fixed too?".
 
 ## Scale to the change

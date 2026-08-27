@@ -7,7 +7,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
-  version: "2.0"
+  version: "2.0.1"
 ---
 
 # Comment Authoring
