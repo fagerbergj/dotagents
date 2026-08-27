@@ -9,9 +9,10 @@
 // truth names is no longer in the diff, and files the change adds do not exist at
 // the base, so citing a line it appends looks like a fabrication.
 //
-// Both SHAs are pinned. `refs/pull/<n>/head` moves under a force-push, so the
-// ref is how the objects are reached and the pinned head is what is verified
-// against; a fixture that drifts fails loudly instead of quietly re-scoping.
+// Both SHAs are pinned, and the reviewed one is fetched by SHA rather than assumed
+// reachable: a blocking review is usually followed by a force-push that orphans
+// the commit it was written against. A fixture GitHub no longer serves fails
+// loudly instead of quietly re-scoping what is under review.
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -38,16 +39,28 @@ function materialise(f, log = () => {}) {
     git(p.git, ['remote', 'add', 'origin', `https://github.com/${f.repo}.git`]);
   }
   // blob:none keeps the fetch small; `git archive` below hydrates what it needs.
-  // A raw SHA cannot be fetched from GitHub, so the PR ref is the way in and the
-  // base comes along with it as an ancestor of the head.
+  // GitHub serves a raw SHA only when it is reachable from an advertised ref
+  // (uploadpack.allowReachableSHA1InWant), which is why the base fetch below
+  // works - it sits on the default branch - while a PR commit does not, and has
+  // to come in through the pull ref.
   git(p.git, ['fetch', '-q', '--filter=blob:none', 'origin', `refs/pull/${f.pr}/head:refs/fixtures/${f.pr}`]);
   // The reviewed commit must still be an ancestor of the PR ref. A force-push
   // makes it unreachable, and the fixture is then unusable rather than merely
   // stale - fail loudly instead of silently reviewing a different tree.
+  // Fetch the reviewed commit explicitly rather than asking whether it is already
+  // present. `cat-file -e` only inspects this clone's object database, so on a warm
+  // cache an object left by an earlier fetch passes long after CI on a cold clone
+  // would fail - the check has to exercise the network path it is standing in for.
+  //
+  // Ancestry would be the wrong test. A blocking review is normally followed by a
+  // force-push, which orphans the reviewed commit: four of these sixteen fixtures
+  // are no longer ancestors of their PR ref, and all four are CHANGES_REQUESTED,
+  // which is the half the suite most needs. GitHub still serves those commits by
+  // SHA, verified on a cold clone, so obtainability is the property that matters.
   try {
-    git(p.git, ['cat-file', '-e', `${f.reviewed}^{commit}`]);
+    git(p.git, ['fetch', '-q', '--filter=blob:none', 'origin', f.reviewed]);
   } catch {
-    throw new Error(`fixture ${f.name}: reviewed commit ${f.reviewed.slice(0, 12)} is unreachable from refs/pull/${f.pr}/head - force-pushed; re-pin or drop it`);
+    throw new Error(`fixture ${f.name}: reviewed commit ${f.reviewed.slice(0, 12)} cannot be fetched from ${f.repo} - GitHub has dropped it; re-pin or drop the fixture`);
   }
   git(p.git, ['fetch', '-q', '--filter=blob:none', 'origin', f.base]);
   // Three dots: the base branch moves on after a PR opens, so diffing against its

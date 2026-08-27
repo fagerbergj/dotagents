@@ -7,10 +7,12 @@ description: review-code skill effectiveness
 # pr-authoring. lib/check-case-vars.py did not catch it because it scans case
 # vars, and here the diff arrives from a fixture instead.
 #
-# Safe to take: no assertion in this suite interpolates a case var. Every rubric
-# states its ground truth inline, so turning off var interpolation costs nothing
-# here. Graders are exempt anyway (promptfoo checks !isGrader), so {{output}}
-# still renders.
+# Safe to take, but not for the reason first written here: tests/cases.yaml does
+# interpolate case vars, in the anchored rubricPrompt that carries {{expected}}
+# and {{verdict}}. That works only because graders are exempt from this flag -
+# promptfoo checks !isGrader - so the grading prompt still renders while the
+# model prompt, built in JavaScript, never goes through nunjucks at all. An
+# assertion *value* interpolating a case var would still arrive as a literal.
 env:
   PROMPTFOO_DISABLE_TEMPLATING: "1"
 
