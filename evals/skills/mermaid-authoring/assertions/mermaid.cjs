@@ -12,7 +12,15 @@ const renderDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dotagents-mermaid-rende
 const renders = new Map();
 const lints = new Map();
 
-const CRASH_SIGNATURE = /puppeteer|Protocol error|Target closed|Navigation failed|spawn ENOMEM/i;
+// Our environment failing, not the model's diagram. Matched against the whole
+// of stderr, so these must be phrases mermaid-cli only emits when the browser
+// itself is the problem - never a bare word. `/puppeteer/i` was here and hit the
+// puppeteer-core path inside an ordinary stack frame, which filed every invalid
+// diagram as a crash and threw the row away instead of scoring it 0.
+const CRASH_SIGNATURE = /Could not find Chrome|Failed to launch|No usable sandbox|Protocol error|Target closed|Navigation failed|spawn ENOMEM|PuppeteerNode\.launch/i;
+// mermaid's own verdict on the diagram, which outranks the above: a parse error
+// arrives with a full stack trace and would otherwise look like a crash.
+const DIAGRAM_ERROR = /UnknownDiagramError|Parse error|Syntax error|No diagram type detected/i;
 
 // mermaid-cli reaches Chromium through puppeteer-core, which bundles no browser,
 // so on a runner it aborts inside launch() with nothing installed. Point it at
@@ -33,8 +41,11 @@ function renderOnce(input, output) {
   if (run.error) return { ok: false, error: `validator failed to start: ${run.error.message}` };
   if (run.status !== 0 || !fs.existsSync(output)) {
     const stderr = `${run.stderr || run.stdout || ''}`;
-    if (CRASH_SIGNATURE.test(stderr)) return { ok: false, crash: stderr.trim().slice(0, 400) };
-    return { ok: false, error: stderr.trim().slice(-600) };
+    if (!DIAGRAM_ERROR.test(stderr) && CRASH_SIGNATURE.test(stderr)) return { ok: false, crash: stderr.trim().slice(0, 400) };
+    // mermaid states its verdict on one line and then unwinds through hundreds
+    // of frames, so report that line when there is one rather than any slice.
+    const verdict = stderr.split('\n').find((l) => DIAGRAM_ERROR.test(l));
+    return { ok: false, error: (verdict || stderr).trim().slice(0, 600) };
   }
   return { ok: true, file: output };
 }
