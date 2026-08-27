@@ -1,0 +1,230 @@
+# Each case is a real document with real mess in it, plus the way its author
+# actually asked. The ask never says what is wrong with the document, never
+# names a formatting rule, and never uses the skill's vocabulary: knowing what
+# to fix is what is being graded.
+
+- description: heading levels - runbook with two titles and skipped levels
+  vars:
+    ask: "wrote this runbook between two meetings and it shows. it goes in the team wiki tomorrow, can you make it presentable? not attached to how it's laid out."
+    rubric: |
+      The runbook has one title, its sections sit under it in order, and no step or sentence has been added, dropped, or reworded.
+    document: |
+      # Deploy Runbook
+      ### Prerequisites
+      You need the CLI installed and a token with deploy access.
+      ##### Token scopes
+      The token needs deploy:write and logs:read. Ask an admin if yours is missing either.
+      # Steps
+      Run the deploy from a clean checkout, then watch the logs until the health check goes green.
+      ### Rollback
+      Roll back by redeploying the previous tag. There is no separate rollback command.
+
+- description: ragged lists - onboarding checklist with three bullet characters
+  vars:
+    ask: "hey - onboarding checklist below, it looks like garbage on the intranet. sort it out for me?"
+    rubric: |
+      Every checklist item is still there and still says the same thing, and the nesting reads the way it was meant.
+    document: |
+      ## Onboarding checklist
+      Before your first day:
+      * Get your laptop from IT
+      + Set up two-factor authentication
+      - Clone the main repository
+          * Install the toolchain
+             - Run the test suite once end to end
+      Ask your onboarding buddy if anything here is unclear.
+
+- description: unlabeled fences - release notes with three bare code blocks
+  vars:
+    ask: "Release notes for 2.4.0. These go up on the docs site within the hour and they are the first thing customers will see about this version. See what you can do with them."
+    rubric: |
+      All three commands and the config snippet are byte-for-byte what they were, and each block is recognisable as the kind of thing it is.
+    document: |
+      # Release 2.4.0
+      ## Install
+      ```
+      npm install acme@2.4.0
+      ```
+      ## Configure
+      ```
+      {
+        "retries": 3,
+        "timeout": "30s"
+      }
+      ```
+      ## Verify
+      ```
+      acme --version
+      acme doctor --strict
+      ```
+
+- description: broken table - rate limits with ragged pipes
+  vars:
+    ask: "our rate limit page - support keeps pointing people at it. give it a pass before i publish?"
+    rubric: |
+      The table has the same three endpoints with the same limits and bursts, and the note after it is still a note and not a table row.
+    document: |
+      # Rate limits
+      | Endpoint | Limit | Burst |
+      |---|-----|-|
+      | `/search` | 60/min | 10 |
+      |`/upload`|5/min|2|
+      |   `/status`   |   unlimited   |   n/a   |
+      Notes: limits are counted per API key, not per user.
+
+- description: stray HTML - incident note with inline tags and a details block
+  vars:
+    ask: "incident note for the postmortem thread. half of it came out of an email so there's junk in it. make it look like something i'd actually post in #incidents"
+    rubric: |
+      The impact, cause and both source links are intact, and the collapsible sources block would still expand and render its list.
+    document: |
+      # Incident 2026-04-02<br>
+      <b>Impact:</b> checkout was unavailable for 22 minutes.<br>
+      <i>Cause:</i> a config push that pointed the payment client at staging.
+      <details><summary>Sources</summary>
+      - [Status page](https://status.example.com/incidents/2026-04-02)
+      - [Postmortem](https://docs.example.com/postmortems/checkout-april)
+      </details>
+
+- description: reference links - weekly digest with link definitions at the bottom
+  vars:
+    ask: "weekly digest, goes to the whole eng org in about 20 minutes. give it a once-over so it doesn't look sloppy?"
+    rubric: |
+      Every link still points where it pointed and still reads the way it read.
+    document: |
+      # Weekly digest
+      Two things shipped this week: the [new search index][search] and the [billing export][billing].
+      The rollout notes are in [the handbook][handbook], and the API reference lives at https://api.example.com/docs
+      [search]: https://github.com/acme/search/pull/1180
+      [billing]: https://github.com/acme/billing/pull/94
+      [handbook]: https://handbook.example.com/engineering
+
+- description: scannability - long support policy written as three walls of text
+  vars:
+    ask: "This is the support policy page. Nobody reads it, and I am fairly sure the reason is how it looks rather than what it says. Can you do something about that before I point people at it again."
+    rubric: |
+      Every fact, version number and date is exactly as it was. Nothing has been summarised away and nothing has been invented to pad a section out.
+    document: |
+      # Support policy
+      We support the current major version and the one before it. Version 3.x receives security fixes and bug fixes until 2027-06-30, version 2.x receives security fixes only until 2026-12-31, and version 1.x is out of support as of 2025-09-30 with no further releases planned of any kind. Customers on version 1.x who need a fix must first upgrade to a supported line, and we will help plan that upgrade at no cost if you contact support before your renewal date.
+      Support requests are triaged by severity. A severity one incident means a production outage with no workaround and gets a response within one hour at any time of day or night, a severity two means a major feature is unusable and gets a response within four business hours, a severity three means degraded behaviour with a workaround and gets a response within one business day, and a severity four covers questions and feature requests and gets a response within three business days. Severity is assigned by our on-call engineer and can be raised on request if the impact has been misjudged.
+      Enterprise plans add a named technical account manager, a quarterly review of open issues, and a private escalation channel that bypasses the general queue. Standard plans use the public support portal only. Neither plan includes custom patch backports to unsupported versions, which is the single most common request we have to turn down, and the answer does not change with contract size.
+
+- description: crammed whitespace - meeting notes with no air and trailing spaces
+  vars:
+    ask: "sprint planning notes from this morning, straight out of my scratchpad. bit of a mess. can you clean it up before i drop it in the channel"
+    rubric: |
+      Every decision and owner is still recorded and still attributed to the same person.
+    document: |
+      ## Sprint planning 2026-05-11
+      Attendees: Dana, Priya, Marcus.  
+      ### Decisions
+      - Ship the export feature behind a flag.  
+      - Defer the audit log to next sprint.
+      ### Owners
+      Dana takes the export flag.
+
+
+      Priya takes the migration.
+      Marcus is out Thursday and Friday.
+      > Blocked on the vendor contract until legal signs off.
+      ### Next steps
+      Review on Friday.
+
+- description: no title - status page with several sections and no H1
+  vars:
+    ask: "internal status snapshot, goes in the ops channel every morning. what would you do with it"
+    rubric: |
+      The document was not given a title it never had, and each service still reports the same status.
+    document: |
+      ## API
+      All endpoints are healthy. Latency is within normal range.
+      #### Search
+      Search is degraded. Reindexing is running and should finish by 18:00 UTC.
+      ## Billing
+      Invoicing is healthy. Card capture is healthy.
+      #### Exports
+      Nightly exports ran late but completed.
+
+- description: negative control - a document that is already clean
+  vars:
+    ask: "someone asked me to double check this before it goes out. here it is - do whatever you think it needs."
+    rubric: |
+      This document was already in good shape. The right answer changes almost nothing about it.
+    document: |
+      # Cache invalidation
+
+      The cache is keyed by tenant and resource. Invalidation is explicit: nothing expires on a timer.
+
+      ## When entries are dropped
+
+      - **Write-through** - a successful write replaces the cached value in the same request.
+      - **Explicit purge** - the admin API drops every key under a tenant prefix.
+      - **Deploy** - a new build starts with a cold cache by design.
+
+      ## Purging a tenant
+
+      ```bash
+      acme cache purge --tenant acme-corp
+      ```
+
+      The command is idempotent and safe to run during traffic. See the [operations guide](https://docs.example.com/ops/cache) for the failure modes.
+  assert:
+    - &unchanged_when_clean
+      type: javascript
+      value: file://assertions/format.cjs:renderedUnchanged
+      config: { minimum: 0.9 }
+      metric: unchanged_when_clean
+
+- description: negative control - already clean, and mostly a table
+  vars:
+    ask: "this is what ops reads when someone asks how long we keep things. give it a once-over before i link it in the channel."
+    rubric: |
+      This document was already in good shape. The right answer changes almost nothing about it.
+    document: |
+      # Retention windows
+
+      Each row is the authority for how long a store keeps data before the nightly prune job deletes it.
+
+      | Store | Window | Deleted by |
+      | --- | --- | --- |
+      | `runs` | 90 days | nightly prune job |
+      | `run_events` | 30 days | nightly prune job |
+      | `artifacts` | 400 days | nightly prune job |
+      | `audit_log` | 7 years | by hand, on a written request |
+
+      A row under legal hold is skipped by the job and stays until the hold is lifted. See the [retention policy](https://docs.example.com/legal/retention) for who can place one.
+  assert:
+    - *unchanged_when_clean
+
+- description: negative control - already clean, and mostly fenced commands
+  vars:
+    ask: "key rotation steps for the runbook. anything you'd do to it before i paste it in?"
+    rubric: |
+      This document was already in good shape. The right answer changes almost nothing about it.
+    document: |
+      # Rotating the signing key
+
+      Rotation is two commands and a restart. Run them on the primary; replicas pick the new key up from the shared secret store within a minute.
+
+      ## Generate the key
+
+      ```bash
+      acme keys generate --alg ed25519 --out /etc/acme/signing-2026-09.pem
+      ```
+
+      ## Publish it
+
+      ```bash
+      acme keys publish /etc/acme/signing-2026-09.pem --activate-at 2026-09-01T00:00:00Z
+      ```
+
+      The previous key stays valid for verification until it expires, so tokens signed before the switch keep working.
+
+      ## Roll back
+
+      ```bash
+      acme keys activate signing-2026-08
+      ```
+  assert:
+    - *unchanged_when_clean
