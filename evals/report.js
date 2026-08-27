@@ -213,9 +213,22 @@ function storedLatency() {
   carried = {};
   try {
     const store = path.join(path.dirname(file), `${path.basename(file).split('@')[0]}.csv`);
+    // The store keys a skill arm by version, not by arm name, so mapping back
+    // needs this run's version and - on a three-arm run - the shipped one written
+    // beside the results. Matching the `skill` prefix alone collapsed every
+    // version onto skill-current, so skill-next could never be carried.
+    const runVersion = (path.basename(file).split('@')[1] || '').replace(/\.json$/, '') || 'unversioned';
+    const sidecar = file.replace(/\.json$/, '.base-version');
+    const baseVersion = fs.existsSync(sidecar) ? fs.readFileSync(sidecar, 'utf8').trim() : '';
+    const newest = arms.includes('skill-next') ? 'skill-next' : 'skill-current';
     for (const line of fs.readFileSync(store, 'utf8').trim().split('\n').slice(1)) {
       const [, mode, metric, value] = line.split(',').map((c) => c.replace(/^"|"$/g, ''));
-      if (metric === 'latency_s') carried[mode.startsWith('skill') ? 'skill-current' : mode] = Number(value);
+      if (metric !== 'latency_s') continue;
+      const arm = mode === 'no-skill' ? 'no-skill'
+        : mode === `skill@${runVersion}` ? newest
+        : (baseVersion && mode === `skill@${baseVersion}`) ? 'skill-current'
+        : null;
+      if (arm) carried[arm] = Number(value);
     }
   } catch { /* no store yet - first run, or a PR checkout without one */ }
   return carried;
