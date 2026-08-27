@@ -14,16 +14,26 @@ const lints = new Map();
 
 const CRASH_SIGNATURE = /puppeteer|Protocol error|Target closed|Navigation failed|spawn ENOMEM/i;
 
-// GitHub's ubuntu runners restrict unprivileged user namespaces, so Chromium
-// aborts with "No usable sandbox!" unless launched with the flags in this file.
-const PUPPETEER_CONFIG = path.join(__dirname, 'puppeteer.json');
+// mermaid-cli reaches Chromium through puppeteer-core, which bundles no browser,
+// so on a runner it aborts inside launch() with nothing installed. Point it at
+// the image's Chrome when one exists, else let puppeteer resolve its own.
+// The flags are a separate need: ubuntu runners restrict unprivileged user
+// namespaces, so Chromium aborts with "No usable sandbox!" without them.
+const CHROME = [process.env.PUPPETEER_EXECUTABLE_PATH, process.env.CHROME_BIN,
+  '/usr/bin/google-chrome', '/usr/bin/chromium-browser', '/usr/bin/chromium']
+  .find((c) => c && fs.existsSync(c));
+const PUPPETEER_CONFIG = path.join(renderDir, 'puppeteer.json');
+fs.writeFileSync(PUPPETEER_CONFIG, JSON.stringify({
+  args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  ...(CHROME ? { executablePath: CHROME } : {}),
+}));
 
 function renderOnce(input, output) {
   const run = spawnSync('npx', ['-y', '@mermaid-js/mermaid-cli@11.16.0', '-i', input, '-o', output, '-p', PUPPETEER_CONFIG], { encoding: 'utf8', timeout: 180000 });
   if (run.error) return { ok: false, error: `validator failed to start: ${run.error.message}` };
   if (run.status !== 0 || !fs.existsSync(output)) {
     const stderr = `${run.stderr || run.stdout || ''}`;
-    if (CRASH_SIGNATURE.test(stderr)) return { ok: false, crash: stderr.trim().slice(-400) };
+    if (CRASH_SIGNATURE.test(stderr)) return { ok: false, crash: stderr.trim().slice(0, 400) };
     return { ok: false, error: stderr.trim().slice(-600) };
   }
   return { ok: true, file: output };
