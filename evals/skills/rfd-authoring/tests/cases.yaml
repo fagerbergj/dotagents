@@ -156,8 +156,11 @@
       value: |
         A colleague wrote this to you: "{{task}}"
 
-        The correct answer says plainly that an open-ended exploratory write-up is not what
-        this situation needs, and names what it needs instead.
+        Nothing in this situation is actually undecided. The correct answer is the compact
+        thing the note calls for - a record, a decision request, a plan, an explanation -
+        or a plain statement that an open-ended exploratory write-up is not needed here.
+        Either earns the first item; the reply is graded on what it is, not on whether it
+        editorialises about which genre of document to write.
 
         Oxide Computer's RFD 1 reserves the discussion state for ideas not yet settled: "by
         the time an idea represents the consensus or direction, it should be in the
@@ -176,14 +179,16 @@
 
         What belongs instead, specific to this case: {{rubric}}
 
-        Score from 0 to 1, never above 1: award 0.34 for the text saying plainly that an
-        open-ended exploratory write-up is not what this situation needs, 0.33 for the text
-        naming what it needs instead, and 0.33 for the case-specific requirement above.
-        Quote the reply's own words for each, or answer NONE. Award nothing for an item you
-        could not quote for. A complete exploratory document - background, live directions,
-        open questions - produces NONE on the first item however good it is, since a
-        document is not a recommendation against writing one; no separate cap is needed.
-        State the arithmetic.
+        Score from 0 to 1, never above 1: award 0.34 for the reply being the compact thing
+        the situation calls for, or saying plainly that an exploratory write-up is not
+        needed; 0.33 for it not manufacturing uncertainty - not reopening a settled choice,
+        not inventing open questions the note did not contain, not asking anyone to
+        reconsider what the author has already worked out; and 0.33 for the case-specific
+        requirement above. Quote the reply's own words for each, or answer NONE. Award
+        nothing for an item you could not quote for. A reply that presents background plus
+        live alternative directions plus open questions for others to weigh produces NONE on
+        the first item however well written it is, because nothing here is open. State the
+        arithmetic.
 
         Judge the reply as delivered; do not reward or penalise how it was built or which
         authoring convention it followed.
