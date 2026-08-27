@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: RFC authoring skill effectiveness
+
+# Two arms over the same tasks. Arm labels come from the skill's frontmatter
+# version, so bumping metadata.version in SKILL.md relabels the comparison.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # Custom provider, not `openai:chat:*`: same OpenAI-compatible call, plus a
+  # `load_resource` tool over the skill's own directory so the skill arm can
+  # follow SKILL.md's instructions to read its bundled files. The tool exists
+  # only when the prompt supplies `skillDir` (see prompts/arms.js), so the
+  # baseline arm sends no `tools` key and is called exactly as before.
+  - id: file://../../lib/skill-tools.js
+    label: deepseek-v4-flash+resources
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      # One reference plus one example RFC, 5.9 KB together - the budget is a ceiling
+      # on a runaway loop, not a rationing of two small files.
+      maxToolCalls: 4
+      maxResourceBytes: 8192
+
+defaultTest:
+  options:
+    # Every judged assertion is llm-rubric, never g-eval: g-eval extracts its
+    # verdict with /{.+}/, which cannot cross newlines, so a pretty-printed
+    # reply is discarded and the row records 0.00 even where the judge wrote
+    # 10/10. llm-rubric brace-matches instead and is unaffected, so no
+    # rubricPrompt override is needed anywhere in this suite.
+    # The llm-swap gateway returns reasoning as message content; strip it so the
+    # graders see the answer, not the leak. There is no fence to anchor on, so
+    # anchor on the document's first heading and only cut a preamble long enough
+    # to be reasoning - an answer that declines to write a document has no
+    # heading to cut back to and passes through untouched.
+    transform: file://../../lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        # Keeps the judge's reply parseable as JSON. json_object, not json_schema:
+        # the latter makes promptfoo pre-parse the reply into an object, which the
+        # grader then rejects as 'not a string'.
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # The only grader that is right for every case. Judging is per-case: a change
+    # that warrants review and one that does not have opposite right answers, so
+    # the rubric blocks live with the cases in tests/cases.yaml.
+    # Loading a SKILL.md costs wall-clock time and that overhead is part of what
+    # the arms are compared on. No `cost` assertion: this gateway declares no
+    # per-token price, so it would read zero and pass trivially.
+    - type: latency
+      threshold: 180000
+      metric: latency
+
+tests:
+  - file://tests/*.yaml
