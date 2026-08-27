@@ -44,15 +44,26 @@ module.exports = async ({ github, context, markers, body }) => {
   const stale = repository.pullRequest.comments.nodes
     .filter((c) => c.viewerDidAuthor && !c.isMinimized && markers.some((m) => c.body.includes(m)));
 
+  // Collapsing an old comment is housekeeping; posting the new one is the job.
+  // A transient minimize failure must not abort the script and lose the report,
+  // so each is tried independently and its failure only warns.
   for (const c of stale) {
-    await github.graphql(
-      `mutation($id: ID!) {
-         minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) {
-           minimizedComment { isMinimized minimizedReason }
-         }
-       }`,
-      { id: c.id },
-    );
+    try {
+      await github.graphql(
+        `mutation($id: ID!) {
+           minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) {
+             minimizedComment { isMinimized minimizedReason }
+           }
+         }`,
+        { id: c.id },
+      );
+    } catch (err) {
+      // console, not `core`: this module is called with { github, context,
+      // markers, body } and has no `core` in scope - and optional chaining does
+      // not save an undeclared identifier, it throws. github-script surfaces
+      // console output in the job log either way.
+      console.warn(`could not minimize comment ${c.id}: ${err.message}`);
+    }
   }
 
   // GitHub rejects a comment body over 65536 characters. Ten suites of tables

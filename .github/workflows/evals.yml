@@ -280,7 +280,11 @@ jobs:
             echo
 
             for suite in $(printf '%s' "$SUITES" | jq -r '.[]'); do
-              md="$(ls "artifacts/eval-$suite/"*.md 2>/dev/null | head -1 || true)"
+              # `find`, not a shallow glob: upload-artifact roots the archive at the
+              # least common ancestor, and whether that flattens `evals/results/`
+              # away is version- and input-dependent. Searching the tree is correct
+              # under either layout, and is what eval-publish.yml already does.
+              md="$(find "artifacts/eval-$suite" -name '*.md' 2>/dev/null | head -1 || true)"
               if [ -z "$md" ]; then missing+=("$suite"); continue; fi
               echo
               # Demote the report's own `# suite@version` heading to sit under
