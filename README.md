@@ -14,6 +14,7 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 | `format-markdown` | [format-markdown.md](results/format-markdown.md) | `c80a6ae` :warning: | `86334f5` | reused |
 | `mermaid-authoring` | [mermaid-authoring.md](results/mermaid-authoring.md) | `37abd5b` :warning: | `4a46ed5` | reused |
 | `rest-api-authoring` | [rest-api-authoring.md](results/rest-api-authoring.md) | `d84b1b4` :warning: | `1dfd6c8` | reused |
+| `rfd-authoring` | [rfd-authoring.md](results/rfd-authoring.md) | `987edb6` :warning: | `c0df705` | reused |
 
 :warning: means the numbers were produced against a different commit than the one that merged.
 That is the `reused` path: the PR's artifact was built from the PR head, and if `main` moved
