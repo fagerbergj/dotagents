@@ -77,7 +77,7 @@ function metricRow(m) {
     const d = test - base;
     delta = (d >= 0 ? '+' : '') + d.toFixed(2);
     if (diagnostic) { delta = `(${delta})`; }
-    else if (Math.abs(d) < rel.floor) { note += ' - within noise'; }
+    else if (Math.abs(d) < rel.floor) { note += ', no real change'; }
     if (base === test && (base === 1 || base === 0)) note = base === 1 ? 'ceiling both arms' : 'floor both arms';
   }
   const rep = repeatStats(m);
@@ -158,18 +158,21 @@ function reliability({ n, judged }) {
   // is not a stable metric: `docstring_placement` is a regex and still swung a
   // full 1.00 across five identical runs, because the model attaches the
   // docstring on some runs and not others. Generation variance is the floor.
-  const kind = judged ? 'judge' : 'computed';
-  if (n < 5) return { note: `${kind} n=${n} DIAGNOSTIC`, floor: Infinity };
-  if (judged) return n >= 8 ? { note: `judge n=${n}`, floor: 0.10 }
-                            : { note: `judge n=${n}, wide`, floor: 0.20 };
-  return { note: `computed n=${n}`, floor: 0.05 };
+  // Spelled out rather than coded: a reader should not need a legend to know
+  // that `n` is a case count, or what `computed` meant.
+  const kind = judged ? 'llm-judge' : 'deterministic';
+  if (n < 5) return { note: `only ${n} cases`, floor: Infinity };
+  if (judged) return n >= 8 ? { note: `${n} cases, llm-judge`, floor: 0.10 }
+                            : { note: `${n} cases, llm-judge, few`, floor: 0.20 };
+  return { note: `${n} cases, ${kind}`, floor: 0.05 };
 }
 
+const caseCount = () => new Set(rows.map(caseKey)).size;
 const pad = (s, n) => String(s).padEnd(n);
 const w = Math.max(18, ...metrics.map((m) => m.length + 1));
-console.log(`\n${rows.length} results over ${arms.length} arms\n`);
+console.log(`\n${caseCount()} cases, run ${arms.length} ways\n`);
 for (const b of banners) console.error(`!! ${b.level}: ${b.text}\n`);
-console.log(pad('metric', w) + arms.map((a) => pad(a, 16)).join('') + pad('delta', 10) + 'reliability');
+console.log(pad('metric', w) + arms.map((a) => pad(a, 16)).join('') + pad('change', 10) + 'detail');
 console.log('-'.repeat(w + arms.length * 16 + 10 + 22));
 const diagnostic = [];
 for (const m of metrics) {
@@ -179,8 +182,8 @@ for (const m of metrics) {
   if (rep) console.log(pad('', w) + '  each run would have reported: ' + rep.deltas.map((d) => (d >= 0 ? '+' : '') + d.toFixed(2)).join('  '));
 }
 if (diagnostic.length) {
-  console.log(`\nDeltas in parentheses rest on too few cases to mean anything: ${diagnostic.join(', ')}.`);
-  console.log('Read them as a signal to go look at the rows, never as movement.');
+  console.log(`\nToo few cases to make a reliable determination: ${diagnostic.join(', ')}.`);
+  console.log('Go and read the rows; do not read the number.');
 }
 
 // A cached row reports near-zero latency. Averaging it in would quietly wipe out
@@ -212,7 +215,7 @@ console.log(pad('tokens (avg)', w) + arms.map((a) => pad(Math.round(tok(a)), 16)
 
 const worst = rows.filter((r) => (r.gradingResult?.componentResults || [])
   .some((c) => !c.pass && c.assertion?.type !== 'select-best'));
-console.log(`\n${worst.length} results failed a non-select-best assertion. First few:`);
+console.log(`\n${worst.length} of ${rows.length} rows scored below a check's bar. First few:`);
 for (const r of worst.slice(0, 5)) {
   const f = r.gradingResult.componentResults.filter((c) => !c.pass && c.assertion?.type !== 'select-best');
   console.log(`  [${r.prompt.label}] ${r.testCase.description}\n    ${f.map((c) => `${c.assertion.type}: ${String(c.reason).slice(0, 110)}`).join('\n    ')}`);
@@ -223,13 +226,13 @@ for (const r of worst.slice(0, 5)) {
 // durable baseline artifact, so "the skill got worse" stays a checkable claim.
 if (mdPath) {
   const suite = require('node:path').basename(file).replace(/\.json$/, '');
-  const md = [`# ${suite}`, '', `${rows.length} results over ${arms.length} arms.`, ''];
+  const md = [`# ${suite}`, '', `${caseCount()} cases, run ${arms.length} ways.`, ''];
   // Banners first, as GitHub alerts: a dropped-row or errored-grader warning
   // printed under the table is a warning nobody reads.
   for (const b of banners) md.push(`> [!${b.level}]`, `> ${b.text}`, '');
   // Reliable metrics in the table, diagnostic ones folded away. A DIAGNOSTIC
   // +0.50 shown beside a solid +0.20 is worse than no table at all.
-  const head = [`| metric | ${arms.join(' | ')} | delta | reliability |`,
+  const head = [`| metric | ${arms.join(' | ')} | change | detail |`,
     `| --- | ${arms.map(() => '---').join(' | ')} | ---: | --- |`];
   const line = (r) => `| \`${r.m}\` | ${r.vals.map((v) => (v === null ? '-' : v.toFixed(2))).join(' | ')} | ${r.delta} | ${r.note} |`;
   const table = metrics.map(metricRow);
@@ -242,9 +245,9 @@ if (mdPath) {
   md.push(`| latency (s avg) | ${arms.map((a) => (lat(a) === null ? 'all cached' : lat(a).toFixed(1))).join(' | ')} | | |`);
   md.push(`| tokens (avg) | ${arms.map((a) => Math.round(tok(a))).join(' | ')} | | |`);
   if (diag.length) {
-    md.push('', `<details><summary>${diag.length} diagnostic metric(s) - fewer than 5 cases, not movement</summary>`, '',
+    md.push('', `<details><summary>${diag.length} metric${diag.length === 1 ? ' has' : 's have'} too few cases to make a reliable determination</summary>`, '',
       ...head, ...diag.map(line), '',
-      'Deltas in parentheses rest on too few cases to mean anything. Read them as a signal to go look at the rows.',
+      'Five identical runs of a metric this size produced changes from +0.50 to -0.50. Go and read the rows; do not read the number.',
       '</details>');
   }
   if (errors.length) {
@@ -252,13 +255,32 @@ if (mdPath) {
     for (const e of errors.slice(0, 10)) md.push(`- **${e.arm}** / \`${e.metric}\`: ${e.reason}`);
     md.push('</details>');
   }
-  md.push('', `<details><summary>${worst.length} result(s) failed a non-select-best assertion</summary>`, '');
-  for (const r of worst.slice(0, 10)) {
-    const f = r.gradingResult.componentResults.filter((c) => !c.pass && c.assertion?.type !== 'select-best');
-    md.push(`- **${r.prompt.label}** / ${r.testCase.description}`);
-    for (const c of f) md.push(`  - \`${c.assertion.type}\`: ${String(c.reason).replace(/\n/g, ' ').slice(0, 200)}`);
+  // One row per failing check, skill arms first: a baseline row scoring badly is
+  // the effect itself, so leading with those reads as breakage when it is signal.
+  const plain = (label) => (label === 'no-skill' ? 'without skill' : label.startsWith('skill') ? 'with skill' : label);
+  const failRows = [];
+  for (const r of worst) {
+    for (const c of r.gradingResult.componentResults.filter((x) => !x.pass)) {
+      failRows.push({
+        variant: plain(r.prompt.label),
+        base: r.prompt.label === 'no-skill',
+        desc: String(r.testCase.description || '').slice(0, 44),
+        metric: c.assertion?.metric || c.assertion?.type,
+        why: String(c.reason).replace(/\n/g, ' ').replace(/\|/g, '\\|').slice(0, 90),
+      });
+    }
   }
-  md.push('</details>');
+  failRows.sort((a, b) => Number(a.base) - Number(b.base));
+  const withSkill = failRows.filter((f) => !f.base).length;
+  const without = failRows.length - withSkill;
+  if (failRows.length) {
+    md.push('', `<details><summary>${withSkill} row(s) scored below par with the skill, ${without} without it</summary>`, '');
+    md.push('Rows scoring below a check\'s bar. Rows without the skill are the effect rather than a problem, which is what a positive change looks like case by case.', '');
+    md.push('| variant | case | check | why |', '| --- | --- | --- | --- |');
+    for (const f of failRows.slice(0, 20)) md.push(`| ${f.variant} | ${f.desc} | \`${f.metric}\` | ${f.why} |`);
+    if (failRows.length > 20) md.push('', `_${failRows.length - 20} more in the run artifacts._`);
+    md.push('</details>');
+  }
   fs.writeFileSync(mdPath, md.join('\n') + '\n');
   console.log(`wrote ${mdPath}`);
 }
