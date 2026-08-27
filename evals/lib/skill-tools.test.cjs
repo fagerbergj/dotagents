@@ -78,6 +78,14 @@ global.fetch = async (_url, opts) => {
   assert.equal(bodies.length, 1, 'no skillDir means one plain call');
   assert.ok(!('tools' in bodies[0]), 'baseline arm must not be offered a tool');
 
+  // Sending `tools` makes the gateway prefix the reply with blank lines, so the
+  // skill arm alone arrived with a leading "\n\n" and every shape assertion on it
+  // failed. Only the tool-carrying arm is affected, so untrimmed output is a
+  // difference between the arms that is not the skill.
+  global.fetch = async () => reply({ role: 'assistant', content: '\n\n```go\npackage a\n```\n' }, 5);
+  const padded = await provider.callApi('[]', { prompt: { config: { skillDir: real } } });
+  assert.equal(padded.output, '```go\npackage a\n```', 'template whitespace must not reach the graders');
+
   // A runaway loop throws instead of returning an empty answer to be graded.
   bodies.length = 0;
   global.fetch = async (_url, opts) => { bodies.push(JSON.parse(opts.body)); return reply(toolCall, 1); };
