@@ -1,0 +1,23 @@
+[
+  {
+    "name": "quack-1060",
+    "repo": "fagerbergj/quack",
+    "pr": 1060,
+    "base": "097d43d9fecbc27e131f86631d0608f4d503c5ff",
+    "head": "bec4e7b9caacb972d1638228e8f55b3970e475b0"
+  },
+  {
+    "name": "quack-1013",
+    "repo": "fagerbergj/quack",
+    "pr": 1013,
+    "base": "5bf5cbaaab69bd3f20422cc736a88397cad46a85",
+    "head": "96f7fe96ec965da19075c685605ce0c04a4d2328"
+  },
+  {
+    "name": "quack-1055",
+    "repo": "fagerbergj/quack",
+    "pr": 1055,
+    "base": "733464f54670f2b79a1985e327539ce97cda7c43",
+    "head": "cf334d511798d9c920bd14b1588ab168de55b534"
+  }
+]

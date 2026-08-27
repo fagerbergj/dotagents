@@ -86,6 +86,30 @@ global.fetch = async (_url, opts) => {
   const padded = await provider.callApi('[]', { prompt: { config: { skillDir: real } } });
   assert.equal(padded.output, '```go\npackage a\n```', 'template whitespace must not reach the graders');
 
+  // A source tree is the subject matter, not a skill affordance, so read_source
+  // is offered to whichever arm names a repoDir - including the baseline. If it
+  // were gated on the skill the baseline would be reviewing hunks while the skill
+  // arm read the code, and the delta would measure file access, not the skill.
+  global.fetch = async (_url, opts) => { bodies.push(JSON.parse(opts.body)); return reply({ role: 'assistant', content: 'done' }, 5); };
+  bodies.length = 0;
+  await provider.callApi('[]', { prompt: { config: { repoDir: real } } });
+  assert.deepEqual(bodies[0].tools.map((t) => t.function.name), ['read_source'],
+    'repoDir alone offers the source tool and not the skill one');
+
+  bodies.length = 0;
+  await provider.callApi('[]', { prompt: { config: { skillDir: real, repoDir: real } } });
+  assert.deepEqual(bodies[0].tools.map((t) => t.function.name), ['load_resource', 'read_source'],
+    'both roots offer both tools');
+
+  // Each tool reads its own root, and an unknown name is refused rather than
+  // silently served from whichever root happens to be first.
+  bodies.length = 0;
+  const srcCall = { role: 'assistant', content: null, tool_calls: [{ id: 'c2', type: 'function', function: { name: 'read_source', arguments: JSON.stringify({ path: 'references/flowchart/README.md' }) } }] };
+  let n = 0;
+  global.fetch = async (_url, opts) => { bodies.push(JSON.parse(opts.body)); n += 1; return n === 1 ? reply(srcCall, 1) : reply({ role: 'assistant', content: 'done' }, 1); };
+  await provider.callApi('[]', { prompt: { config: { repoDir: real } } });
+  assert.equal(bodies[1].messages.at(-1).content, 'flowchart syntax', 'read_source must serve from repoDir');
+
   // A runaway loop throws instead of returning an empty answer to be graded.
   bodies.length = 0;
   global.fetch = async (_url, opts) => { bodies.push(JSON.parse(opts.body)); return reply(toolCall, 1); };

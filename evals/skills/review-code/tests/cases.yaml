@@ -1,0 +1,127 @@
+# Real merged pull requests from fagerbergj/quack, pinned by base and head SHA in
+# tests/fixtures.json. The diff is whatever git produces for that range, and the
+# arms can open the tree it was opened against, so this measures reviewing a
+# change in the code it lives in rather than reviewing hunks.
+#
+# Each rubric is grounded in what the human reviewer actually found on that PR,
+# not in anything SKILL.md prescribes. Those findings are the ground truth: they
+# were written by a reviewer with the whole repo, and they are what a review of
+# this change is for.
+
+- description: 'real PR - dag plan errors enumerate valid options (#1013)'
+  vars:
+    fixture: quack-1013
+    title: 'fix(dag): plan tool errors enumerate valid options'
+    note: "the unknown-agent incident was costing us blind retries at ~8.8k tokens each. this turns it into one self-correcting error."
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+
+    - type: llm-rubric
+      value: |
+        This is a review of a real pull request that added error enumeration to a
+        DAG planner. Judge the review as delivered; do not reward or penalise how
+        it was produced or which convention it followed.
+
+        Score the review on whether it checked the change rather than trusting it.
+        Answer each with a quote from the review, or NONE.
+
+        1. It names at least one specific, checkable gap or defect in THIS change -
+           a case the new tests do not actually cover, a branch left unhandled, a
+           claim in the description the diff does not support. Specific means a
+           reader could go and confirm it. "Consider adding more tests" is NONE.
+        2. It reasons about code the diff does not show - a caller, an adjacent
+           function, an existing test, an invariant elsewhere in the package -
+           rather than only about the lines in the hunks.
+        3. Nothing it asserts about the code is contradicted by the diff itself.
+           Answer NONE if it makes a claim the diff plainly refutes.
+
+        The reviewer who merged this change found three things, as worked examples
+        of what item 1 means at full strength: the new tests use the offending node
+        id as the only declared id, so they pass whether or not the enumeration is
+        there; the hint gating at zero, one, and two-or-more candidates is
+        untested; and the cycle error lists every node with a non-zero in-degree,
+        which includes nodes merely depending on a cycle. Finding one of those is
+        item 1 at its best - but any other specific, checkable gap counts equally.
+
+        Score from 0 to 1, never above 1: 0.34, 0.33, 0.33 in order. Award nothing
+        for an item you cannot quote for. State the arithmetic.
+      threshold: 0.67
+      metric: verifies_rather_than_trusts
+
+- description: 'real PR - carry reviewer clone URL through fan-in (#1060)'
+  vars:
+    fixture: quack-1060
+    title: 'fix(vetting): carry reviewer clone URL through review fan-in delivery'
+    note: 'this is the fix for the "" is not a github.com clone URL refusal we saw on #1059.'
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+
+    - type: llm-rubric
+      value: |
+        This is a review of a real pull request that threads clone coordinates
+        through a review fan-in. Judge the review as delivered; do not reward or
+        penalise how it was produced.
+
+        Score the review on whether it checked the change rather than trusting it.
+        Answer each with a quote from the review, or NONE.
+
+        1. It names at least one specific, checkable gap or defect in THIS change.
+           Specific means a reader could go and confirm it; a general call for
+           more tests or more error handling is NONE.
+        2. It reasons about code the diff does not show - another call site, a
+           sibling resolution path, an existing test - rather than only about the
+           lines in the hunks.
+        3. Nothing it asserts about the code is contradicted by the diff itself.
+
+        The reviewer who merged this found two things, as worked examples of item 1
+        at full strength: the empty-clone fallback, where no clone URL is recorded
+        and the pre-fix behaviour still applies, has no test; and one resolution
+        path finishes a failed reviewer's slot without recording a clone even
+        though it could. Either is item 1 at its best - any other specific,
+        checkable gap counts equally.
+
+        Score from 0 to 1, never above 1: 0.34, 0.33, 0.33 in order. Award nothing
+        for an item you cannot quote for. State the arithmetic.
+      threshold: 0.67
+      metric: verifies_rather_than_trusts
+
+- description: 'real PR - clean follow-up whose honest verdict is approve (#1055)'
+  vars:
+    fixture: quack-1055
+    title: 'fix(ledger): emit.go and acp.go merge coords field-by-field like traced.go'
+    note: 'follow-up to #1047 - promotes the private helper and uses it in the two remaining stamp consumers.'
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+
+    # The severity control. This change is genuinely clean, and the reviewer who
+    # merged it approved with two non-blocking test-hardening nits. A review that
+    # manufactures a blocker to look thorough is the failure being measured, so
+    # this rubric scores restraint rather than detection.
+    - type: llm-rubric
+      value: |
+        This is a review of a real pull request that promotes a private helper and
+        applies an existing merge pattern to the two remaining callers. It is a
+        small, behaviour-preserving follow-up. The reviewer who merged it approved
+        it, raising two non-blocking test-hardening nits and nothing else.
+
+        Judge the review as delivered. Answer each with a quote, or NONE.
+
+        1. The verdict is approve, or is otherwise clearly not blocking the change.
+        2. Anything raised is marked as non-blocking, a nit, or a suggestion rather
+           than presented as a defect that must be fixed first.
+        3. The review does not claim a correctness, security, or data-loss problem
+           in this change. Answer NONE here if it claims one; quote the absence by
+           quoting the most severe thing it does say.
+
+        Score from 0 to 1, never above 1: 0.34, 0.33, 0.33 in order. Brevity is
+        correct here and must not be penalised - a two-sentence approval that
+        names the change scores full marks. Length is not scored. State the
+        arithmetic.
+      threshold: 0.67
+      metric: severity_restraint
