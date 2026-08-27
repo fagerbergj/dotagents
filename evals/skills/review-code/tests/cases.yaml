@@ -1,0 +1,252 @@
+# Real pull requests from three projects, each pinned at the commit a HUMAN
+# maintainer reviewed. GitHub records that SHA as `reviews[].commit_id`, and it is
+# not the merged head: later commits fix what the review asked for, so pinning the
+# merged head asks the model to find a defect that is no longer there.
+#
+# 16 cases, 8 the maintainer blocked and 8 they approved, across caddyserver/caddy,
+# cli/cli and rclone/rclone, reviewed by steadytao, babakks and ncw. Spreading the
+# projects and the reviewers is deliberate: an earlier version was one repository
+# and one reviewer, which measured agreement with one person's taste.
+#
+# `expected` is the maintainer's own review text, not a summary of it. Paraphrasing
+# put my reading of the review between the reviewer and the judge; quoting does not.
+#
+# An earlier version of this suite used reviews from an automated reviewer on the
+# author's own repository, which made it circular - grading a skill against a bot
+# that may run the same skill - and called that output `HumanFindings`. Every
+# review here is `user.type == "User"`, and one approving review was still dropped
+# because its body opened by saying an agent wrote it on the maintainer's behalf.
+
+- description: "caddy#7916 - reverseproxy: isolate active health-check stat"
+  vars:
+    fixture: caddy-7916
+    title: "reverseproxy: isolate active health-check state per distinct check config"
+    verdict: "CHANGES_REQUESTED"
+    expected: "Each handler still writes `caddy_reverse_proxy_upstreams_healthy` using only `upstream.Dial`. Distinct health-check states therefore race to update the same Prometheus series so the reported value depends on which updater ran last. The metric identity needs to match the newly separated health-state identity + comment"
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    # Anchored so all sixteen cases are judged in identical words; only the case's
+    # own ground truth differs. Uniform wording keeps rubric variance out of the
+    # measurement - rewriting it per case adds noise that is not the skill.
+    - &review_quality
+      type: llm-rubric
+      rubricPrompt:
+        - role: user
+          content: |
+            <MaintainerReview>{{expected}}</MaintainerReview>
+            <MaintainerVerdict>{{verdict}}</MaintainerVerdict>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> is a review of a real pull request. <MaintainerReview> is what the
+        project's maintainer wrote about that same change, and <MaintainerVerdict>
+        is what they decided: APPROVED, or CHANGES_REQUESTED meaning they withheld
+        approval until something was fixed.
+
+        The maintainer is the ground truth for what mattered in this change, not
+        for how a review should read. Do not reward matching their tone, structure
+        or length - only whether the same substance is there.
+
+        Answer each with a quote from <Output>, or NONE.
+
+        1. It raises a concern the maintainer raised, OR another specific defect in
+           this change of comparable seriousness. Specific means a reader could go
+           and confirm it against the code; a general call for more tests, more
+           error handling or more documentation is NONE. Where the maintainer
+           raised nothing blocking, a review that raises no defect satisfies this.
+        2. It reasons about code the diff does not show - a caller, an adjacent
+           function, an existing test, an invariant elsewhere - rather than only
+           about the lines in the hunks.
+        3. Its verdict matches <MaintainerVerdict>. Google's standard for code
+           review is that a reviewer approves once the change definitely improves
+           overall code health even if it is not perfect, and withholds approval
+           only for something that must change first. Blocking a change the
+           maintainer approved is wrong, and approving one they blocked is wrong.
+
+        Score from 0 to 1, never above 1: 0.5 for the first, 0.25 for the second,
+        0.25 for the third. Award nothing for an item you cannot quote for.
+        Brevity is never a deduction. State the arithmetic.
+      threshold: 0.5
+      metric: review_quality
+
+- description: "caddy#7898 - caddyconfig: Register nested named-route invok"
+  vars:
+    fixture: caddy-7898
+    title: "caddyconfig: Register nested named-route invokes transitively"
+    verdict: "CHANGES_REQUESTED"
+    expected: "The implementation seems reasonable but this needs adapter regression coverage before merge with direct nesting, multiple transitive levels, an undefined nested target and a cycle. The tests should demonstrate the original missing-route failure and confirm that cycles terminate without dropping required routes."
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "caddy#7858 - caddyhttp: fix path_regexp (MatchPathRE) Windo"
+  vars:
+    fixture: caddy-7858
+    title: "caddyhttp: fix path_regexp (MatchPathRE) Windows backslash bypass"
+    verdict: "CHANGES_REQUESTED"
+    expected: "I think this still needs one more pass before merge. The same Windows normalisation should probably be shared by `path` and `path_regexp` and it should handle trailing dots/spaces per path component, not only at the end of the whole path. Could you also add the required AI disclosure to your PR body."
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "caddy#7807 - reverseproxy: validate on weighted_round_robin"
+  vars:
+    fixture: caddy-7807
+    title: "reverseproxy: validate on weighted_round_robin loadbalancing policy"
+    verdict: "CHANGES_REQUESTED"
+    expected: "One remaining JSON-config gap is that Caddyfile parsing rejects negative weights but direct JSON config can still set them because `Validate()` only checks `totalWeight == 0`. Since this is now the module-level validation path, it should also reject any weight `< 0` while still allowing `0` when at least one other weight is positive."
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "caddy#7782 - caddyhttp: add {http.request.proto_name} place"
+  vars:
+    fixture: caddy-7782
+    title: "caddyhttp: add {http.request.proto_name} placeholder for spec-compliant protocol names"
+    verdict: "CHANGES_REQUESTED"
+    expected: "I think this should also update the placeholder table in `modules/caddyhttp/app.go` since the original issue was at least a documentation gap. Please document both placeholders there `{http.request.proto}` as Go\u2019s raw `http.Request.Proto` value which may be `HTTP/2.0` or `HTTP/3.0` and `{http.request.proto_name}` as the spec-style protocol name."
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "cli#14136 - Add worktree checkout to `gh issue develop`"
+  vars:
+    fixture: cli-14136
+    title: "Add worktree checkout to `gh issue develop`"
+    verdict: "CHANGES_REQUESTED"
+    expected: "Thanks for putting this together, @sergiou87! :pray: Heads up that I haven't gone through the tests yet. I suspect the implementation will shift based on the points below, and the tests will follow, so I'll hold off reviewing them until things settle. A few things I'd like us to address: - **Replicate the worktree safety checks from `pr checkout`:** The symlink and other target safety validations that `pr checkout` performs (rejecting leaf symlinks, non-directory targets, paths inside a different repository, paths inside an existing worktree, etc.) aren't present here. We should replicate them. Rather than duplicating, I think we should extract that logic from `pr checkout` into a shared package, probably `pkg/cmd/pr/shared`, since there's already precedent for sharing logic between PRs and issues there. @tidy-dev did a great job in `pr checkout` for worktrees covering various use cases and security related concerns. I think the big lift here is to just extract them into the shared package and happily reuse them here. - **Match `pr checkout`'s worktree reuse behavior:** I think users will expect `issue develop` and `pr checkout` to behave the same way around worktrees, in particular the existing worktree reuse behavior that `pr checkout` provides. That's another reason to pull the `pr checkout` internals into a shared place so both commands stay consistent. - **Add acceptance t"
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "cli#14178 - `--attach` stack 2/8: Describe and validate a "
+  vars:
+    fixture: cli-14178
+    title: "`--attach` stack 2/8: Describe and validate a file `gh` can attach"
+    verdict: "CHANGES_REQUESTED"
+    expected: "Thanks for putting this together! :pray: Nice, careful work here, especially the validation coverage and the attention to alt-text escaping. I left a handful of inline notes. Most are nitpicks, but two are worth a proper look: - The `UserAsset` abstraction leaks some mechanical/construction concerns (`file()` returning itself, `sizeLimit()` on the interface). I sketched a reshape that keeps `asset` as pure data and moves the accessors onto the concrete types. - Symlink handling: `os.Stat` follows links today, so a symlink to a regular file slips through. Switching to `os.Lstat` closes that. I also floated an idea around hardening the alt-text escaping with a compose-and-verify parse. Not blocking, just something to consider. Nothing here is a hard blocker, happy to talk through any of it."
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "rclone#9714 - vfs: fix VFS instance leaks on mount/serve fai"
+  vars:
+    fixture: rclone-9714
+    title: "vfs: fix VFS instance leaks on mount/serve failures and shutdown"
+    verdict: "CHANGES_REQUESTED"
+    expected: "Thank you for coming back to this with the decentralized approach - this is much closer to what I had in mind than #9473, and the mountlib part with the `sync.Once` guarded `shutdownVFS()` is great :-) However I found some correctness problems in the serve half, and I think there is a neater way of implementing it which would remove most of the repetition. 1. The proxy cache finalizer will shut down VFSes still in use `libcache` entries expire after 5 minutes of disuse and `cacheExpire` calls the finalizer. Nothing pins the proxy cache entries, and sftp/ftp call `proxy.Call` once at auth then hold the returned VFS for the whole session. So an sftp session which is idle for more than 5 minutes will have its VFS shut down underneath it - we've traded a leak for a use-after-shutdown, which is worse! This is OK for http/webdav/s3 (every request goes through `Call`/`Get` which refreshes the timer), but sftp/ftp would need to `Pin` the cache entry when the connection opens and `Unpin` it when it closes. That's the correct fix here I think, though it does make the change bigger. 2. Double shutdown in serve/nfs `VFS.Shutdown()` is a refcount decrement, and VFS instances are shared via the active cache (`vfs.New` reuses an existing VFS for the same fs + options), so decrementing twice can kill a VFS out from under another user. The rule needs to be: whoever calls `vfs.New` calls `Shutdo"
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "caddy#7920 - caddyhttp: shield specific hostnames from a co"
+  vars:
+    fixture: caddy-7920
+    title: "caddyhttp: shield specific hostnames from a covering wildcard's client auth"
+    verdict: "APPROVED"
+    expected: "Change itself LGTM. Separately, while I am thankful for your PRs recently; in the future respond to review comments in your own words rather than passing them directly through an AI. I need to know that the contributor understands the code and can discuss the reasoning behind it. The assistance disclosure **must** be truthful as well."
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "caddy#7780 - httpcaddyfile: fix incorrect error message on "
+  vars:
+    fixture: caddy-7780
+    title: "httpcaddyfile: fix incorrect error message on duplicate matchers"
+    verdict: "APPROVED"
+    expected: "Looks good to me now. This keeps the fix at the matcher extraction layer and lets the existing duplicate definition check handle the error naturally. Verified the repeated-import shape from #7774 now reports `matcher is defined more than once: @html_br`. Nice to see some more human interaction in our PRs \ud83d\ude0a"
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "caddy#7727 - caddytls: Fix client auth (fix #7724)"
+  vars:
+    fixture: caddy-7727
+    title: "caddytls: Fix client auth (fix #7724)"
+    verdict: "APPROVED"
+    expected: "Approved. I verified this with a direct red/green regression test against the `LeafCertClientAuth` path; current master fails with `no client certificate provided` while this PR passes the same test because it restores passing raw peer cert bytes from `tls.ConnectionState.PeerCertificates` into the configured `ClientCertificateVerifier`. *issue was behaviour drift introduced by 1fbb28720b5d20d54074593b3c5d12f3549f371b*"
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "cli#14261 - Document attachment support in `gh` skill"
+  vars:
+    fixture: cli-14261
+    title: "Document attachment support in `gh` skill"
+    verdict: "APPROVED"
+    expected: "Thanks for capping off the stack with the docs, @bagtoad! :books: The attachment section reads clearly and covers the important edges: supported file types, alt text syntax and shell quoting, the reference-rewrite versus append behavior, the video limitations, the per-command conflicts, and the partial-upload exit semantics. Nice and thorough. I left one small suggestion: it would help to spell out that the filesystem paths in the body markdown and in `--attach` resolve either as absolute paths or relative to the directory where `gh` runs. Non-blocking. Nice work landing the whole stack! :tada:"
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "cli#14191 - Adapt spinner output for invoking agents"
+  vars:
+    fixture: cli-14191
+    title: "Adapt spinner output for invoking agents"
+    verdict: "APPROVED"
+    expected: "Thanks for tackling this, @niik! :sparkles: Really nice, focused change. Collapsing agent detection down to a single `Detect()` call at startup and threading that one value through IOStreams, telemetry, and the factory is a clean improvement over the previous repeated detection. The spinner precedence (env override, then detected agent, then config) reads well, and I appreciate the acceptance test covering the full startup path. I only have a couple of minor comments inline, nothing blocking."
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "cli#14244 - Reject non-empty worktree targets before branc"
+  vars:
+    fixture: cli-14244
+    title: "Reject non-empty worktree targets before branch creation"
+    verdict: "APPROVED"
+    expected: "Thanks for the thorough follow-up here, @tidy-dev! :pray: The fix looks solid. Putting the emptiness check in the shared `ResolveWorktreeTarget` keeps `issue develop` and `pr checkout` consistent, and gating it on `!reuse` correctly leaves existing linked worktrees reusable. Verifying that validation runs before `CreateLinkedBranch` (so no orphan linked branch is left behind) is exactly the right thing to prove, and the unit test that registers no branch mutation nails it. The only thing I felt was missing is acceptance coverage for the non-empty target case. I'm going to push a couple of acceptance tests for that shortly (one under `issue develop`, one under `pr checkout`), so no action needed on your end there. Once those land I think this is good to go. :rocket:"
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "rclone#9786 - yandex: fix truncated files being uploaded suc"
+  vars:
+    fixture: rclone-9786
+    title: "yandex: fix truncated files being uploaded successfully when the source ends early"
+    verdict: "APPROVED"
+    expected: "Nice fix - thank you. The FsPutShortEOF integration test against a real Yandex remote and the fix behaves exactly as intended: the upload now fails with \"expected 10240 bytes in input, but got 5120: unexpected EOF\" instead of succeeding"
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
+
+- description: "rclone#9785 - box: fix truncated files being uploaded succes"
+  vars:
+    fixture: rclone-9785
+    title: "box: fix truncated files being uploaded successfully when the source ends early"
+    verdict: "APPROVED"
+    expected: "Thank you, nice fix. I checked the integration tests === RUN TestIntegration/FsMkdir/FsPutShortEOF/Simple fstests.go:2596: Put returned an error (acceptable): expected 10240 bytes in input, but got 5120: unexpected EOF :+1:"
+  assert:
+    - type: javascript
+      value: file://assertions/review.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *review_quality
