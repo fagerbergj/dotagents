@@ -109,6 +109,11 @@ defaultTest:
         The restraint the reader is entitled to, specifically: {{rubric}}
       threshold: 0.7
       metric: readability
+      rubricPrompt:
+        - role: system
+          content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else: {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
+        - role: user
+          content: "<Original>\n{{document}}\n</Original>\n<Delivered>\n{{output}}\n</Delivered>\n<Rubric>\n{{rubric}}\n</Rubric>"
 
 tests:
   - file://tests/*.yaml
