@@ -1,0 +1,1319 @@
+# Real code, comments stripped, plus what the author knows that the file does
+# not say. The ask never names a comment category or a rule: deciding what
+# deserves a comment, and what deserves none, is what is being graded.
+#
+# Each ask carries 2-4 specific, load-bearing facts, and the case's fact_transfer
+# rubric enumerates exactly those. Grading fact transfer rather than the "state
+# why" principle keeps the judge independent of the skill under test and computes
+# against this case's own input.
+#
+# The last five cases are negative controls - plain code where the right answer
+# is few or no comments, and where over-commenting is the failure. Knowing when
+# not to comment is where this skill's value most shows, so the controls carry
+# cases rather than losing them: two of them offer one assumption the types do
+# not carry and nothing else, the rest are self-evident throughout. None of them
+# has a second defensible answer - restraint scores adding nothing and adding
+# only an assumption-carrying comment the same, so both correct answers pass.
+
+- description: go constraint - retry policy and backoff budget
+  vars:
+    lang: go
+    ask: |
+      Can you comment this up before I push it back? Got a review saying "why is
+      POST treated differently, looks like a bug". It isn't. A POST that times out
+      mid-flight may already have been processed server-side, so we only send it
+      again when the connection provably never landed - WithIdempotent is the
+      escape hatch for calls where a repeat is harmless, like regenerating a model
+      completion. The 4 attempts and the 200ms/5s pair are there so a dead upstream
+      gives up after about a second instead of grinding away for minutes.
+    code: |
+      package httpx
+
+      import (
+      	"context"
+      	"errors"
+      	"net"
+      	"net/http"
+      	"strconv"
+      	"time"
+      )
+
+      const (
+      	DefaultMaxAttempts = uint(4)
+      	DefaultBaseDelay   = 200 * time.Millisecond
+      	DefaultMaxDelay    = 5 * time.Second
+      )
+
+      type idempotencyKey struct{}
+
+      func WithIdempotent(ctx context.Context) context.Context {
+      	return context.WithValue(ctx, idempotencyKey{}, true)
+      }
+
+      func isIdempotent(ctx context.Context) bool {
+      	v, _ := ctx.Value(idempotencyKey{}).(bool)
+      	return v
+      }
+
+      type transport struct {
+      	next        http.RoundTripper
+      	maxAttempts uint
+      	baseDelay   time.Duration
+      	maxDelay    time.Duration
+      }
+
+      func (t *transport) shouldRetry(req *http.Request, resp *http.Response, err error) bool {
+      	free := req.Method == http.MethodGet || req.Method == http.MethodHead || isIdempotent(req.Context())
+      	if err != nil {
+      		var netErr net.Error
+      		if errors.As(err, &netErr) && netErr.Timeout() {
+      			return free
+      		}
+      		var opErr *net.OpError
+      		if errors.As(err, &opErr) && !opErr.Temporary() {
+      			return true
+      		}
+      		return free
+      	}
+      	if resp == nil {
+      		return false
+      	}
+      	if resp.StatusCode == http.StatusTooManyRequests {
+      		return free
+      	}
+      	return free && resp.StatusCode >= 500
+      }
+
+      func retryAfter(resp *http.Response) (time.Duration, bool) {
+      	if resp == nil {
+      		return 0, false
+      	}
+      	v := resp.Header.Get("Retry-After")
+      	if v == "" {
+      		return 0, false
+      	}
+      	if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
+      		return time.Duration(secs) * time.Second, true
+      	}
+      	if at, err := http.ParseTime(v); err == nil {
+      		return time.Until(at), true
+      	}
+      	return 0, false
+      }
+  assert:
+    # not_narration, enumerate-and-divide. The three-band holistic version had the
+    # worst per-cell spread in the suite (0.568 over five identical runs) even at
+    # n=11, cells wandering [0, 0.5, 0, 1, 0.5] between runs. A false claim is
+    # counted as an F term instead of capping the row: a cap is a binary switch
+    # bolted onto a graded scale. Anchored here and aliased by the eight other
+    # cases that hide something. The negative controls do not carry it - scoring
+    # (K - F) / N would score a reply that correctly adds nothing at 0, so those
+    # are graded by restraint instead.
+    - &not_narration
+      type: llm-rubric
+      metric: not_narration
+      threshold: 0.6
+      value: |
+        Google's C++ style guide, under "Don'ts", says: "Do not state the obvious. In
+        particular, don't literally describe what code does, unless the behavior is
+        nonobvious to a reader who understands C++ well. Instead, provide higher-level
+        comments that describe why the code does what it does, or make the code
+        self-describing." It adds that "Self-describing code doesn't need a comment."
+        Pascarella and Bacchelli (MSR 2017) hand-classified comments in 2,000 Java files
+        and found summary comments outnumbering rationale comments by roughly twenty to
+        one, which is the failure this scores.
+
+        Judge only the comments the Reply added. Ignore where comments sit, their length,
+        their syntax, and their punctuation. Judge what they say.
+
+        List every comment the Reply added, quoting each verbatim and numbering them. Let N
+        be that count. For each numbered comment answer, in one line:
+          - the constraint, cause, contract, or consequence it states, quoted; or NARRATION
+            if a competent programmer in this language, reading only the identifiers and
+            statements it sits beside, would already know what it says; or FALSE if it makes
+            a claim that is not true of this code.
+        Answer for every comment before scoring. Do not group them.
+
+        Let K be the number answered with a quoted constraint, cause, contract, or
+        consequence. Let F be the number answered FALSE.
+
+        Score from 0 to 1, never above 1: (K - F) / N, floored at 0. If N is 0, score 0.
+        State N, K, F and the arithmetic in your reason.
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) a POST that times out may already have executed server-side, so it is retried
+              only when the request provably never reached the server; the asymmetry is
+              correctness, not a bug.
+          (b) WithIdempotent is a caller's opt-in for requests where a duplicate is harmless.
+          (c) the attempt count and the base/max delay pair bound total time against a dead
+              upstream to roughly a second rather than minutes.
+
+        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried.
+        Award nothing for a comment that only renames the code in English, such as restating
+        that GET, HEAD and idempotent requests are retried.
+
+        Ignore comment placement, length and syntax.
+
+
+- description: go workaround - span reparenting around an upstream context rebuild
+  vars:
+    lang: go
+    ask: |
+      Nobody remembers why this re-injects a span context instead of just using
+      the one on ctx, and someone already "simplified" it once and silently broke
+      our traces for a week. The ADK rebuilds the child context this callback runs
+      under, so oteltrace.SpanFromContext(ctx) hands back the no-op span and we
+      root a brand new disconnected trace. Coords carries the SpanContext we
+      captured before that rebuild. And no, StartLinked is not the fix - it forces
+      WithNewRoot and forks the trace anyway. Comment it so the next person leaves
+      it alone.
+    code: |
+      package agent
+
+      import (
+      	"go.opentelemetry.io/otel/attribute"
+      	oteltrace "go.opentelemetry.io/otel/trace"
+      	adkagent "google.golang.org/adk/v2/agent"
+
+      	"github.com/fagerbergj/quack/internal/ledger"
+      	"github.com/fagerbergj/quack/internal/otelobs"
+      	"github.com/fagerbergj/quack/internal/stream"
+      )
+
+      func emitCompaction(ctx adkagent.Context, before, after int) {
+      	coords := ledger.CoordsFromContext(ctx)
+      	parentCtx := oteltrace.ContextWithSpanContext(ctx, coords.SpanContext)
+      	_, span := otelobs.Start(parentCtx, "compaction",
+      		attribute.String("node_id", coords.Node),
+      		attribute.String("run_id", coords.Round),
+      		attribute.Bool(otelobs.GenAIConversationCompacted, true))
+      	span.End()
+
+      	sink, ok := stream.YieldFromContext(ctx)
+      	if !ok {
+      		return
+      	}
+      	sink(stream.Compaction(coords.Node, coords.Round, int32(before), int32(after)))
+      }
+  assert:
+    - *not_narration
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the ADK rebuilds the context this callback runs under, so SpanFromContext on ctx
+              returns a no-op span and starting from ctx would root a new disconnected trace.
+          (b) Coords carries the SpanContext captured before that rebuild, which is why the
+              span context is re-injected rather than taken from ctx.
+          (c) StartLinked is not the fix - it forces WithNewRoot and forks the trace anyway.
+
+        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. Fact (c) counts only if
+        the Reply names the alternative explicitly; a general "do not simplify this" warning
+        does not count.
+
+        Ignore comment placement, length and syntax.
+
+
+- description: go security - credential redaction before anything is persisted
+  vars:
+    lang: go
+    ask: |
+      This one guards the ledger - anything that gets past it lands in a file we
+      keep for months and ship to support. Two things people keep trying to
+      "clean up": the string branch re-parses values as JSON because half our
+      upstreams hand us a pre-marshalled blob and the keys would otherwise sail
+      straight through, and the key set is matched lowercased because header
+      casing is whatever the sender felt like that day. Comment it before I open
+      the PR.
+    code: |
+      package ledger
+
+      import (
+      	"encoding/json"
+      	"strings"
+      )
+
+      var redactedKeys = map[string]bool{
+      	"authorization": true, "www-authenticate": true, "proxy-authorization": true,
+      	"api_key": true, "apikey": true, "api-key": true, "x-api-key": true,
+      	"token": true, "access_token": true, "refresh_token": true, "id_token": true,
+      	"secret": true, "client_secret": true, "webhook_secret": true,
+      	"password": true, "passwd": true,
+      	"private_key": true, "privatekey": true,
+      	"cookie": true, "set-cookie": true,
+      }
+
+      const redactedValue = "[REDACTED]"
+
+      func Redact(v any) any {
+      	switch x := v.(type) {
+      	case map[string]any:
+      		out := make(map[string]any, len(x))
+      		for k, val := range x {
+      			if redactedKeys[strings.ToLower(k)] {
+      				out[k] = redactedValue
+      				continue
+      			}
+      			out[k] = Redact(val)
+      		}
+      		return out
+      	case []any:
+      		out := make([]any, len(x))
+      		for i, e := range x {
+      			out[i] = Redact(e)
+      		}
+      		return out
+      	case string:
+      		return redactJSONString(x)
+      	default:
+      		return v
+      	}
+      }
+
+      func redactJSONString(s string) string {
+      	var decoded any
+      	if err := json.Unmarshal([]byte(s), &decoded); err != nil {
+      		return s
+      	}
+      	switch decoded.(type) {
+      	case map[string]any, []any:
+      	default:
+      		return s
+      	}
+      	b, err := json.Marshal(Redact(decoded))
+      	if err != nil {
+      		return s
+      	}
+      	return string(b)
+      }
+  assert:
+    - *not_narration
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the string branch re-parses values as JSON because some upstreams hand over a
+              pre-marshalled blob whose keys would otherwise pass through unredacted.
+          (b) keys are matched lowercased because header casing is not controlled by this code.
+          (c) anything that gets past this is persisted for months and shipped to support, so a
+              miss is a durable disclosure.
+
+        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A comment that merely
+        labels the key set "sensitive keys" or the function "redacts secrets" carries none of
+        them.
+
+        Ignore comment placement, length and syntax.
+
+
+- description: go performance - the ugly cap ladder that keeps a request under budget
+  vars:
+    lang: go
+    ask: |
+      I know this looks like something written at 2am, and it sort of was. The
+      three-pass cap ladder is deliberate: one pass at 500 chars shreds tool
+      results that would have fit fine at 8k, so we squeeze in stages and stop as
+      soon as we're under. The char-per-token divisor of 4 and the 1.3 calibration
+      ratio came out of comparing our estimate against what the provider actually
+      billed us. Can you put some comments on it so the next reader doesn't
+      "simplify" it into a single pass?
+    code: |
+      package agent
+
+      import (
+      	"log/slog"
+
+      	adkagent "google.golang.org/adk/v2/agent"
+      	"google.golang.org/adk/v2/model"
+      	"google.golang.org/genai"
+      )
+
+      const (
+      	charsPerToken           = 4
+      	toolOutputMaxChars      = 2_000
+      	minPreserveTokens       = 2_000
+      	defaultCalibrationRatio = 1.3
+      )
+
+      func backstop(ctx adkagent.Context, req *model.LLMRequest, threshold int) {
+      	if len(req.Contents) == 0 {
+      		return
+      	}
+      	ratio := defaultCalibrationRatio
+      	overhead := intState(ctx, overheadKey)
+
+      	if head := calibrated(estimateTokens(req.Contents[:1]), ratio, overhead); head > threshold {
+      		if truncateHeadToFit(req.Contents, threshold, ratio) {
+      			slog.Warn("compaction truncated an oversized prompt as a last resort",
+      				"component", "agent", "threshold", threshold, "head_tokens", head)
+      		}
+      	}
+      	for _, cap := range []int{8_000, toolOutputMaxChars, 500} {
+      		if calibrated(estimateTokens(req.Contents), ratio, overhead) <= threshold {
+      			break
+      		}
+      		if n := clampToolResults(req.Contents[1:], cap); n > 0 {
+      			slog.Warn("compaction clamped oversized tool results",
+      				"component", "agent", "clamped", n, "cap_chars", cap)
+      		}
+      	}
+      	if got := calibrated(estimateTokens(req.Contents), ratio, overhead); got > threshold {
+      		slog.Warn("compaction could not bring request under budget; overflow likely",
+      			"component", "agent", "calibrated_tokens", got, "threshold", threshold)
+      	}
+      }
+
+      func truncateHeadToFit(contents []*genai.Content, budget int, ratio float64) bool {
+      	if len(contents) == 0 || contents[0] == nil {
+      		return false
+      	}
+      	headBudgetEst := int(float64(budget)/ratio) - estimateTokens(contents[1:])
+      	if headBudgetEst < minPreserveTokens {
+      		headBudgetEst = minPreserveTokens
+      	}
+      	headMaxChars := headBudgetEst * charsPerToken
+      	if contentBytes(contents[0]) <= headMaxChars {
+      		return false
+      	}
+      	contents[0] = truncateContentMiddle(contents[0], headMaxChars)
+      	return true
+      }
+  assert:
+    - *not_narration
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the staged cap ladder is deliberate - a single pass at the smallest cap would
+              shred tool results that would have fit under a larger cap, so it stops as soon as
+              the request is under budget.
+          (b) the chars-per-token divisor is an estimate, not an exact conversion.
+          (c) the calibration ratio was derived by comparing the local estimate against what the
+              provider actually billed.
+
+        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A comment saying the loop
+        "tries progressively smaller caps" carries none of them.
+
+        Ignore comment placement, length and syntax.
+
+
+- description: go public API - godoc contract on an encode/decode pair
+  vars:
+    lang: go
+    ask: |
+      This package is the bit three other packages import, and I keep getting
+      asked the same questions in review, so I want it written down next to the
+      code. Things worth knowing: the scheme is chosen so it can never collide
+      with a real FileData part (gs://, https://), Decode returns ok=false for
+      anything that isn't ours rather than erroring, and callers must not assume
+      the revision still exists in the artifact store by the time they resolve it.
+      Comment it for me.
+    code: |
+      package artifactref
+
+      import (
+      	"net/url"
+      	"strconv"
+      	"strings"
+
+      	"google.golang.org/genai"
+      )
+
+      const AppName = "quack"
+
+      const Scheme = "quack-artifact"
+
+      func Encode(userID, sessionID, name string, revision int64, mimeType string) *genai.Part {
+      	u := url.URL{
+      		Scheme: Scheme,
+      		Path:   "/" + url.PathEscape(userID) + "/" + url.PathEscape(sessionID) + "/" + url.PathEscape(name),
+      	}
+      	q := url.Values{}
+      	q.Set("v", strconv.FormatInt(revision, 10))
+      	u.RawQuery = q.Encode()
+      	return &genai.Part{FileData: &genai.FileData{FileURI: u.String(), MIMEType: mimeType}}
+      }
+
+      func Decode(p *genai.Part) (userID, sessionID, name string, revision int64, ok bool) {
+      	if p == nil || p.FileData == nil || p.FileData.FileURI == "" {
+      		return "", "", "", 0, false
+      	}
+      	u, err := url.Parse(p.FileData.FileURI)
+      	if err != nil || u.Scheme != Scheme {
+      		return "", "", "", 0, false
+      	}
+      	segs := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
+      	if len(segs) != 3 {
+      		return "", "", "", 0, false
+      	}
+      	uid, err1 := url.PathUnescape(segs[0])
+      	sid, err2 := url.PathUnescape(segs[1])
+      	nm, err3 := url.PathUnescape(segs[2])
+      	if err1 != nil || err2 != nil || err3 != nil || uid == "" || sid == "" || nm == "" {
+      		return "", "", "", 0, false
+      	}
+      	rev, err := strconv.ParseInt(u.Query().Get("v"), 10, 64)
+      	if err != nil {
+      		return "", "", "", 0, false
+      	}
+      	return uid, sid, nm, rev, true
+      }
+  assert:
+    - *not_narration
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the URI scheme is chosen so it can never collide with a real FileData part such as
+              a gs:// or https:// URI.
+          (b) Decode reports ok=false for any part that is not one of ours rather than returning
+              an error - a false result is a normal outcome, not a failure.
+          (c) a successful Decode does not mean the revision still exists in the artifact store,
+              so callers must not assume it is resolvable.
+
+        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A doc comment that only
+        restates the signature carries none of them.
+
+        Ignore comment placement, length and syntax.
+        Also ignore whether the comment opens with the identifier name.
+    # Placement only, and a conformance floor rather than a discriminator: go doc and
+    # pkgsite drop a comment that is not immediately above the declaration, so the
+    # rendered artifact differs. The name-prefix half is gone - it patterns over the
+    # comment's prose and is the skill's own instruction.
+    - type: regex
+      value: '(?:^|\n)(?://[^\n]*\n)+func Encode\('
+      metric: doc_placement_floor
+    - type: regex
+      value: '(?:^|\n)(?://[^\n]*\n)+func Decode\('
+      metric: doc_placement_floor
+
+
+- description: typescript public API - exported router helpers other pages call
+  vars:
+    lang: ts
+    ask: |
+      Handing this module to the extensions team tomorrow and they'll be calling
+      it without reading the body. Stuff they'll trip on: navigate() keeps the
+      current query string when the path has no '?' of its own, which is what
+      stops a chat switch from dropping the sidebar's filters; the route matches
+      are anchored to a whole segment on purpose, because startsWith('/memory')
+      also matches /memory-export; and the hooks re-render on popstate, so they
+      only work inside a component. Comment it up for them.
+    code: |
+      import { useState, useEffect } from 'react'
+
+      export type Route = 'chat' | 'memory' | 'ext'
+
+      function readChatId(): string | undefined {
+        const m = window.location.pathname.match(/^\/chat\/([^/]+)/)
+        return m ? decodeURIComponent(m[1]) : undefined
+      }
+
+      export function navigate(path: string, opts?: { replace?: boolean }) {
+        const full = path.includes('?') ? path : path + window.location.search
+        if (opts?.replace) window.history.replaceState(null, '', full)
+        else window.history.pushState(null, '', full)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      }
+
+      export function routeFor(pathname: string): Route {
+        if (/^\/ext(\/|$)/.test(pathname)) return 'ext'
+        return /^\/memory(\/|$)/.test(pathname) ? 'memory' : 'chat'
+      }
+
+      export function useChatId(): string | undefined {
+        const [chatId, setChatId] = useState(readChatId)
+        useEffect(() => {
+          const onPop = () => setChatId(readChatId())
+          window.addEventListener('popstate', onPop)
+          return () => window.removeEventListener('popstate', onPop)
+        }, [])
+        return chatId
+      }
+
+      export function useSearch(): string {
+        const [search, setSearch] = useState(() => window.location.search)
+        useEffect(() => {
+          const onPop = () => setSearch(window.location.search)
+          window.addEventListener('popstate', onPop)
+          return () => window.removeEventListener('popstate', onPop)
+        }, [])
+        return search
+      }
+  assert:
+    - *not_narration
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) navigate carries the current query string forward when the path has no '?' of its
+              own, which is what stops a chat switch from dropping the sidebar's filters.
+          (b) the route patterns are anchored to a whole path segment on purpose, because a
+              prefix match would also claim sibling paths such as /memory-export.
+          (c) the hooks re-render on popstate, so they only work inside a React component and
+              cannot be called from plain module code.
+
+        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A comment that restates
+        the TypeScript signature, or says a hook "subscribes to popstate", carries none.
+
+        Ignore comment placement, length and syntax.
+        Ignore whether JSDoc block syntax was used.
+
+
+- description: python public API - client method with a clamp and an error contract
+  vars:
+    lang: python
+    ask: |
+      This is the only thing outside the package that other teams import, and I'd
+      rather write it down once than answer it in Slack again. What they need:
+      limit is clamped at 100 because the server silently clamps it anyway and
+      then the page you get back doesn't match the number you asked for; a 429 is
+      retried twice with whatever Retry-After says and everything else raises
+      requests.HTTPError; an empty result is an empty page, not an exception; and
+      iter_all holds a cursor, so it is not safe to share one across threads.
+      Comment it before I tag the release.
+    code: |
+      from dataclasses import dataclass
+      from typing import Any, Iterator, Optional
+      import time
+      import warnings
+
+      import requests
+
+
+      @dataclass
+      class Page:
+          items: list[dict[str, Any]]
+          cursor: Optional[str]
+
+
+      class MemoryClient:
+          def __init__(self, base_url: str, token: str, session: Optional[requests.Session] = None):
+              self.base_url = base_url.rstrip("/")
+              self.token = token
+              self.session = session or requests.Session()
+
+          def search(self, query: str, bucket: Optional[str] = None, limit: int = 20, cursor: Optional[str] = None, page_size: Optional[int] = None) -> Page:
+              if page_size is not None:
+                  warnings.warn("page_size is deprecated, use limit", DeprecationWarning, stacklevel=2)
+                  limit = page_size
+              params: dict[str, Any] = {"q": query, "limit": min(limit, 100)}
+              if bucket:
+                  params["bucket"] = bucket
+              if cursor:
+                  params["cursor"] = cursor
+              for attempt in range(3):
+                  response = self.session.get(
+                      f"{self.base_url}/v1/memory/search",
+                      params=params,
+                      headers={"Authorization": f"Bearer {self.token}"},
+                      timeout=10,
+                  )
+                  if response.status_code == 429 and attempt < 2:
+                      time.sleep(float(response.headers.get("Retry-After", 1)))
+                      continue
+                  response.raise_for_status()
+                  break
+              body = response.json()
+              return Page(items=body["items"], cursor=body.get("next_cursor"))
+
+          def iter_all(self, query: str, **kwargs: Any) -> Iterator[dict[str, Any]]:
+              cursor = None
+              while True:
+                  page = self.search(query, cursor=cursor, **kwargs)
+                  yield from page.items
+                  if not page.cursor:
+                      return
+                  cursor = page.cursor
+  assert:
+    - *not_narration
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        PEP 257: "The docstring for a function or method should summarize its behavior and
+        document its arguments, return value(s), side effects, exceptions raised, and
+        restrictions on when it can be called (all if applicable)." It is a should, and the
+        parenthetical is the source's own - a fact that does not apply to this code is not
+        owed a line.
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) limit is capped at 100 because the server clamps it silently, so an uncapped
+              request returns a page that does not match the number asked for.
+          (b) a 429 is retried twice honouring Retry-After, and every other failing status
+              raises requests.HTTPError to the caller.
+          (c) an empty result is an empty page, not an exception.
+          (d) iter_all holds a cursor across yields, so a single iterator is not safe to share
+              across threads.
+
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. Ignore summary-line
+        formatting and which docstring style was used.
+
+        Ignore comment placement, length and syntax.
+    # Placement only, and a conformance floor: only the first statement string in a
+    # def becomes __doc__, so a docstring elsewhere is not one.
+    # Decided by Python's own parser: only the first statement string becomes
+    # __doc__. A regex cannot do this - `def search(` spans seven lines here, so
+    # any `def name\([^\n]*` form never reaches the quotes and fails regardless
+    # of what the model wrote. It scored 0.00 in both arms for that reason.
+    - type: javascript
+      value: file://assertions/comment.cjs:docstringOnFunctions
+      config: { functions: [search, iter_all] }
+      metric: doc_placement_floor
+
+
+- description: java security plus deferred work - webhook signature check
+  vars:
+    lang: java
+    ask: |
+      Last thing before this goes out: verify() is all that stands between a
+      forged payload and a dispatched run, and callers have to hand it the raw
+      body bytes - if anyone re-serialises the JSON first the digest won't match
+      and they'll waste a day on it. Also, that .equals() is not constant time and
+      leaks a timing signal; we can't move to MessageDigest.isEqual until the
+      platform crypto upgrade lands, which is PLAT-4417 on Priya's board. I don't
+      want either of those to be tribal knowledge, so please comment it.
+    code: |
+      package com.quack.webhooks;
+
+      import java.nio.charset.StandardCharsets;
+      import java.security.GeneralSecurityException;
+      import java.util.HexFormat;
+
+      import javax.crypto.Mac;
+      import javax.crypto.spec.SecretKeySpec;
+
+      public final class WebhookVerifier {
+
+          private static final String ALGORITHM = "HmacSHA256";
+          private static final String PREFIX = "sha256=";
+
+          private final byte[] secret;
+
+          public WebhookVerifier(String secret) {
+              this.secret = secret.getBytes(StandardCharsets.UTF_8);
+          }
+
+          @Deprecated
+          public boolean verify(String body, String signatureHeader) {
+              return verify(body.getBytes(StandardCharsets.UTF_8), signatureHeader);
+          }
+
+          public boolean verify(byte[] rawBody, String signatureHeader) {
+              if (signatureHeader == null || !signatureHeader.startsWith(PREFIX)) {
+                  return false;
+              }
+              String provided = signatureHeader.substring(PREFIX.length());
+              return sign(rawBody).equals(provided);
+          }
+
+          private String sign(byte[] body) {
+              try {
+                  Mac mac = Mac.getInstance(ALGORITHM);
+                  mac.init(new SecretKeySpec(secret, ALGORITHM));
+                  return HexFormat.of().formatHex(mac.doFinal(body));
+              } catch (GeneralSecurityException e) {
+                  throw new IllegalStateException("HMAC unavailable: " + ALGORITHM, e);
+              }
+          }
+      }
+  assert:
+    - *not_narration
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the byte[] overload requires the raw request body exactly as received -
+              re-serialising the JSON before calling changes the bytes and the digest will not
+              match.
+          (b) this check is the only thing between a forged payload and a dispatched run.
+          (c) the string comparison of computed and provided digests is not constant time and
+              leaks a timing signal.
+          (d) that comparison is deferred work, not an oversight - it is tracked as PLAT-4417
+              on Priya's board, and it can be removed once the platform crypto upgrade lands
+              and MessageDigest.isEqual becomes available. Naming the ticket or the owner is
+              one half; naming the condition that retires the deferral is the other. A comment
+              that only says the comparison should be fixed later carries neither half.
+
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A comment saying the
+        method "verifies the HMAC signature" carries none. Do not score any marker keyword, its
+        casing, its bracket style, or its position.
+
+        Ignore comment placement, length and syntax.
+
+
+- description: go invariant - a startup-only sweep callers must not run late
+  vars:
+    lang: go
+    ask: |
+      Two landmines in here I'd like written down. ScanOrphanedRuns is table-wide
+      with no per-chat liveness check, so it is only safe before the Hub has
+      registered any run - call it later and it stamps a chat that is very much
+      alive. And it deliberately leaves pending_question alone: the node row owns
+      that question now, and the last time we blanked the chat's copy we destroyed
+      resume state for everyone mid-run. Comment it up, I'm handing this off.
+    code: |
+      package store
+
+      import (
+      	"context"
+      	"log/slog"
+      	"time"
+      )
+
+      const (
+      	RunStatusIdle        = "idle"
+      	RunStatusFailed      = "failed"
+      	RunStatusInterrupted = "interrupted"
+      	RunStatusPaused      = "paused"
+      )
+
+      func (s *Store) ScanOrphanedRuns(ctx context.Context) (paused, interrupted []string, err error) {
+      	var chats []Chat
+      	if err := s.db.WithContext(ctx).
+      		Where("active_turn_id <> ? OR run_status IN ?", "", []string{RunStatusInterrupted, RunStatusPaused}).
+      		Find(&chats).Error; err != nil {
+      		return nil, nil, err
+      	}
+      	suspended, err := s.chatsWithPausedNodes(ctx)
+      	if err != nil {
+      		return nil, nil, err
+      	}
+      	for _, c := range chats {
+      		status := RunStatusInterrupted
+      		if suspended[c.ID] {
+      			status = RunStatusPaused
+      			paused = append(paused, c.ID)
+      		} else {
+      			interrupted = append(interrupted, c.ID)
+      		}
+      		if err := s.stampRunStatusKeepingQuestion(ctx, c.ID, status); err != nil {
+      			slog.Warn("scan orphaned runs: stamp failed", "component", "store", "chat", c.ID, "err", err)
+      		}
+      	}
+      	return paused, interrupted, nil
+      }
+
+      func (s *Store) stampRunStatusKeepingQuestion(ctx context.Context, chatID, status string) error {
+      	return s.db.WithContext(ctx).Model(&Chat{}).Where("id = ?", chatID).Updates(map[string]any{
+      		"run_status":     status,
+      		"active_turn_id": "",
+      		"updated_at":     time.Now().UTC(),
+      	}).Error
+      }
+
+      func (s *Store) chatsWithPausedNodes(ctx context.Context) (map[string]bool, error) {
+      	nodes, err := s.ListPausedDagNodes(ctx)
+      	if err != nil {
+      		return nil, err
+      	}
+      	out := map[string]bool{}
+      	for _, n := range nodes {
+      		var p DagPlan
+      		if e := s.db.WithContext(ctx).Where("id = ?", n.PlanID).First(&p).Error; e == nil {
+      			out[p.ChatID] = true
+      		}
+      	}
+      	return out, nil
+      }
+  assert:
+    - *not_narration
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the sweep is table-wide with no per-chat liveness check, so it is only safe to
+              call before any run has been registered; calling it later stamps a chat that is
+              still running.
+          (b) pending_question is deliberately left untouched because the node row owns that
+              question, and blanking the chat's copy destroyed resume state for in-flight runs.
+
+        Score from 0 to 1, never above 1: award 0.5 per fact carried and 0.25 per fact half carried. Naming the helper "keeps
+        the question" in prose does not carry (b) - the reason and the consequence must both be
+        stated.
+
+        Ignore comment placement, length and syntax.
+    # Placement only, a conformance floor - see the note on case 5.
+    - type: regex
+      value: '(?:^|\n)(?://[^\n]*\n)+func \(s \*Store\) ScanOrphanedRuns\('
+      metric: doc_placement_floor
+
+
+- description: negative control - plain unexported Go list helpers
+  vars:
+    lang: go
+    ask: |
+      Housekeeping file I split out of the sidebar handler, going in the same PR.
+      Give it whatever comments you think it needs and send it back.
+    code: |
+      package chatlist
+
+      import (
+      	"sort"
+      	"strings"
+      )
+
+      type chat struct {
+      	ID        string
+      	Title     string
+      	Status    string
+      	UpdatedAt string
+      }
+
+      func title(c chat) string {
+      	if strings.TrimSpace(c.Title) == "" {
+      		return "Untitled chat"
+      	}
+      	return c.Title
+      }
+
+      func ids(chats []chat) []string {
+      	out := make([]string, 0, len(chats))
+      	for _, c := range chats {
+      		out = append(out, c.ID)
+      	}
+      	return out
+      }
+
+      func byID(chats []chat) map[string]chat {
+      	out := make(map[string]chat, len(chats))
+      	for _, c := range chats {
+      		out[c.ID] = c
+      	}
+      	return out
+      }
+
+      func withStatus(chats []chat, status string) []chat {
+      	var out []chat
+      	for _, c := range chats {
+      		if c.Status == status {
+      			out = append(out, c)
+      		}
+      	}
+      	return out
+      }
+
+      func sortByUpdated(chats []chat) {
+      	sort.Slice(chats, func(i, j int) bool {
+      		return chats[i].UpdatedAt > chats[j].UpdatedAt
+      	})
+      }
+  assert:
+    # restraint, enumerate-and-divide over a countable property of the input.
+    # comment_budget was merged in here: a javascript ceiling on the number of
+    # added comments and a rubric asking whether they earned their place are the
+    # same question from two directions, and both rode the same two cases. The
+    # three-band version this replaces measured 0.500 per-cell spread over five
+    # identical runs and behaved binomially; it also pinned the Go control at 0 in
+    # both arms across all five, because its "two or more restatements" band
+    # collapsed five narration comments and six to the same score. D is counted
+    # from the delivered file, so it is identical across arms and runs - not a
+    # magic number. Prompt echo is counted as OFF-TOPIC rather than capping the
+    # row: the baseline pasted the requester's own chat message into the source
+    # and scored 1.00 on the rubric this replaces.
+    # llm-rubric's stock user message is <Output>/<Rubric> only, so neither the
+    # request nor the pre-comment source file reached the judge: "text copied from
+    # the request" and "the comments the Reply added" were both unverifiable. The
+    # rubricPrompt puts them in front of it. Object/message-list shape is legal on
+    # an assertion but not under defaultTest.options.
+    - &restraint
+      type: llm-rubric
+      metric: restraint
+      threshold: 0.6
+      rubricPrompt:
+      - role: system
+        content: 'You grade a delivered file against a rubric. Reply with one line of JSON and nothing
+          else: {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
+      - role: user
+        content: "<Request>\n{{ask}}\n</Request>\n<SourceFile>\n{{code}}\n</SourceFile>\n<Output>\n{{output}}\n</Output>\n<Rubric>\n{{rubric}}\n</Rubric>"
+      value: |
+        The SourceFile above is this file as the requester sent it, before any comments; every comment in
+        the Reply is one the Reply added. The Request above is what they asked for.
+
+        Google's style guidance sets the default the other way and then names the exception:
+        "Almost every function declaration should have comments immediately preceding it
+        that describe what the function does and how to use it. These comments may be
+        omitted only if the function is simple and obvious (e.g., simple accessors for
+        obvious properties of the class). Private methods and functions declared in .cc
+        files are not exempt." Being unexported or private buys nothing here. What the same
+        guide does rule out is the comment that says nothing: "Do not state the obvious. In
+        particular, don't literally describe what code does", and "Self-describing code
+        doesn't need a comment." Judged against that pair, most of this file is simple and
+        obvious enough to fall under the exception and needs no comment at all - but that is
+        a judgement about these particular declarations, not a rule that private code goes
+        uncommented.
+
+        Count the top-level declarations in the delivered file - functions, methods, types,
+        exported constants. Call that D; state it.
+
+        List every comment the Reply added, quoting each verbatim. For each, answer one of:
+          - CARRIES: quote the assumption, constraint, or consequence it states that the
+            identifiers and statements beside it do not - for example that a timestamp field
+            is sorted as a string and so must be in a lexicographically ordered format.
+          - RESTATES: a competent programmer reading only the code beside it would already
+            know what it says.
+          - OFF-TOPIC: it is not about the code beside it - a reply to the requester, a note
+            about the task, or text copied from the request.
+        Judge only what the comment says - never its placement, length, syntax, or
+        punctuation. A fluent, accurate, well-phrased comment on self-evident code is
+        RESTATES, exactly as a clumsy one is; quality of writing is not a defence for a
+        comment that was not needed.
+
+        Let U be the number answered RESTATES or OFF-TOPIC.
+
+        Score from 0 to 1, never above 1: 1 - (U / D), floored at 0. Adding no comments at
+        all scores 1. State D, U and the arithmetic in your reason.
+
+
+- description: negative control - self-evident TypeScript view helpers
+  vars:
+    lang: ts
+    ask: |
+      Small one. Pulled these out of the chat list component so they can be unit
+      tested. Anything you'd add before I open the PR?
+    code: |
+      export type Status = 'queued' | 'running' | 'needs_input' | 'idle' | 'failed'
+
+      export interface ChatSummary {
+        id: string
+        title: string
+        status: Status
+        updated_at: string
+      }
+
+      const STATUS_LABELS: Record<Status, string> = {
+        queued: 'Queued',
+        running: 'Running',
+        needs_input: 'Needs input',
+        idle: 'Idle',
+        failed: 'Failed',
+      }
+
+      export function statusLabel(status: Status): string {
+        return STATUS_LABELS[status]
+      }
+
+      export function chatTitle(chat: ChatSummary): string {
+        return chat.title.trim() || 'Untitled chat'
+      }
+
+      export function matchesQuery(chat: ChatSummary, query: string): boolean {
+        const needle = query.trim().toLowerCase()
+        if (!needle) return true
+        return chatTitle(chat).toLowerCase().includes(needle)
+      }
+
+      export function countByStatus(chats: ChatSummary[]): Record<string, number> {
+        const counts: Record<string, number> = {}
+        for (const chat of chats) counts[chat.status] = (counts[chat.status] ?? 0) + 1
+        return counts
+      }
+
+      export function sortByUpdated(chats: ChatSummary[]): ChatSummary[] {
+        return [...chats].sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      }
+  assert:
+    - *restraint
+
+- description: negative control - unexported Go table-rendering helpers
+  vars:
+    lang: go
+    ask: |
+      Little table printer I pulled out of the status command so it can be tested
+      on its own. Comment pass before it goes in - what would you put in it?
+    code: |
+      package render
+
+      import "strings"
+
+      type column struct {
+      	header string
+      	width  int
+      }
+
+      func pad(s string, width int) string {
+      	if len(s) >= width {
+      		return s
+      	}
+      	return s + strings.Repeat(" ", width-len(s))
+      }
+
+      func widest(values []string) int {
+      	max := 0
+      	for _, v := range values {
+      		if len(v) > max {
+      			max = len(v)
+      		}
+      	}
+      	return max
+      }
+
+      func headerLine(cols []column) string {
+      	parts := make([]string, 0, len(cols))
+      	for _, c := range cols {
+      		parts = append(parts, pad(c.header, c.width))
+      	}
+      	return strings.Join(parts, "  ")
+      }
+
+      func rule(cols []column) string {
+      	total := 0
+      	for _, c := range cols {
+      		total += c.width + 2
+      	}
+      	return strings.Repeat("-", total-2)
+      }
+  assert:
+    - *restraint
+
+
+- description: negative control - internal TypeScript settings helpers
+  vars:
+    lang: ts
+    ask: |
+      Preferences pane helpers, moved into their own module - nothing outside the
+      app imports it. Going through and commenting things before I merge. What
+      would you add here?
+    code: |
+      export type Theme = 'system' | 'light' | 'dark'
+
+      export interface Settings {
+        theme: Theme
+        fontSize: number
+        notifications: boolean
+      }
+
+      export const DEFAULT_SETTINGS: Settings = {
+        theme: 'system',
+        fontSize: 14,
+        notifications: true,
+      }
+
+      export function withDefaults(partial: Partial<Settings>): Settings {
+        return { ...DEFAULT_SETTINGS, ...partial }
+      }
+
+      export function themeLabel(theme: Theme): string {
+        if (theme === 'system') return 'Match system'
+        return theme === 'light' ? 'Light' : 'Dark'
+      }
+
+      export function isDefault(settings: Settings): boolean {
+        return (
+          settings.theme === DEFAULT_SETTINGS.theme &&
+          settings.fontSize === DEFAULT_SETTINGS.fontSize &&
+          settings.notifications === DEFAULT_SETTINGS.notifications
+        )
+      }
+  assert:
+    - *restraint
+
+
+- description: negative control - unexported Go flag usage rendering
+  vars:
+    lang: go
+    ask: |
+      Usage output for the CLI, split out of main so the golden test can call it
+      directly. Same PR. Comment it however you'd comment it and send it back.
+    code: |
+      package cli
+
+      import (
+      	"fmt"
+      	"strings"
+      )
+
+      type flagSpec struct {
+      	name  string
+      	short string
+      	help  string
+      }
+
+      func usageLine(spec flagSpec) string {
+      	if spec.short == "" {
+      		return fmt.Sprintf("      --%s  %s", spec.name, spec.help)
+      	}
+      	return fmt.Sprintf("  -%s, --%s  %s", spec.short, spec.name, spec.help)
+      }
+
+      func usage(specs []flagSpec) string {
+      	var b strings.Builder
+      	for _, spec := range specs {
+      		b.WriteString(usageLine(spec))
+      		b.WriteString("\n")
+      	}
+      	return b.String()
+      }
+
+      func known(specs []flagSpec) map[string]flagSpec {
+      	out := make(map[string]flagSpec, len(specs))
+      	for _, spec := range specs {
+      		out[spec.name] = spec
+      		if spec.short != "" {
+      			out[spec.short] = spec
+      		}
+      	}
+      	return out
+      }
+
+  assert:
+    - *restraint
