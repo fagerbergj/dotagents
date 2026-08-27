@@ -39,6 +39,18 @@ git remote add origin "${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSIT
 # caveat lives here and not only in provenance.csv. A reused artifact was produced
 # against the PR head; if main moved underneath before the merge, the numbers
 # describe a tree that never existed. That is not detectable, so it is disclosed.
+# GitHub Pages serves this branch. Without a config the .md files download as raw
+# text; with one, Jekyll renders them and jekyll-relative-links - on by default for
+# Pages - rewrites the `results/<suite>.md` links to their generated URLs, so the
+# same README works both in the GitHub file view and on the site.
+render_pages_config() {
+  cat > _config.yml <<'YML'
+title: dotagents eval results
+description: Does loading a skill change the artifact the model produces?
+theme: jekyll-theme-primer
+YML
+}
+
 render_readme() {
   {
     echo "# eval results on \`main\`"
@@ -87,6 +99,7 @@ build_and_commit() {
   done < "$manifest"
 
   render_readme
+  render_pages_config
   git add -A
   git commit -q -F - <<EOF
 eval results for ${merge_sha:0:7}

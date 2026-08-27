@@ -7,6 +7,11 @@ on:
       - 'skills/**'
       - 'evals/**'
   workflow_dispatch:
+    inputs:
+      force_rerun:
+        description: 'Re-measure every suite on main, ignoring any PR artifact. Clears the warning rows.'
+        type: boolean
+        default: false
 
 # Publishing is a read-modify-write of one branch. Two runs building on the same
 # parent would each push a store missing the other's rows; serialising them means
@@ -50,7 +55,14 @@ jobs:
           else
             git ls-tree -r --name-only "${{ github.sha }}" > /tmp/changed-files.txt
           fi
-          suites="$(.github/scripts/detect-suites.sh "$GITHUB_WORKSPACE" < /tmp/changed-files.txt | jq -c '[.[].name]')"
+          if [ "${{ inputs.force_rerun }}" = "true" ]; then
+            # Every suite, not just the ones a diff touched: this path re-measures
+            # the tree that actually merged, which is what clears a `measured
+            # against` SHA that is not the merge SHA.
+            suites="$(ls -d evals/skills/*/ | xargs -n1 basename | jq -R . | jq -sc .)"
+          else
+            suites="$(.github/scripts/detect-suites.sh "$GITHUB_WORKSPACE" < /tmp/changed-files.txt | jq -c '[.[].name]')"
+          fi
           echo "suites=$suites" >> "$GITHUB_OUTPUT"
           echo "Affected suites: $suites"
 
@@ -68,6 +80,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/reused
+          # Forcing means measuring this commit, so a PR artifact - built against
+          # the PR head - is exactly what must not be used.
+          if [ "${{ inputs.force_rerun }}" = "true" ]; then
+            echo "force_rerun: ignoring any PR artifact"; exit 0
+          fi
           pr="$(gh api "repos/$GITHUB_REPOSITORY/commits/${{ github.sha }}/pulls" \
                   --jq 'map(select(.merged_at != null)) | .[0].number' 2>/dev/null || echo '')"
           if [ -z "$pr" ] || [ "$pr" = "null" ]; then
