@@ -101,7 +101,14 @@ jobs:
         # no matter what `permissions:` says, so this call would just 403 - and so
         # would the minimize mutation inside the helper. The job summary written
         # above still carries the same information.
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        #
+        # Also skipped when nothing is affected. A PR can match this workflow's
+        # `evals/**` path filter and still touch no suite - editing the reporter,
+        # say - and announcing "nothing will run" on those is noise on a PR that
+        # was never about evals. The summary still records it either way.
+        if: >-
+          github.event.pull_request.head.repo.full_name == github.repository
+          && steps.detect.outputs.suites != '[]'
         uses: actions/github-script@v9
         with:
           script: |
