@@ -11,6 +11,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
+  version: "1.1"
 ---
 
 # Review code: understand → verify → categorize → structure
@@ -26,9 +27,9 @@ Do not write a single finding until step 2: you cannot judge a change you don't 
 Before looking critically at any line, learn what the change is *for*.
 
 - Read the PR description / linked issue / commit messages. State in one sentence what problem this change claims to solve and how.
-- Get the change in front of you: `git_diff` (or `git_log` for the branch's commits). Take a broad view first - which files were added, deleted, moved - to grasp the intent before the details.
+- Get the change in front of you - the diff, or the branch's commit log where that is the better view. Take a broad view first - which files were added, deleted, moved - to grasp the intent before the details.
 - If you can't tell what the change is meant to do, that's your first finding (a `question:`), not a licence to guess.
-- **Understand the PR's current state before forming your review.** Read what has already been said: on a GitHub PR, `github_list_pr_comments` returns the existing inline comments, the conversation, and prior submitted reviews. And recall this repo's settled decisions and conventions with `load_memory`. Know what ground has already been covered so your review adds to it.
+- **Understand the PR's current state before forming your review.** Read what has already been said - the existing inline comments, the conversation, and any prior submitted reviews - and recall this repo's settled decisions and conventions from whatever memory carries across sessions. Know what ground has already been covered so your review adds to it.
 - **Do not re-raise anything already settled or already discussed.** A resolved thread, a maintainer-accepted explanation, a prior ruling ("we do X here because Y") is closed - applying it and moving on is the point of remembering it. If you genuinely disagree with a settled decision, note the concern *once* and move on; don't reopen the same debate every review.
 
 ### 2. Verify the claims - don't trust them
@@ -37,11 +38,11 @@ Before looking critically at any line, learn what the change is *for*.
 
 - Does the code actually do what the description says? Trace the changed path and confirm the stated behavior is really there.
 - Is the change in the right part of the system, or bolted somewhere convenient? A four-line change can be correct in isolation yet wrong for where it lives.
-- Never assert behavior about code you didn't open. `read_file` the file before claiming what it does - a finding about code you never read is fabrication.
+- Never assert behavior about code you didn't open. Open the file before claiming what it does - a finding about code you never read is fabrication.
 
 ### 3. Read the diff AND the surrounding code
 
-Use `git_diff` to see *what* changed - but never review from the diff hunks alone. A hunk shows a handful of lines with a sliver of context and hides everything a real judgment needs: the caller, the invariant two methods up, the error the callee can return, the lock the function is supposed to hold. **`read_file` the full files the change touches**, not just the changed lines, and grep for other call sites a signature change affects. Judge the change in the code it actually lives in - a four-line diff can be correct in isolation and wrong for the function it sits inside.
+Read the diff to see *what* changed - but never review from the diff hunks alone. A hunk shows a handful of lines with a sliver of context and hides everything a real judgment needs: the caller, the invariant two methods up, the error the callee can return, the lock the function is supposed to hold. **Open the full files the change touches**, not just the changed lines, and grep for other call sites a signature change affects. Judge the change in the code it actually lives in - a four-line diff can be correct in isolation and wrong for the function it sits inside.
 
 ### 4. Evaluate by priority - spend attention where it matters
 
@@ -84,9 +85,15 @@ Don't scatter line-by-line comments. Deliver:
 
 Cite findings by `path:line` so the author can jump straight to them. Write the summary and each finding following the shared style ruleset at `~/.agents/AGENTS.md` - concrete, no ceremony, no canned "great work!" filler.
 
-On a GitHub PR, deliver this as one native review: record each ACTIONABLE finding (never praise) as an inline comment (`github_add_review_comment`, path+line) the moment you spot it - the draft is your durable memory against context compaction - then `github_submit_review` once with the summary body and the event matching your verdict. Reply in-thread (`github_reply_to_review_comment`) when you're responding to an existing comment rather than opening a new thread.
+**Check the project's AI policy before you post anything.** Submitting a review puts machine-written text under the user's name in someone else's project, so the project's rules govern rather than this skill. Look for `AI_POLICY.md`, `CONTRIBUTING.md`, or the equivalent in the target repo and follow what it says. 
 
-**Close loops with a reaction, not a comment.** To acknowledge a point, signal agreement, or say "seen / handled", add an emoji reaction (`github_react_to_comment` - 👍 / 👀 / 🚀) instead of writing another comment. It closes the loop with near-zero words and low reader load. Reserve comment text for substantive findings.
+Absent a stated policy, hold to the same line: say what wrote the review, and let a human read it before it goes out.
+
+**Never submit on your own initiative.** Draft the inline comments - that draft is also your durable memory against context compaction - and then hand the review to the user. Submit only when they have asked you to: it publishes to a third party under their name, and the disclosure and the human read both have to happen first.
+
+Where the review surface can hold a review as a single unit, deliver it that way rather than as scattered comments: attach each ACTIONABLE finding (never praise) to its path and line as you spot it, reply inside an existing thread rather than opening a second one beside it, and submit once - carrying the summary, the AI-usage disclosure, and the verdict - when the user asks for it to go out. Where it cannot, write the whole review as one message with each finding cited by `path:line`.
+
+**Close loops with a reaction, not a comment.** To acknowledge a point, signal agreement, or say "seen / handled", add an emoji reaction (👍 / 👀 / 🚀) where the platform has them, instead of writing another comment. It closes the loop with near-zero words and low reader load. Reserve comment text for substantive findings.
 
 ## Why this order
 
