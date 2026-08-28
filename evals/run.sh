@@ -1,17 +1,42 @@
 #!/usr/bin/env bash
-# Run one suite's baseline. Results are stamped with the skill version they
-# measured, read from the skill's own frontmatter.
+# Run one suite's baseline. Results are stamped with the version of the SUBJECT
+# under test - the file whose effect the arms measure.
 set -euo pipefail
 suite="${1:?usage: run.sh <suite> [extra promptfoo args...]}"; shift || true
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# OpenRouter key lives beside the results, gitignored
+# Gateway key lives beside the results, gitignored
 [ -f "$here/.env" ] && { set -a; . "$here/.env"; set +a; }
-# Assertion-level providers ignore apiKeyEnvar, so judges 401 while generations
-# succeed on the same key. Every provider here is `openai:chat:*`, which falls back
-# to OPENAI_API_KEY - so point that at the OpenRouter key and the judges authenticate.
-export OPENAI_API_KEY="${OPENAI_API_KEY:-$OPENROUTER_API_KEY}"
-version="$(sed -n 's/^[[:space:]]*version:[[:space:]]*"\?\([^"]*\)"\?[[:space:]]*$/\1/p' \
-  "$here/../skills/$suite/SKILL.md" | head -1)"
+# Assertion-level providers ignore apiKeyEnvar and fall back to OPENAI_API_KEY, so
+# both must point at the same key or judges 401 while generations succeed. Which
+# variable holds it is configurable: a repo on another gateway should not have to
+# name its secret OPENROUTER_API_KEY.
+key_envar="${EVAL_API_KEY_ENVAR:-OPENROUTER_API_KEY}"
+export OPENAI_API_KEY="${OPENAI_API_KEY:-${!key_envar:-}}"
+
+# The subject under test. `{suite}` expands to the suite name, so the default
+# keeps this repo's one-skill-per-suite layout while a repo testing a single
+# shared file (an AGENTS.md, say) sets EVAL_SUBJECT to that one path.
+# Assigned in two steps on purpose: a `}` inside a ${var:-default} closes the
+# expansion early, so the inline default silently became "../skills/{suite".
+subject_tpl="${EVAL_SUBJECT:-}"
+[ -n "$subject_tpl" ] || subject_tpl='../skills/{suite}/SKILL.md'
+subject="$here/${subject_tpl//\{suite\}/$suite}"
+[ -f "$subject" ] || { echo "run.sh: subject not found: $subject" >&2; exit 2; }
+subject="$(cd "$(dirname "$subject")" && pwd)/$(basename "$subject")"
+export EVAL_SUBJECT_PATH="$subject"
+
+# Where the suites live, relative to this script. Separate from the subject: a
+# repo can keep suites anywhere without moving the files under test.
+suites_dir="$here/${EVAL_SUITES_DIR:-skills}"
+
+# Frontmatter version where there is one; otherwise the file's own blob hash, so
+# a subject without frontmatter still gets a stable per-content label instead of
+# collapsing every run into "unversioned" and losing the accumulating columns.
+version="$(sed -n 's/^[[:space:]]*version:[[:space:]]*"\?\([^"]*\)"\?[[:space:]]*$/\1/p' "$subject" | head -1)"
+if [ -z "$version" ]; then
+  version="$(git -C "$here" hash-object "$subject" 2>/dev/null | cut -c1-7)"
+  version="${version:+blob-$version}"
+fi
 version="${version:-unversioned}"
 out="$here/results/$suite@$version.json"
 mkdir -p "$here/results"
@@ -38,7 +63,7 @@ for arg in "$@"; do
 done
 set -- "${args[@]+"${args[@]}"}"
 
-cd "$here/skills/$suite"
+cd "$suites_dir/$suite"
 # Three arms only when there is a second skill version to compare against.
 # SKILL_CURRENT names the shipped copy; the checkout is then the new one, and the
 # third prompt is appended to a throwaway config so the ten committed ones stay
@@ -46,7 +71,7 @@ cd "$here/skills/$suite"
 # anchors, and a sed would sit inside one.
 config=promptfooconfig.yaml
 if [ -n "${SKILL_CURRENT:-}" ]; then
-  export SKILL_NEXT="$here/../skills/$suite/SKILL.md"
+  export SKILL_NEXT="$subject"
   config=".promptfooconfig.3arm.yaml"
   python3 - "$config" <<'PYCFG'
 import sys, yaml
@@ -56,7 +81,7 @@ if 'skill-next' not in labels:
     c['prompts'].append({'id': 'file://prompts/arms.js:skillNext', 'label': 'skill-next'})
 yaml.safe_dump(c, open(sys.argv[1], 'w'), sort_keys=False, width=10**6)
 PYCFG
-  trap 'rm -f "$here/skills/$suite/.promptfooconfig.3arm.yaml"' EXIT
+  trap 'rm -f "$suites_dir/$suite/.promptfooconfig.3arm.yaml"' EXIT
 fi
 node assertions/*.test.cjs
 # The load_resource provider is shared harness code, so its self-check runs for
