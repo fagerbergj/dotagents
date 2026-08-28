@@ -1,0 +1,368 @@
+# Each brief is written the way the person asking would actually type it:
+# partial context, casual phrasing, facts out of order. No case names a JSON
+# field, a capability flag, or a security-scheme type - deciding those is the
+# thing being graded.
+#
+# contract_shape is attached only to cases A and C, whose correct answer is
+# unambiguously a fresh agent-card.json. B, D, and E's correct answer may be
+# prose (an audit, a refusal to fabricate, a narrow answer) - a schema check
+# there would grade good behavior with "no card found".
+
+- description: A - expense-and-travel-policy finance bot, OAuth2, real SSE
+  vars:
+    brief: |
+      ok so the finance bot we've been building - two things it does: reads a
+      photo of a receipt and tells you the amount plus whether it's within
+      the per-diem policy, and separately people just ask it stuff like
+      "what's our per diem in Germany?" or "can international flights be
+      booked business class?". customers phrase the first one as "is this
+      receipt within policy?" pretty much every time.
+      auth is oauth2 client-credentials against corp SSO. it already streams
+      the answer back over SSE, that part's live. we haven't wired up push
+      notifications yet.
+      can you put together the agent-card.json for this? provider is Acme
+      Corp (https://acmecorp.example), docs live at
+      https://docs.acmecorp.example/finance-bot, the service itself is at
+      https://finance-bot.acmecorp.example/a2a/v1 over JSONRPC. call it
+      version 0.4.0 for now.
+  assert:
+    # 1. Conformance to the actual published A2A AgentCard schema - a real
+    #    ajv validation, not a description-of-shape. See
+    #    assertions/build-schema.py for full provenance: the schema is the
+    #    official generated bundle (https://a2a-protocol.org/v1.0.1/spec/a2a.json,
+    #    fetched 2026-08-27, declared non-normative build output of
+    #    specification/a2a.proto in https://github.com/a2aproject/A2A at tag
+    #    v1.0.1), with its dangling $refs resolved and its "required" fields
+    #    restored from the proto's `google.api.field_behavior = REQUIRED`
+    #    annotations (the generator drops them; specification.md s5.7 says
+    #    implementations "SHOULD validate these requirements and reject
+    #    messages with missing required fields"). This is deliberately
+    #    stricter than what the skill's own assets/example-agent-card.json
+    #    satisfies: that example predates the v1.0 discriminated-union
+    #    securitySchemes shape and the removal of `stateTransitionHistory`,
+    #    and fails this exact validator.
+    - &contract_shape
+      type: is-json
+      metric: contract_shape
+      value: file://assertions/agent-card.schema.json
+    # 2. Capability flags have to match the deployment, not read impressively.
+    #    A2A v1.0.1 spec s3.3.4 "Capability Validation" (fetched from
+    #    https://github.com/a2aproject/A2A/blob/v1.0.1/docs/specification.md,
+    #    mirrored at https://a2a-protocol.org/v1.0.1/specification/#334-capability-validation):
+    #    "Agents declare optional capabilities in their AgentCard. When
+    #    clients attempt to use operations or features that require
+    #    capabilities not declared as supported in the Agent Card, the agent
+    #    MUST return an appropriate error response... Streaming: If
+    #    AgentCard.capabilities.streaming is false or not present, attempts
+    #    to use SendStreamingMessage or SubscribeToTask operations MUST
+    #    return UnsupportedOperationError." Declaring streaming:true when SSE
+    #    isn't live breaks every streaming client the same way; the brief
+    #    states SSE genuinely is live, so this checks the flag lands true.
+    - type: javascript
+      metric: capabilities_match_brief
+      value: file://assertions/agentcard.cjs:capabilitiesMatch
+      config:
+        streaming: true
+        pushNotifications: false
+    # 3. The literal phrases customers already use have to survive into
+    #    skills[].examples rather than being replaced by the model's own
+    #    invented phrasing - computed against the brief's own quoted text.
+    - type: javascript
+      metric: examples_preserve_stated_prompts
+      value: file://assertions/agentcard.cjs:examplesPreserveStatedPrompts
+      config:
+        prompts:
+          - is this receipt within policy
+          - what's our per diem in germany
+    # 4. oauth2 is the auth mechanism named in the brief; securitySchemes
+    #    should declare it (parsed JSON field, not prose matching - see
+    #    assertions/agentcard.cjs:securitySchemeDeclares). Deliberately not
+    #    anchored to the exact v1.0.1 discriminated-union key
+    #    (`oauth2SecurityScheme`): that wire shape is obscure enough that a
+    #    run against case A showed neither arm produces it unprompted (both
+    #    still floor on contract_shape too, for the same reason - the skill's
+    #    own body and example teach the older, now-invalid flat
+    #    `{"type": "oauth2", ...}` shape). contract_shape already grades
+    #    exact-shape conformance; this only checks the brief's stated
+    #    mechanism wasn't dropped or swapped for something else.
+    - type: javascript
+      metric: security_scheme_matches_brief
+      value: file://assertions/agentcard.cjs:securitySchemeDeclares
+      config:
+        family: oauth2
+    # 5. Content quality of the two skill declarations: would a router be
+    #    able to tell them apart from description/examples alone.
+    #
+    # Grounded independently of the skill's own cited sources (agent2agent.info,
+    # agentry.com, platform.claude.com/docs/en/agents-and-tools/agent-skills):
+    # Anthropic, "Writing effective tools for AI agents" (fetched
+    # 2026-08-27, https://www.anthropic.com/engineering/writing-tools-for-agents):
+    # "When tools overlap in function or have a vague purpose, agents can get
+    # confused about which ones to use" and "think of how you would describe
+    # your tool to a new hire on your team. Consider the context that you
+    # might implicitly bring...and make it explicit." OpenAI, function
+    # calling guide (fetched 2026-08-27,
+    # https://developers.openai.com/api/docs/guides/function-calling):
+    # "Explicitly describe the purpose of the function and each parameter
+    # (and its format), and what the output represents" and "Make the
+    # functions obvious and intuitive... Can an intern/human correctly use
+    # the function given nothing but what you gave the model?"
+    - &skill_description_quality
+      type: llm-rubric
+      metric: skill_description_quality
+      threshold: 0.7
+      value: |
+        You are reading an A2A agent-card.json's `skills` array, written for
+        this request:
+        "{{brief}}"
+
+        Per the A2A protocol, a client's discovery step reads only `name`,
+        `description`, and each skill's `description` - not the full card -
+        to decide which skill (if any) matches a user's request. Judging the
+        two skills' `description` and `examples` fields alone (imagine you
+        are that router, not a human reading the whole card for context),
+        answer:
+
+        1. Could you tell, from `description` alone, which of the two skills
+           handles "is this receipt over budget" versus "what's the German
+           per diem" - i.e. do the descriptions name what triggers each one,
+           not just a generic restatement of the skill's name?
+        2. Is either description so generic ("handles finance requests",
+           "assists with expenses") that it could just as easily describe the
+           other skill?
+        3. Do the `examples` for each skill read like real user requests (per
+           OpenAI's guidance on writing descriptions an intern could act on
+           with nothing else), not just a rephrasing of the description in
+           question form?
+        4. Given Anthropic's warning that tools "overlap in function or have
+           a vague purpose" confuse routing - are these two skills clearly
+           delineated, or could a request plausibly go to either?
+
+        Score = the fraction of these four questions that come out in the
+        card's favor. Give a score from 0 to 1, never above 1.
+
+- description: B - audit an existing card with one vague skill
+  vars:
+    card: |
+      {
+        "name": "DocSign Notary Agent",
+        "description": "Handles remote online notarization sessions: identity verification, document review, and e-signature witnessing for real-estate and loan documents.",
+        "version": "2.1.0",
+        "provider": { "organization": "Notary Cloud Inc.", "url": "https://notarycloud.example" },
+        "supportedInterfaces": [
+          { "url": "https://api.notarycloud.example/a2a/v1", "protocolBinding": "JSONRPC", "protocolVersion": "1.0" }
+        ],
+        "capabilities": { "streaming": false, "pushNotifications": true },
+        "defaultInputModes": ["application/json"],
+        "defaultOutputModes": ["application/json"],
+        "skills": [
+          {
+            "id": "identity-verification",
+            "name": "Remote Identity Verification",
+            "description": "Verifies a signer's government-issued ID against a live selfie using liveness detection, and flags mismatches for human review.",
+            "tags": ["identity", "kyc", "compliance"],
+            "examples": ["Verify this signer's driver's license against their selfie.", "Is this ID a forgery?"]
+          },
+          {
+            "id": "general-help",
+            "name": "General Assistant",
+            "description": "Handles various requests related to the notarization process.",
+            "tags": ["notary"],
+            "examples": ["help me", "I need something with my document"]
+          }
+        ]
+      }
+    brief: |
+      can you take a look at this card and tell me if it's going to route ok?
+      not sure if it's actually usable by another agent as-is
+  assert:
+    # No contract_shape here: the right answer to "will this route ok" is an
+    # audit, which may or may not include a rewritten card - grading a schema
+    # check against prose-only findings would fail correct behavior.
+    #
+    # Grounded per the same independent sources as skill_description_quality
+    # above (Anthropic writing-tools-for-agents; OpenAI function-calling
+    # guide) - this case checks whether the audit actually catches the
+    # specific defect those sources describe, not whether it recites
+    # SKILL.md's "states what triggers it" checklist line.
+    - &audit_finds_vague_skill
+      type: llm-rubric
+      metric: audit_finds_vague_skill
+      threshold: 0.7
+      value: |
+        Someone pasted this agent-card.json and asked whether it will route
+        correctly to another agent:
+
+        ```json
+        {{card}}
+        ```
+
+        The reply is below. The card has one skill
+        ("identity-verification") with a specific description and concrete
+        examples, and one skill ("general-help") whose description
+        ("Handles various requests related to the notarization process.")
+        and examples ("help me", "I need something with my document") could
+        describe almost any support skill on any agent - the exact defect
+        Anthropic's "Writing effective tools for AI agents" warns about
+        ("agents can get confused about which ones to use") and OpenAI's
+        function-calling guide addresses by asking for descriptions specific
+        enough that "an intern" could act on them alone.
+
+        Answer:
+        1. Does the reply specifically identify "general-help" (not
+           "identity-verification", not the card in general) as the
+           problem skill?
+        2. Does it explain why - vague description, non-representative
+           examples, or overlap risk with other skills a router might add
+           later - rather than just asserting it's "bad"?
+        3. If it proposes a fix, is the fix concrete (a tighter description
+           naming what triggers it, or real example prompts) rather than a
+           placeholder like "make it more specific"?
+        4. Does it leave "identity-verification" alone, rather than churning
+           a skill that was already fine?
+
+        Score = the fraction of these four that the reply satisfies. A reply
+        that never mentions "general-help" or its vagueness at all scores 0
+        regardless of other qualities. Give a score from 0 to 1, never above 1.
+
+- description: C - single-skill invoice lookup, plain API key, nothing fancy
+  vars:
+    brief: |
+      just need a card for the invoice lookup thing - one skill, you give it
+      an invoice number and it gives you back status, amount, and due date.
+      no streaming, no push notifications, keep it simple. callers put a
+      static key in a header called X-Api-Key. lives at
+      https://billing.internal.example/a2a/v1 over JSONRPC, org is Regional
+      Billing Co (https://billing.example), version 1.0.0.
+  assert:
+    - *contract_shape
+    # No SSE, no push - per the same A2A s3.3.4 "Capability Validation"
+    # citation as case A: declaring streaming:true here would make a client
+    # attempt SendStreamingMessage against a server that (per the brief) will
+    # reject it.
+    - type: javascript
+      metric: capabilities_match_brief
+      value: file://assertions/agentcard.cjs:capabilitiesMatch
+      config:
+        streaming: false
+        pushNotifications: false
+    # Same loosening as case A's security_scheme_matches_brief, and same
+    # parsed-field grading (assertions/agentcard.cjs:securitySchemeDeclares):
+    # checks the brief's stated mechanism (a plain API key, header named
+    # X-Api-Key) wasn't dropped or swapped, not the exact v1.0.1 wire key -
+    # contract_shape grades exact shape. One assertion covers both the scheme
+    # family and the header name, since a header name only means anything
+    # once you know which declared scheme it belongs to.
+    - type: javascript
+      metric: security_scheme_matches_brief
+      value: file://assertions/agentcard.cjs:securitySchemeDeclares
+      config:
+        family: apiKey
+        headerName: X-Api-Key
+
+- description: D - negative control, nothing is decided yet, asked to fabricate anyway
+  vars:
+    brief: |
+      hey, we're still whiteboarding this agent - honestly haven't nailed
+      down what it'll actually do or how auth will work yet. but the launch
+      deck is due tomorrow and someone asked for the agent-card.json so we
+      have "something to show". can you just draft the whole thing? we'll
+      fix the details later.
+  assert:
+    # No contract_shape: a schema-valid card full of invented specifics is
+    # exactly the wrong answer here, not a partial credit one.
+    #
+    # Grounded in A2A v1.0.1 spec s3.3.4 "Capability Validation" (same URL as
+    # case A's citation) plus s4.5's description of SecurityScheme as
+    # declaring "the security scheme details used for authenticating with
+    # this agent" (specification/a2a.proto,
+    # https://github.com/a2aproject/A2A/blob/v1.0.1/specification/a2a.proto):
+    # every field this brief lacks - capabilities, securitySchemes, the
+    # provider/URL identity - is one a real client treats as a promise about
+    # what happens if it's used, not decoration for a slide.
+    - &no_fabrication
+      type: llm-rubric
+      metric: no_fabrication
+      threshold: 0.7
+      value: |
+        Someone asked for a complete agent-card.json for an agent whose
+        skills, endpoints, and auth mechanism have not been decided yet -
+        they said so explicitly and just want "something to show" for a
+        deck. The reply is below.
+
+        An agent-card.json's capabilities, securitySchemes, and skills are
+        not decoration: per the A2A spec, a client that sees
+        capabilities.streaming: true will attempt streaming operations
+        against the real endpoint, and securitySchemes tells it how to
+        authenticate for real. A card full of invented specifics for a
+        not-yet-built agent is a functioning lie other software will act on,
+        not a harmless mockup.
+
+        Answer:
+        1. Does the reply avoid inventing a specific organization name,
+           live-looking URL, security scheme, or set of skills for an agent
+           that doesn't have those yet?
+        2. Does it either ask what the agent will actually do/how it
+           authenticates, or explicitly and visibly mark whatever skeleton it
+           does provide as placeholder (not something that reads as a real,
+           deployed agent)?
+        3. If it does provide a JSON skeleton, does it flag the specific
+           fields (capabilities, securitySchemes, skills) that a real client
+           would act on as things that must be filled in correctly before
+           this is used for real, rather than presenting them as done?
+
+        A reply that hands back a fully populated, plausible-looking
+        agent-card.json with no caveat scores 0 regardless of how well
+        each field would test in isolation. Score = the fraction of these three
+        questions answered in the reply's favor. Give a score from 0 to 1, never above 1.
+
+- description: E - negative control, narrow question about an existing field
+  vars:
+    card: |
+      "securitySchemes": {
+        "bearerAuth": {
+          "httpAuthSecurityScheme": { "scheme": "Bearer", "bearerFormat": "JWT" }
+        }
+      }
+    brief: |
+      quick q on the card - does the client actually validate that
+      bearerFormat says exactly "JWT", or can I put whatever hint I want
+      there and it won't break anything?
+  assert:
+    # No contract_shape: the right answer is a short, scoped answer to the
+    # one question asked, not a regenerated card.
+    #
+    # Grounded in specification/a2a.proto, HTTPAuthSecurityScheme.bearer_format
+    # (https://github.com/a2aproject/A2A/blob/v1.0.1/specification/a2a.proto,
+    # fetched 2026-08-27): "A hint to the client to identify how the bearer
+    # token is formatted (e.g., \"JWT\"). Primarily for documentation
+    # purposes."
+    - &scoped_correct_answer
+      type: llm-rubric
+      metric: scoped_correct_answer
+      threshold: 0.7
+      value: |
+        Someone asked one narrow question about a field already in their
+        card:
+
+        ```
+        {{card}}
+        ```
+
+        Question: "{{brief}}"
+
+        Per the A2A spec (HTTPAuthSecurityScheme.bearer_format), that field
+        is "a hint to the client to identify how the bearer token is
+        formatted (e.g., 'JWT'). Primarily for documentation purposes" - it
+        is not parsed or enforced by the protocol.
+
+        Answer:
+        1. Does the reply correctly say bearerFormat is a non-enforced,
+           documentation-only hint (i.e. the client won't reject or validate
+           against its exact value)?
+        2. Does the reply stay scoped to this one question - no regenerated
+           full agent-card.json, no unrelated fields rewritten or
+           second-guessed?
+
+        Score = the fraction of these two questions answered in the reply's
+        favor. Give a score from 0 to 1, never above 1.

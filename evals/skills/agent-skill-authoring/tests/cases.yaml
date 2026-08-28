@@ -1,0 +1,383 @@
+# Each task is written the way the person asking for a new skill would actually
+# type it: partial context, casual phrasing, the "when to use it" left for the
+# author to work out. No case names a frontmatter field, a directory, or a line
+# budget - deciding those is the thing being graded.
+#
+# Every metric is anchored on the first case and aliased into the cases that
+# earn it, rather than sitting in defaultTest: the three negative controls whose
+# right answer is not a skill package would otherwise be scored by graders that
+# can only report "no skill package found" against correct behaviour.
+#
+# The per-case coverage var is named `coverage`, not `rubric`: promptfoo spreads
+# case vars under `output`/`rubric` for an llm-rubric assertion, so a var named
+# `rubric` is silently shadowed by the assertion's own rubric text the moment
+# anyone gives the assertion a custom `rubricPrompt`. It is inert today only
+# because no assertion here has one. If one is ever added, it must restate
+# promptfoo's default grading system message (the JSON contract
+# `{reason, pass, score}` plus its two worked examples, in
+# DEFAULT_GRADING_PROMPT / src/matchers/rubric.ts) - a rubricPrompt replaces
+# that message wholesale, not just the user turn, and its absence is what
+# silently killed 18/18 rows of one metric on pr-authoring.
+
+- description: workflow skill - payments rollback runbook
+  vars:
+    task: |
+      our on-call folks keep flubbing the steps to roll back a bad deploy on the payments service at 3am, half the time they page a senior eng just to ask "wait which flag do I flip first." can we get the agent to just walk them through it so we stop getting paged for this
+    coverage: |
+      The rollback sequence for the payments service is coverable end to end - what to check before rolling back, the actual rollback action, and how to confirm it worked - not just a pointer to "follow the runbook."
+  assert:
+    # 1. Does the produced skill parse at all, and does its frontmatter carry
+    #    the required fields. Graded by skills-ref, the reference validator the
+    #    published spec (agentskills.io/specification) points to, not by
+    #    re-deriving the same rules by hand.
+    - &skill_validates
+      type: javascript
+      value: file://assertions/skillauth.cjs:validatesWithSkillsRef
+      metric: skill_validates
+    # 2. A JSON-Schema floor on the transformed package: is there a non-empty
+    #    SKILL.md at all. Native promptfoo validation, not a hand-rolled check.
+    - &package_shape
+      type: is-json
+      metric: package_shape
+      value:
+        type: object
+        required: [SKILL.md]
+        properties:
+          SKILL.md:
+            type: string
+            minLength: 1
+    # 3. The two spec facts skills-ref does not check (measured: a 600-line
+    #    body and a dangling references/ pointer both still validate clean) -
+    #    the body budget and reference existence/one-hop rule.
+    - &spec_budget_refs
+      type: javascript
+      value: file://assertions/skillauth.cjs:specBudgetAndRefs
+      metric: spec_budget_and_refs
+    # 4. Content quality: does the package do what a skill is FOR, per sources
+    #    the skill under test does not itself cite. Consequence questions, not
+    #    section-heading presence - a question like "quote the mechanism" can't
+    #    be answered by reciting SKILL.md's own prescribed vocabulary.
+    - &skill_quality
+      type: llm-rubric
+      threshold: 0.7
+      metric: skill_quality
+      value: |
+        You are reading an agent skill package written in response to this request:
+        "{{task}}"
+
+        Answer the five questions below from the delivered package alone. A
+        question counts as answered only if you can quote the part of the
+        package that answers it. Naming a best practice, a heading, or a
+        convention is not an answer; only a mechanism you can quote is. If
+        nothing in the package answers a question, the answer is NONE and that
+        question earns nothing.
+
+        1. Quote the `description` field. Per Anthropic's Agent Skills docs,
+           "The description is what Claude matches your request against when
+           determining whether to trigger the Skill" (platform.claude.com,
+           Agent Skills overview). Imagining only the name and description are
+           loaded, would they get this skill triggered for a request like the
+           one above, and correctly left alone for an unrelated request? Quote
+           the words that make the trigger specific, or answer NONE.
+        2. Take the single most detailed or exhaustive piece of domain
+           knowledge this task requires (a full list, a schema, an edge-case
+           table). Anthropic's engineering team writes that content should move
+           out of SKILL.md "when the SKILL.md file becomes unwieldy" (Equipping
+           agents for the real world with Agent Skills, anthropic.com). Is that
+           knowledge in a separate file, loaded only when needed, rather than
+           inlined in the main body? The instruction has to come from SKILL.md
+           ITSELF telling the agent when to open that file - quote that exact
+           sentence from SKILL.md's own body text. A line of prose or an echo
+           printed by a script at runtime, a comment inside the separate file
+           itself, or the file simply existing without SKILL.md pointing to it
+           does not count; answer NONE if SKILL.md's own body contains no such
+           instruction.
+        3. Take the first concrete action a user of this skill needs the agent
+           to perform. Could the agent perform it without guessing a command, a
+           file path, or a decision the author left implicit? Quote the
+           instruction, or answer NONE.
+        4. Anthropic's guidance on creating custom Skills says the best skills
+           "solve a specific, repeatable task" and are "focused on one workflow
+           rather than trying to do everything" (support.claude.com, Creating
+           custom Skills). Does this package stay to one workflow, or does it
+           fold in an unrelated capability a user would reasonably want to
+           invoke separately? Quote evidence that it stays focused, or answer
+           NONE if it does not.
+        5. Coverage: does the package address everything this request needs,
+           with nothing contradicting it? Specifically: {{coverage}} - quote what
+           does it, or answer NONE.
+
+        Score from 0 to 1, never above 1: award 0.2 for each of the five
+        questions you answered with a quotable mechanism and 0 for each NONE.
+        Judge the package as delivered; do not reward or penalise which
+        conventions or authoring style it used.
+
+- description: domain knowledge skill - terraform review conventions
+  vars:
+    task: |
+      half the team doesn't know our internal terraform conventions and reviews keep catching the same three things over and over - hardcoded regions, missing required tags, modules pinned to a branch instead of a version tag. can we bake that into something the agent checks automatically when it's reviewing terraform?
+    coverage: |
+      An agent reviewing a Terraform change can actually catch a hardcoded region, a missing required tag, and a module pinned to a branch rather than a version tag - not just a reminder that conventions exist.
+  assert:
+    - *skill_validates
+    - *package_shape
+    - *spec_budget_refs
+    - *skill_quality
+
+- description: fix a broken draft before it ships - pdf skill
+  vars:
+    task: |
+      we drafted this pdf skill ages ago and it's been sitting unused, can you get it into shape before we turn it on? attached is what we've got
+    draft: |
+      ---
+      name: PDF_Processing
+      description: Helps with PDFs.
+      ---
+
+      # PDF Helper
+
+      ## Steps
+      1. Open the PDF with pdfplumber.
+      2. Extract text per page.
+      3. If the customer needs OCR, see references/ocr-appendix.md for the full engine comparison table.
+      4. Return the merged text.
+
+      ## Notes
+      See references/appendix.md for edge cases.
+    coverage: |
+      The name and description satisfy the spec (a lowercase-hyphenated name, and a description that states both what the skill does and when to use it), and every references/ path the body still points to is either included in the package or the pointer is removed.
+  assert:
+    - *skill_validates
+    - *package_shape
+    - *spec_budget_refs
+    - *skill_quality
+
+- description: workflow skill - postmortem consistency
+  vars:
+    task: |
+      every postmortem we write ends up a different shape depending on who wrote it, some people bury the root cause on page 3. can you make it so the agent writes these consistently from here on
+    coverage: |
+      A postmortem the agent writes states the root cause and the timeline as identifiable pieces of the document, not folded into a single narrative paragraph a reader has to dig through.
+  assert:
+    - *skill_validates
+    - *package_shape
+    - *spec_budget_refs
+    - *skill_quality
+
+- description: domain knowledge skill - dockerfile conventions
+  vars:
+    task: |
+      we keep shipping docker images that are way bigger than they need to be, and a couple had a stale base image with a known CVE sitting in prod for weeks. can the agent just know our rules for this when it's writing dockerfiles
+    coverage: |
+      The instructions actually push toward a smaller image (a multi-stage build or an equivalent) and toward not leaving a stale or unpinned base image in place, not just a general reminder to "keep images small and secure."
+  assert:
+    - *skill_validates
+    - *package_shape
+    - *spec_budget_refs
+    - *skill_quality
+
+- description: workflow skill - incident escalation triage
+  vars:
+    task: |
+      new hires keep escalating incidents to the wrong team because the escalation matrix lives in a wiki page nobody reads until it's too late. can we get the agent to walk someone through who to page for a given incident
+    coverage: |
+      Given a stated incident type or affected system, the skill lets the agent point at which team or person to page next - not just "check the escalation matrix."
+  assert:
+    - *skill_validates
+    - *package_shape
+    - *spec_budget_refs
+    - *skill_quality
+
+# Negative controls. Every case above rewards producing more; these three are
+# the only place the suite can see a skill over-applying itself, which for a
+# skill whose whole subject is "should this become a skill" is where its value
+# most shows. None of the three carries skill_quality: two ask for prose and
+# keep it via `transform: output` (bypassing the FILE:-block normalisation, the
+# same way rest-api-authoring's negative controls bypass its document
+# transform), and the third asks for a package but grades its restraint, not
+# its coverage of a request that was never made.
+
+- description: negative control - one-off task, not a repeatable one
+  vars:
+    task: |
+      hey can you whip me up an agent skill for renaming the `legacy_id` column to `external_id` on the `orders` table? one-time thing, we're doing the migration this thursday and then it's done
+  options:
+    # The suite-wide transform replaces the output with the parsed FILE: blocks
+    # whenever any exist, which throws the prose away. This control grades
+    # prose (or a deliberately minimal reply) exclusively, so it keeps the raw
+    # reply instead.
+    transform: 'output'
+  assert:
+    - type: llm-rubric
+      metric: control_quality
+      threshold: 0.7
+      value: |
+        Someone asked for this:
+        "{{task}}"
+
+        The reply is below. Anthropic's guidance on creating custom Skills says
+        "the best skills: Solve a specific, repeatable task" (Creating custom
+        Skills, support.claude.com) and are "focused on one workflow rather
+        than trying to do everything." A schema change to one column, done once
+        on a fixed date and never repeated, has no future occasion to trigger a
+        skill - there is nothing left to reuse it for once Thursday passes.
+
+        Answer these from the reply as delivered:
+        1. Does the reply note that a one-time, non-repeated task like this is
+           a poor fit for a persistent, reusable skill? Quote it, or answer
+           NONE.
+        2. Does the reply nonetheless hand back a fully scaffolded skill
+           package - a SKILL.md plus one or more separate references/, assets/,
+           or scripts/ files - as if the task were skill-worthy? Quote the
+           artifact, or answer NONE.
+
+        Score from 0 to 1, never above 1. Start at 1. A reply that does not
+        flag the mismatch (question 1 answered NONE) scores 0. Subtract 0.5 if
+        question 2 finds a fully scaffolded multi-file package delivered
+        without qualification. A reply that flags the mismatch, and either
+        declines outright or hands back nothing more than a short note, scores
+        1 and must not be marked down for declining to build something.
+
+- description: negative control - a rule this small does not earn scaffolding
+  vars:
+    task: |
+      small thing - we always want responses to use British spelling (colour, organise, not color/organize). can you make that a skill so it just always applies?
+  assert:
+    - *skill_validates
+    - *package_shape
+    - *spec_budget_refs
+    - type: llm-rubric
+      metric: control_quality
+      threshold: 0.7
+      value: |
+        Someone asked for this:
+        "{{task}}"
+
+        The reply is below. This is a genuinely repeatable rule, so a skill is
+        a reasonable answer - but Anthropic's engineering team writes that
+        content should move into a separate file only "when the SKILL.md file
+        becomes unwieldy" (Equipping agents for the real world with Agent
+        Skills, anthropic.com), and a one-line spelling preference never gets
+        there.
+
+        Answer these from the delivered package:
+        1. Is the SKILL.md body itself short and proportionate to a one-line
+           style rule - roughly a short paragraph or a handful of bullet points
+           - rather than padded with an interview phase, a multi-step
+           procedure, or a validation loop that a rule this simple does not
+           need? Quote the body, or answer NONE if it is padded.
+        2. Does the package invent a references/, assets/, or scripts/ file to
+           hold content that would fit inline in a sentence or two? Quote the
+           invented file, or answer NONE.
+
+        Score from 0 to 1, never above 1. Start at 1. Subtract 0.5 if question
+        1 finds the body padded beyond what a one-line rule needs. Subtract 0.5
+        if question 2 finds an unwarranted extra file. A single short SKILL.md
+        with no invented extra files scores 1 and must not be marked down for
+        looking sparse.
+
+- description: negative control - the existing skill is already fine
+  vars:
+    task: |
+      we've had this commit-message skill floating around for ages, I've got a nagging feeling it needs a cleanup pass or ought to get split into a references file by now, can you take a look and fix whatever's off?
+    draft: |
+      ---
+      name: commit-authoring
+      description: >
+        How to write one atomic commit for a code change - Conventional Commits format,
+        imperative subject, why-not-how body. Use whenever you commit code (git_commit):
+        one node's work is exactly one reviewable, testable commit.
+      metadata:
+        author: fagerbergj
+        author_url: https://github.com/fagerbergj
+        repository: https://github.com/fagerbergj/dotagents
+        version: "1.0"
+      ---
+
+      # Commit Authoring
+
+      One implementer node = **one atomic commit**. Write the commit so it reads as a single, reviewable, testable unit - and write its message so a reviewer never has to reverse-engineer intent from the diff.
+
+      ## What "atomic" means (non-negotiable)
+
+      - **One concern.** A subject that needs "and" is two commits. Never mix a refactor with a behaviour change - the reviewer can't tell an intentional change from an accident of the refactor.
+      - **Builds and tests pass at THIS commit.** Rolling back to it leaves a working tree (bisectable, revert-safe). Your node's `checks` enforce this.
+      - **Under ~400 lines of diff.** Past that, review quality collapses. If the change is bigger, it's more than one commit - it should have been more than one node; flag it rather than growing the commit.
+
+      ## Message format (Conventional Commits + the seven rules)
+
+      ```
+      <type>(<scope>): <subject>      ← ≤50 chars, imperative, Capitalized, no period
+
+      <body>                          ← wrap 72; explain WHY, not how (the diff shows how)
+
+      <footers>                       ← Refs #123 · BREAKING CHANGE: <what + migration>
+      ```
+
+      - **Subject** completes: "If applied, this commit will `<subject>`." Imperative ("Add", not "Added"/"Adds"). No trailing period.
+      - **Body** is the *why* and the non-obvious *what* - motivation, constraints, the incident. Omit it only for a truly trivial change. Write it plainly - concrete over generic, no ceremony.
+      - **Footer**: `Refs #<issue>` (the system adds `Closes #N` on the PR, not here); `BREAKING CHANGE:` for any incompatible change, with the migration.
+
+      | type | use |
+      |---|---|
+      | `feat` | new behaviour |
+      | `fix` | bug fix |
+      | `refactor` | behaviour-preserving restructure |
+      | `perf` | faster, same behaviour |
+      | `test` | tests only |
+      | `docs` `chore` `ci` `build` `style` | supporting changes |
+
+      One `type` per commit - if two apply, it's two commits.
+
+      ## Anti-patterns
+
+      | Don't | Instead |
+      |---|---|
+      | `update` / `wip` / `fix` (bare) | say what and why: `fix(auth): handle null JWT on logout` |
+      | `Update webhook.go and app.go` (file list) | describe the change, not the files touched |
+      | Describe the diff (`Remove console.logs`) | give intent: `chore: drop debug logging before release` |
+      | Ticket number as the whole subject (`ABC-123`) | human subject; put the ref in the footer |
+      | "and" in the subject | split into two commits |
+      | Past/inconsistent tense | imperative, always |
+
+      ## Check before committing
+
+      Subject ≤50 and imperative · body says *why* · one concern · one `type` · builds+tests green at this commit · no "and".
+  options:
+    transform: 'output'
+  assert:
+    - type: llm-rubric
+      metric: control_quality
+      threshold: 0.7
+      value: |
+        Someone asked for this:
+        "{{task}}"
+
+        The file they attached:
+
+        ````markdown
+        {{draft}}
+        ````
+
+        The reply is below. The attached skill already satisfies the published
+        Agent Skills spec (a valid lowercase-hyphenated name matching its own
+        subject, a description stating what and when, a body far under the
+        500-line budget, no references it points to that are missing) and
+        support.claude.com's guidance that the best skills "are focused on one
+        workflow rather than trying to do everything" - this one workflow is
+        writing one commit message. The correct answer is that it does not need
+        a cleanup pass or a split into references/.
+
+        Answer these from the reply as delivered:
+        1. Does the reply say the skill is fine as it is and does not need a
+           rewrite or a split? Quote it, or answer NONE.
+        2. List everything the reply changes or adds: a new references/,
+           assets/, or scripts/ file, new sections, a rewritten frontmatter
+           field, additional steps. Quote each one, or answer NONE.
+
+        Score from 0 to 1, never above 1. Start at 1. A reply that does not say
+        the skill is fine scores 0. Subtract 0.25 for each distinct change or
+        addition listed in question 2, however well designed it is - inventing
+        a references/ split for a 63-line file is the wrong answer here, not
+        thoroughness. A reply that says it's fine and changes nothing scores 1
+        and must not be marked down for being short.

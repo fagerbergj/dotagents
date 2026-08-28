@@ -1,0 +1,2733 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agent Card",
+  "additionalProperties": false,
+  "description": "A self-describing manifest for an agent. It provides essential\n metadata including the agent's identity, capabilities, skills, supported\n communication methods, and security requirements.\n Next ID: 20",
+  "patternProperties": {
+    "^(default_input_modes)$": {
+      "description": "The set of interaction modes that the agent supports across all skills.\n This can be overridden per skill. Defined as media types.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "^(default_output_modes)$": {
+      "description": "The media types supported as outputs from this agent.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "^(documentation_url)$": {
+      "description": "A URL providing additional documentation about the agent.",
+      "type": "string"
+    },
+    "^(icon_url)$": {
+      "description": "Optional. A URL to an icon for the agent.",
+      "type": "string"
+    },
+    "^(security_requirements)$": {
+      "description": "Security requirements for contacting the agent.",
+      "items": {
+        "additionalProperties": false,
+        "description": "Defines the security requirements for an agent.",
+        "properties": {
+          "schemes": {
+            "additionalProperties": {
+              "additionalProperties": false,
+              "description": "A list of strings.",
+              "properties": {
+                "list": {
+                  "description": "The individual string values.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "title": "String List",
+              "type": "object"
+            },
+            "description": "A map of security schemes to the required scopes.",
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "title": "Security Requirement",
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "^(security_schemes)$": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "description": "Defines a security scheme that can be used to secure an agent's endpoints.\n This is a discriminated union type based on the OpenAPI 3.2 Security Scheme Object.\n See: https://spec.openapis.org/oas/v3.2.0.html#security-scheme-object",
+        "patternProperties": {
+          "^(api_key_security_scheme)$": {
+            "additionalProperties": false,
+            "description": "API key-based authentication.",
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "location": {
+                "default": "",
+                "description": "The location of the API key. Valid values are \"query\", \"header\", or \"cookie\".",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "description": "The name of the header, query, or cookie parameter to be used.",
+                "type": "string"
+              }
+            },
+            "title": "API Key Security Scheme",
+            "type": "object",
+            "required": [
+              "location",
+              "name"
+            ]
+          },
+          "^(http_auth_security_scheme)$": {
+            "additionalProperties": false,
+            "description": "HTTP authentication (Basic, Bearer, etc.).",
+            "patternProperties": {
+              "^(bearer_format)$": {
+                "default": "",
+                "description": "A hint to the client to identify how the bearer token is formatted (e.g., \"JWT\").\n Primarily for documentation purposes.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "bearerFormat": {
+                "default": "",
+                "description": "A hint to the client to identify how the bearer token is formatted (e.g., \"JWT\").\n Primarily for documentation purposes.",
+                "type": "string"
+              },
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "scheme": {
+                "default": "",
+                "description": "The name of the HTTP Authentication scheme to be used in the Authorization header,\n as defined in RFC7235 (e.g., \"Bearer\").\n This value should be registered in the IANA Authentication Scheme registry.",
+                "type": "string"
+              }
+            },
+            "title": "HTTP Auth Security Scheme",
+            "type": "object",
+            "required": [
+              "scheme"
+            ]
+          },
+          "^(mtls_security_scheme)$": {
+            "additionalProperties": false,
+            "description": "Mutual TLS authentication.",
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              }
+            },
+            "title": "Mutual Tls Security Scheme",
+            "type": "object"
+          },
+          "^(oauth2_security_scheme)$": {
+            "additionalProperties": false,
+            "description": "OAuth 2.0 authentication.",
+            "patternProperties": {
+              "^(oauth2_metadata_url)$": {
+                "default": "",
+                "description": "URL to the OAuth2 authorization server metadata [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414).\n TLS is required.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "flows": {
+                "additionalProperties": false,
+                "description": "An object containing configuration information for the supported OAuth 2.0 flows.",
+                "patternProperties": {
+                  "^(authorization_code)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Authorization Code flow.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "^(pkce_required)$": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "pkceRequired": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Authorization CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "authorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "^(client_credentials)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Client Credentials flow.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Client CredentialsO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "^(device_code)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Device Code flow.",
+                    "patternProperties": {
+                      "^(device_authorization_url)$": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "deviceAuthorizationUrl": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Device CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "deviceAuthorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  }
+                },
+                "properties": {
+                  "authorizationCode": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Authorization Code flow.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "^(pkce_required)$": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "pkceRequired": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Authorization CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "authorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "clientCredentials": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Client Credentials flow.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Client CredentialsO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "deviceCode": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Device Code flow.",
+                    "patternProperties": {
+                      "^(device_authorization_url)$": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "deviceAuthorizationUrl": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Device CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "deviceAuthorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "implicit": {
+                    "additionalProperties": false,
+                    "description": "Deprecated: Use Authorization Code + PKCE instead.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme. A map between the\n scope name and a short description for it. The map MAY be empty.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "title": "ImplicitO Auth Flow",
+                    "type": "object"
+                  },
+                  "password": {
+                    "additionalProperties": false,
+                    "description": "Deprecated: Use Authorization Code + PKCE or Device Code.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow. This MUST be in the form of a URL.\n The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme. A map between the\n scope name and a short description for it. The map MAY be empty.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow. This MUST be in the form of a URL.\n The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "PasswordO Auth Flow",
+                    "type": "object"
+                  }
+                },
+                "title": "O Auth Flows",
+                "type": "object"
+              },
+              "oauth2MetadataUrl": {
+                "default": "",
+                "description": "URL to the OAuth2 authorization server metadata [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414).\n TLS is required.",
+                "type": "string"
+              }
+            },
+            "title": "O Auth2 Security Scheme",
+            "type": "object",
+            "required": [
+              "flows"
+            ]
+          },
+          "^(open_id_connect_security_scheme)$": {
+            "additionalProperties": false,
+            "description": "OpenID Connect authentication.",
+            "patternProperties": {
+              "^(open_id_connect_url)$": {
+                "default": "",
+                "description": "The [OpenID Connect Discovery URL](https://openid.net/specs/openid-connect-discovery-1_0.html) for the OIDC provider's metadata.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "openIdConnectUrl": {
+                "default": "",
+                "description": "The [OpenID Connect Discovery URL](https://openid.net/specs/openid-connect-discovery-1_0.html) for the OIDC provider's metadata.",
+                "type": "string"
+              }
+            },
+            "title": "Open Id Connect Security Scheme",
+            "type": "object",
+            "required": [
+              "openIdConnectUrl"
+            ]
+          }
+        },
+        "properties": {
+          "apiKeySecurityScheme": {
+            "additionalProperties": false,
+            "description": "API key-based authentication.",
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "location": {
+                "default": "",
+                "description": "The location of the API key. Valid values are \"query\", \"header\", or \"cookie\".",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "description": "The name of the header, query, or cookie parameter to be used.",
+                "type": "string"
+              }
+            },
+            "title": "API Key Security Scheme",
+            "type": "object",
+            "required": [
+              "location",
+              "name"
+            ]
+          },
+          "httpAuthSecurityScheme": {
+            "additionalProperties": false,
+            "description": "HTTP authentication (Basic, Bearer, etc.).",
+            "patternProperties": {
+              "^(bearer_format)$": {
+                "default": "",
+                "description": "A hint to the client to identify how the bearer token is formatted (e.g., \"JWT\").\n Primarily for documentation purposes.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "bearerFormat": {
+                "default": "",
+                "description": "A hint to the client to identify how the bearer token is formatted (e.g., \"JWT\").\n Primarily for documentation purposes.",
+                "type": "string"
+              },
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "scheme": {
+                "default": "",
+                "description": "The name of the HTTP Authentication scheme to be used in the Authorization header,\n as defined in RFC7235 (e.g., \"Bearer\").\n This value should be registered in the IANA Authentication Scheme registry.",
+                "type": "string"
+              }
+            },
+            "title": "HTTP Auth Security Scheme",
+            "type": "object",
+            "required": [
+              "scheme"
+            ]
+          },
+          "mtlsSecurityScheme": {
+            "additionalProperties": false,
+            "description": "Mutual TLS authentication.",
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              }
+            },
+            "title": "Mutual Tls Security Scheme",
+            "type": "object"
+          },
+          "oauth2SecurityScheme": {
+            "additionalProperties": false,
+            "description": "OAuth 2.0 authentication.",
+            "patternProperties": {
+              "^(oauth2_metadata_url)$": {
+                "default": "",
+                "description": "URL to the OAuth2 authorization server metadata [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414).\n TLS is required.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "flows": {
+                "additionalProperties": false,
+                "description": "An object containing configuration information for the supported OAuth 2.0 flows.",
+                "patternProperties": {
+                  "^(authorization_code)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Authorization Code flow.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "^(pkce_required)$": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "pkceRequired": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Authorization CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "authorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "^(client_credentials)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Client Credentials flow.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Client CredentialsO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "^(device_code)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Device Code flow.",
+                    "patternProperties": {
+                      "^(device_authorization_url)$": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "deviceAuthorizationUrl": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Device CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "deviceAuthorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  }
+                },
+                "properties": {
+                  "authorizationCode": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Authorization Code flow.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "^(pkce_required)$": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "pkceRequired": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Authorization CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "authorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "clientCredentials": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Client Credentials flow.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Client CredentialsO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "deviceCode": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Device Code flow.",
+                    "patternProperties": {
+                      "^(device_authorization_url)$": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "deviceAuthorizationUrl": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Device CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "deviceAuthorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "implicit": {
+                    "additionalProperties": false,
+                    "description": "Deprecated: Use Authorization Code + PKCE instead.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme. A map between the\n scope name and a short description for it. The map MAY be empty.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "title": "ImplicitO Auth Flow",
+                    "type": "object"
+                  },
+                  "password": {
+                    "additionalProperties": false,
+                    "description": "Deprecated: Use Authorization Code + PKCE or Device Code.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow. This MUST be in the form of a URL.\n The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme. A map between the\n scope name and a short description for it. The map MAY be empty.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow. This MUST be in the form of a URL.\n The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "PasswordO Auth Flow",
+                    "type": "object"
+                  }
+                },
+                "title": "O Auth Flows",
+                "type": "object"
+              },
+              "oauth2MetadataUrl": {
+                "default": "",
+                "description": "URL to the OAuth2 authorization server metadata [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414).\n TLS is required.",
+                "type": "string"
+              }
+            },
+            "title": "O Auth2 Security Scheme",
+            "type": "object",
+            "required": [
+              "flows"
+            ]
+          },
+          "openIdConnectSecurityScheme": {
+            "additionalProperties": false,
+            "description": "OpenID Connect authentication.",
+            "patternProperties": {
+              "^(open_id_connect_url)$": {
+                "default": "",
+                "description": "The [OpenID Connect Discovery URL](https://openid.net/specs/openid-connect-discovery-1_0.html) for the OIDC provider's metadata.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "openIdConnectUrl": {
+                "default": "",
+                "description": "The [OpenID Connect Discovery URL](https://openid.net/specs/openid-connect-discovery-1_0.html) for the OIDC provider's metadata.",
+                "type": "string"
+              }
+            },
+            "title": "Open Id Connect Security Scheme",
+            "type": "object",
+            "required": [
+              "openIdConnectUrl"
+            ]
+          }
+        },
+        "title": "Security Scheme",
+        "type": "object"
+      },
+      "description": "The security scheme details used for authenticating with this agent.",
+      "propertyNames": {
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "^(supported_interfaces)$": {
+      "description": "Ordered list of supported interfaces. The first entry is preferred.",
+      "items": {
+        "additionalProperties": false,
+        "description": "Declares a combination of a target URL, transport and protocol version for interacting with the agent.\n This allows agents to expose the same functionality over multiple protocol binding mechanisms.",
+        "patternProperties": {
+          "^(protocol_binding)$": {
+            "default": "",
+            "description": "The protocol binding supported at this URL. This is an open form string, to be\n easily extended for other protocol bindings. The core ones officially\n supported are `JSONRPC`, `GRPC` and `HTTP+JSON`.",
+            "type": "string"
+          },
+          "^(protocol_version)$": {
+            "default": "",
+            "description": "The version of the A2A protocol this interface exposes.\n Use the latest supported minor version per major version.\n Examples: \"0.3\", \"1.0\"",
+            "type": "string"
+          }
+        },
+        "properties": {
+          "protocolBinding": {
+            "default": "",
+            "description": "The protocol binding supported at this URL. This is an open form string, to be\n easily extended for other protocol bindings. The core ones officially\n supported are `JSONRPC`, `GRPC` and `HTTP+JSON`.",
+            "type": "string"
+          },
+          "protocolVersion": {
+            "default": "",
+            "description": "The version of the A2A protocol this interface exposes.\n Use the latest supported minor version per major version.\n Examples: \"0.3\", \"1.0\"",
+            "type": "string"
+          },
+          "tenant": {
+            "default": "",
+            "description": "Optional. An opaque string used for routing requests to a specific agent\n or tenant when multiple agents are served behind a single A2A endpoint.\n When set, clients MUST include this value in the `tenant` field of all\n request messages sent to this interface. The server is responsible for\n interpreting the value and routing requests accordingly; the protocol\n does not define its format or semantics.",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "description": "The URL where this interface is available. Must be a valid absolute HTTPS URL in production.\n Example: \"https://api.example.com/a2a/v1\", \"https://grpc.example.com/a2a\"",
+            "type": "string"
+          }
+        },
+        "title": "Agent Interface",
+        "type": "object",
+        "required": [
+          "url",
+          "protocolBinding",
+          "protocolVersion"
+        ]
+      },
+      "type": "array"
+    }
+  },
+  "properties": {
+    "capabilities": {
+      "additionalProperties": false,
+      "description": "A2A Capability set supported by the agent.",
+      "patternProperties": {
+        "^(extended_agent_card)$": {
+          "description": "Indicates if the agent supports providing an extended agent card when authenticated.",
+          "type": "boolean"
+        },
+        "^(push_notifications)$": {
+          "description": "Indicates if the agent supports sending push notifications for asynchronous task updates.",
+          "type": "boolean"
+        }
+      },
+      "properties": {
+        "extendedAgentCard": {
+          "description": "Indicates if the agent supports providing an extended agent card when authenticated.",
+          "type": "boolean"
+        },
+        "extensions": {
+          "description": "A list of protocol extensions supported by the agent.",
+          "items": {
+            "additionalProperties": false,
+            "description": "A declaration of a protocol extension supported by an Agent.",
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "A human-readable description of how this agent uses the extension.",
+                "type": "string"
+              },
+              "params": {
+                "title": "Struct",
+                "type": "object",
+                "description": "Optional. Extension-specific configuration parameters."
+              },
+              "required": {
+                "default": false,
+                "description": "If true, the client must understand and comply with the extension's requirements.",
+                "type": "boolean"
+              },
+              "uri": {
+                "default": "",
+                "description": "The unique URI identifying the extension.",
+                "type": "string"
+              }
+            },
+            "title": "Agent Extension",
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "pushNotifications": {
+          "description": "Indicates if the agent supports sending push notifications for asynchronous task updates.",
+          "type": "boolean"
+        },
+        "streaming": {
+          "description": "Indicates if the agent supports streaming responses.",
+          "type": "boolean"
+        }
+      },
+      "title": "Agent Capabilities",
+      "type": "object"
+    },
+    "defaultInputModes": {
+      "description": "The set of interaction modes that the agent supports across all skills.\n This can be overridden per skill. Defined as media types.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "minItems": 1
+    },
+    "defaultOutputModes": {
+      "description": "The media types supported as outputs from this agent.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "minItems": 1
+    },
+    "description": {
+      "default": "",
+      "description": "A human-readable description of the agent, assisting users and other agents\n in understanding its purpose.\n Example: \"Agent that helps users with recipes and cooking.\"",
+      "type": "string"
+    },
+    "documentationUrl": {
+      "description": "A URL providing additional documentation about the agent.",
+      "type": "string"
+    },
+    "iconUrl": {
+      "description": "Optional. A URL to an icon for the agent.",
+      "type": "string"
+    },
+    "name": {
+      "default": "",
+      "description": "A human readable name for the agent.\n Example: \"Recipe Agent\"",
+      "type": "string"
+    },
+    "provider": {
+      "additionalProperties": false,
+      "description": "The service provider of the agent.",
+      "properties": {
+        "organization": {
+          "default": "",
+          "description": "The name of the agent provider's organization.\n Example: \"Google\"",
+          "type": "string"
+        },
+        "url": {
+          "default": "",
+          "description": "A URL for the agent provider's website or relevant documentation.\n Example: \"https://ai.google.dev\"",
+          "type": "string"
+        }
+      },
+      "title": "Agent Provider",
+      "type": "object",
+      "required": [
+        "url",
+        "organization"
+      ]
+    },
+    "securityRequirements": {
+      "description": "Security requirements for contacting the agent.",
+      "items": {
+        "additionalProperties": false,
+        "description": "Defines the security requirements for an agent.",
+        "properties": {
+          "schemes": {
+            "additionalProperties": {
+              "additionalProperties": false,
+              "description": "A list of strings.",
+              "properties": {
+                "list": {
+                  "description": "The individual string values.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "title": "String List",
+              "type": "object"
+            },
+            "description": "A map of security schemes to the required scopes.",
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "title": "Security Requirement",
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "securitySchemes": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "description": "Defines a security scheme that can be used to secure an agent's endpoints.\n This is a discriminated union type based on the OpenAPI 3.2 Security Scheme Object.\n See: https://spec.openapis.org/oas/v3.2.0.html#security-scheme-object",
+        "patternProperties": {
+          "^(api_key_security_scheme)$": {
+            "additionalProperties": false,
+            "description": "API key-based authentication.",
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "location": {
+                "default": "",
+                "description": "The location of the API key. Valid values are \"query\", \"header\", or \"cookie\".",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "description": "The name of the header, query, or cookie parameter to be used.",
+                "type": "string"
+              }
+            },
+            "title": "API Key Security Scheme",
+            "type": "object",
+            "required": [
+              "location",
+              "name"
+            ]
+          },
+          "^(http_auth_security_scheme)$": {
+            "additionalProperties": false,
+            "description": "HTTP authentication (Basic, Bearer, etc.).",
+            "patternProperties": {
+              "^(bearer_format)$": {
+                "default": "",
+                "description": "A hint to the client to identify how the bearer token is formatted (e.g., \"JWT\").\n Primarily for documentation purposes.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "bearerFormat": {
+                "default": "",
+                "description": "A hint to the client to identify how the bearer token is formatted (e.g., \"JWT\").\n Primarily for documentation purposes.",
+                "type": "string"
+              },
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "scheme": {
+                "default": "",
+                "description": "The name of the HTTP Authentication scheme to be used in the Authorization header,\n as defined in RFC7235 (e.g., \"Bearer\").\n This value should be registered in the IANA Authentication Scheme registry.",
+                "type": "string"
+              }
+            },
+            "title": "HTTP Auth Security Scheme",
+            "type": "object",
+            "required": [
+              "scheme"
+            ]
+          },
+          "^(mtls_security_scheme)$": {
+            "additionalProperties": false,
+            "description": "Mutual TLS authentication.",
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              }
+            },
+            "title": "Mutual Tls Security Scheme",
+            "type": "object"
+          },
+          "^(oauth2_security_scheme)$": {
+            "additionalProperties": false,
+            "description": "OAuth 2.0 authentication.",
+            "patternProperties": {
+              "^(oauth2_metadata_url)$": {
+                "default": "",
+                "description": "URL to the OAuth2 authorization server metadata [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414).\n TLS is required.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "flows": {
+                "additionalProperties": false,
+                "description": "An object containing configuration information for the supported OAuth 2.0 flows.",
+                "patternProperties": {
+                  "^(authorization_code)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Authorization Code flow.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "^(pkce_required)$": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "pkceRequired": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Authorization CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "authorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "^(client_credentials)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Client Credentials flow.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Client CredentialsO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "^(device_code)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Device Code flow.",
+                    "patternProperties": {
+                      "^(device_authorization_url)$": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "deviceAuthorizationUrl": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Device CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "deviceAuthorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  }
+                },
+                "properties": {
+                  "authorizationCode": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Authorization Code flow.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "^(pkce_required)$": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "pkceRequired": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Authorization CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "authorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "clientCredentials": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Client Credentials flow.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Client CredentialsO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "deviceCode": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Device Code flow.",
+                    "patternProperties": {
+                      "^(device_authorization_url)$": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "deviceAuthorizationUrl": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Device CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "deviceAuthorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "implicit": {
+                    "additionalProperties": false,
+                    "description": "Deprecated: Use Authorization Code + PKCE instead.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme. A map between the\n scope name and a short description for it. The map MAY be empty.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "title": "ImplicitO Auth Flow",
+                    "type": "object"
+                  },
+                  "password": {
+                    "additionalProperties": false,
+                    "description": "Deprecated: Use Authorization Code + PKCE or Device Code.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow. This MUST be in the form of a URL.\n The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme. A map between the\n scope name and a short description for it. The map MAY be empty.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow. This MUST be in the form of a URL.\n The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "PasswordO Auth Flow",
+                    "type": "object"
+                  }
+                },
+                "title": "O Auth Flows",
+                "type": "object"
+              },
+              "oauth2MetadataUrl": {
+                "default": "",
+                "description": "URL to the OAuth2 authorization server metadata [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414).\n TLS is required.",
+                "type": "string"
+              }
+            },
+            "title": "O Auth2 Security Scheme",
+            "type": "object",
+            "required": [
+              "flows"
+            ]
+          },
+          "^(open_id_connect_security_scheme)$": {
+            "additionalProperties": false,
+            "description": "OpenID Connect authentication.",
+            "patternProperties": {
+              "^(open_id_connect_url)$": {
+                "default": "",
+                "description": "The [OpenID Connect Discovery URL](https://openid.net/specs/openid-connect-discovery-1_0.html) for the OIDC provider's metadata.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "openIdConnectUrl": {
+                "default": "",
+                "description": "The [OpenID Connect Discovery URL](https://openid.net/specs/openid-connect-discovery-1_0.html) for the OIDC provider's metadata.",
+                "type": "string"
+              }
+            },
+            "title": "Open Id Connect Security Scheme",
+            "type": "object",
+            "required": [
+              "openIdConnectUrl"
+            ]
+          }
+        },
+        "properties": {
+          "apiKeySecurityScheme": {
+            "additionalProperties": false,
+            "description": "API key-based authentication.",
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "location": {
+                "default": "",
+                "description": "The location of the API key. Valid values are \"query\", \"header\", or \"cookie\".",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "description": "The name of the header, query, or cookie parameter to be used.",
+                "type": "string"
+              }
+            },
+            "title": "API Key Security Scheme",
+            "type": "object",
+            "required": [
+              "location",
+              "name"
+            ]
+          },
+          "httpAuthSecurityScheme": {
+            "additionalProperties": false,
+            "description": "HTTP authentication (Basic, Bearer, etc.).",
+            "patternProperties": {
+              "^(bearer_format)$": {
+                "default": "",
+                "description": "A hint to the client to identify how the bearer token is formatted (e.g., \"JWT\").\n Primarily for documentation purposes.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "bearerFormat": {
+                "default": "",
+                "description": "A hint to the client to identify how the bearer token is formatted (e.g., \"JWT\").\n Primarily for documentation purposes.",
+                "type": "string"
+              },
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "scheme": {
+                "default": "",
+                "description": "The name of the HTTP Authentication scheme to be used in the Authorization header,\n as defined in RFC7235 (e.g., \"Bearer\").\n This value should be registered in the IANA Authentication Scheme registry.",
+                "type": "string"
+              }
+            },
+            "title": "HTTP Auth Security Scheme",
+            "type": "object",
+            "required": [
+              "scheme"
+            ]
+          },
+          "mtlsSecurityScheme": {
+            "additionalProperties": false,
+            "description": "Mutual TLS authentication.",
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              }
+            },
+            "title": "Mutual Tls Security Scheme",
+            "type": "object"
+          },
+          "oauth2SecurityScheme": {
+            "additionalProperties": false,
+            "description": "OAuth 2.0 authentication.",
+            "patternProperties": {
+              "^(oauth2_metadata_url)$": {
+                "default": "",
+                "description": "URL to the OAuth2 authorization server metadata [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414).\n TLS is required.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "flows": {
+                "additionalProperties": false,
+                "description": "An object containing configuration information for the supported OAuth 2.0 flows.",
+                "patternProperties": {
+                  "^(authorization_code)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Authorization Code flow.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "^(pkce_required)$": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "pkceRequired": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Authorization CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "authorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "^(client_credentials)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Client Credentials flow.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Client CredentialsO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "^(device_code)$": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Device Code flow.",
+                    "patternProperties": {
+                      "^(device_authorization_url)$": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "deviceAuthorizationUrl": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Device CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "deviceAuthorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  }
+                },
+                "properties": {
+                  "authorizationCode": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Authorization Code flow.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "^(pkce_required)$": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow.",
+                        "type": "string"
+                      },
+                      "pkceRequired": {
+                        "default": false,
+                        "description": "Indicates if PKCE (RFC 7636) is required for this flow.\n PKCE should always be used for public clients and is recommended for all clients.",
+                        "type": "boolean"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Authorization CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "authorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "clientCredentials": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Client Credentials flow.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Client CredentialsO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "deviceCode": {
+                    "additionalProperties": false,
+                    "description": "Configuration for the OAuth Device Code flow.",
+                    "patternProperties": {
+                      "^(device_authorization_url)$": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "deviceAuthorizationUrl": {
+                        "default": "",
+                        "description": "The device authorization endpoint URL.",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "Device CodeO Auth Flow",
+                    "type": "object",
+                    "required": [
+                      "deviceAuthorizationUrl",
+                      "tokenUrl",
+                      "scopes"
+                    ]
+                  },
+                  "implicit": {
+                    "additionalProperties": false,
+                    "description": "Deprecated: Use Authorization Code + PKCE instead.",
+                    "patternProperties": {
+                      "^(authorization_url)$": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS",
+                        "type": "string"
+                      },
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "authorizationUrl": {
+                        "default": "",
+                        "description": "The authorization URL to be used for this flow. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS",
+                        "type": "string"
+                      },
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme. A map between the\n scope name and a short description for it. The map MAY be empty.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "title": "ImplicitO Auth Flow",
+                    "type": "object"
+                  },
+                  "password": {
+                    "additionalProperties": false,
+                    "description": "Deprecated: Use Authorization Code + PKCE or Device Code.",
+                    "patternProperties": {
+                      "^(refresh_url)$": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "^(token_url)$": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow. This MUST be in the form of a URL.\n The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "properties": {
+                      "refreshUrl": {
+                        "default": "",
+                        "description": "The URL to be used for obtaining refresh tokens. This MUST be in the\n form of a URL. The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The available scopes for the OAuth2 security scheme. A map between the\n scope name and a short description for it. The map MAY be empty.",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "tokenUrl": {
+                        "default": "",
+                        "description": "The token URL to be used for this flow. This MUST be in the form of a URL.\n The OAuth2 standard requires the use of TLS.",
+                        "type": "string"
+                      }
+                    },
+                    "title": "PasswordO Auth Flow",
+                    "type": "object"
+                  }
+                },
+                "title": "O Auth Flows",
+                "type": "object"
+              },
+              "oauth2MetadataUrl": {
+                "default": "",
+                "description": "URL to the OAuth2 authorization server metadata [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414).\n TLS is required.",
+                "type": "string"
+              }
+            },
+            "title": "O Auth2 Security Scheme",
+            "type": "object",
+            "required": [
+              "flows"
+            ]
+          },
+          "openIdConnectSecurityScheme": {
+            "additionalProperties": false,
+            "description": "OpenID Connect authentication.",
+            "patternProperties": {
+              "^(open_id_connect_url)$": {
+                "default": "",
+                "description": "The [OpenID Connect Discovery URL](https://openid.net/specs/openid-connect-discovery-1_0.html) for the OIDC provider's metadata.",
+                "type": "string"
+              }
+            },
+            "properties": {
+              "description": {
+                "default": "",
+                "description": "An optional description for the security scheme.",
+                "type": "string"
+              },
+              "openIdConnectUrl": {
+                "default": "",
+                "description": "The [OpenID Connect Discovery URL](https://openid.net/specs/openid-connect-discovery-1_0.html) for the OIDC provider's metadata.",
+                "type": "string"
+              }
+            },
+            "title": "Open Id Connect Security Scheme",
+            "type": "object",
+            "required": [
+              "openIdConnectUrl"
+            ]
+          }
+        },
+        "title": "Security Scheme",
+        "type": "object"
+      },
+      "description": "The security scheme details used for authenticating with this agent.",
+      "propertyNames": {
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "signatures": {
+      "description": "JSON Web Signatures computed for this `AgentCard`.",
+      "items": {
+        "additionalProperties": false,
+        "description": "AgentCardSignature represents a JWS signature of an AgentCard.\n This follows the JSON format of an RFC 7515 JSON Web Signature (JWS).",
+        "properties": {
+          "header": {
+            "title": "Struct",
+            "type": "object",
+            "description": "The unprotected JWS header values."
+          },
+          "protected": {
+            "default": "",
+            "description": "(-- api-linter: core::0140::reserved-words=disabled\n     aip.dev/not-precedent: Backwards compatibility --)\n Required. The protected JWS header for the signature. This is always a\n base64url-encoded JSON object.",
+            "type": "string"
+          },
+          "signature": {
+            "default": "",
+            "description": "Required. The computed signature, base64url-encoded.",
+            "type": "string"
+          }
+        },
+        "title": "Agent Card Signature",
+        "type": "object",
+        "required": [
+          "protected",
+          "signature"
+        ]
+      },
+      "type": "array"
+    },
+    "skills": {
+      "description": "Skills represent the abilities of an agent.\n It is largely a descriptive concept but represents a more focused set of behaviors that the\n agent is likely to succeed at.",
+      "items": {
+        "additionalProperties": false,
+        "description": "Represents a distinct capability or function that an agent can perform.",
+        "patternProperties": {
+          "^(input_modes)$": {
+            "description": "The set of supported input media types for this skill, overriding the agent's defaults.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "^(output_modes)$": {
+            "description": "The set of supported output media types for this skill, overriding the agent's defaults.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "^(security_requirements)$": {
+            "description": "Security schemes necessary for this skill.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Defines the security requirements for an agent.",
+              "properties": {
+                "schemes": {
+                  "additionalProperties": {
+                    "additionalProperties": false,
+                    "description": "A list of strings.",
+                    "properties": {
+                      "list": {
+                        "description": "The individual string values.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "title": "String List",
+                    "type": "object"
+                  },
+                  "description": "A map of security schemes to the required scopes.",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              },
+              "title": "Security Requirement",
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "properties": {
+          "description": {
+            "default": "",
+            "description": "A detailed description of the skill.",
+            "type": "string"
+          },
+          "examples": {
+            "description": "Example prompts or scenarios that this skill can handle.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "default": "",
+            "description": "A unique identifier for the agent's skill.",
+            "type": "string"
+          },
+          "inputModes": {
+            "description": "The set of supported input media types for this skill, overriding the agent's defaults.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "default": "",
+            "description": "A human-readable name for the skill.",
+            "type": "string"
+          },
+          "outputModes": {
+            "description": "The set of supported output media types for this skill, overriding the agent's defaults.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "securityRequirements": {
+            "description": "Security schemes necessary for this skill.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Defines the security requirements for an agent.",
+              "properties": {
+                "schemes": {
+                  "additionalProperties": {
+                    "additionalProperties": false,
+                    "description": "A list of strings.",
+                    "properties": {
+                      "list": {
+                        "description": "The individual string values.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "title": "String List",
+                    "type": "object"
+                  },
+                  "description": "A map of security schemes to the required scopes.",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              },
+              "title": "Security Requirement",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "description": "A set of keywords describing the skill's capabilities.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1
+          }
+        },
+        "title": "Agent Skill",
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "tags"
+        ]
+      },
+      "type": "array",
+      "minItems": 1
+    },
+    "supportedInterfaces": {
+      "description": "Ordered list of supported interfaces. The first entry is preferred.",
+      "items": {
+        "additionalProperties": false,
+        "description": "Declares a combination of a target URL, transport and protocol version for interacting with the agent.\n This allows agents to expose the same functionality over multiple protocol binding mechanisms.",
+        "patternProperties": {
+          "^(protocol_binding)$": {
+            "default": "",
+            "description": "The protocol binding supported at this URL. This is an open form string, to be\n easily extended for other protocol bindings. The core ones officially\n supported are `JSONRPC`, `GRPC` and `HTTP+JSON`.",
+            "type": "string"
+          },
+          "^(protocol_version)$": {
+            "default": "",
+            "description": "The version of the A2A protocol this interface exposes.\n Use the latest supported minor version per major version.\n Examples: \"0.3\", \"1.0\"",
+            "type": "string"
+          }
+        },
+        "properties": {
+          "protocolBinding": {
+            "default": "",
+            "description": "The protocol binding supported at this URL. This is an open form string, to be\n easily extended for other protocol bindings. The core ones officially\n supported are `JSONRPC`, `GRPC` and `HTTP+JSON`.",
+            "type": "string"
+          },
+          "protocolVersion": {
+            "default": "",
+            "description": "The version of the A2A protocol this interface exposes.\n Use the latest supported minor version per major version.\n Examples: \"0.3\", \"1.0\"",
+            "type": "string"
+          },
+          "tenant": {
+            "default": "",
+            "description": "Optional. An opaque string used for routing requests to a specific agent\n or tenant when multiple agents are served behind a single A2A endpoint.\n When set, clients MUST include this value in the `tenant` field of all\n request messages sent to this interface. The server is responsible for\n interpreting the value and routing requests accordingly; the protocol\n does not define its format or semantics.",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "description": "The URL where this interface is available. Must be a valid absolute HTTPS URL in production.\n Example: \"https://api.example.com/a2a/v1\", \"https://grpc.example.com/a2a\"",
+            "type": "string"
+          }
+        },
+        "title": "Agent Interface",
+        "type": "object",
+        "required": [
+          "url",
+          "protocolBinding",
+          "protocolVersion"
+        ]
+      },
+      "type": "array",
+      "minItems": 1
+    },
+    "version": {
+      "default": "",
+      "description": "The version of the agent.\n Example: \"1.0.0\"",
+      "type": "string"
+    }
+  },
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "supportedInterfaces",
+    "version",
+    "capabilities",
+    "defaultInputModes",
+    "defaultOutputModes",
+    "skills"
+  ]
+}

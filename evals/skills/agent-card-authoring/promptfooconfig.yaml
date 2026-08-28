@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: Agent card authoring skill effectiveness
+
+# Two arms over the same tasks. Arm labels come from the skill's frontmatter
+# version, so bumping metadata.version in SKILL.md relabels the comparison.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # Custom provider, not `openai:chat:*`: same OpenAI-compatible call, plus a
+  # `load_resource` tool over the skill's own directory so the skill arm can
+  # follow SKILL.md's pointers to assets/example-agent-card.json,
+  # assets/example-skill.md, and references/a2a-lifecycle.md. The tool exists
+  # only when the prompt supplies `skillDir` (see prompts/arms.js), so the
+  # baseline arm sends no `tools` key and is called exactly as before.
+  - id: file://../../lib/skill-tools.js
+    label: deepseek-v4-flash+resources
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      # 3 files, ~9 KB bundled (largest is example-skill.md at 4.1 KB). 4 rounds
+      # covers all three plus one wrong guess.
+      maxToolCalls: 4
+      maxResourceBytes: 16384
+
+defaultTest:
+  options:
+    # The llm-swap gateway returns reasoning as message content. This pulls the
+    # fenced agent-card.json out of that leak; a negative-control case with no
+    # card gets a sentinel-prefixed pass-through so the rubric still sees the
+    # reply. See assertions/agentcard.cjs:normalizeToJson.
+    transform: file://assertions/agentcard.cjs:normalizeToJson
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # Only the latency ceiling is universal - see tests/cases.yaml for why
+    # everything else lives per case rather than here: two of the five cases'
+    # correct answer is not a card, and a defaultTest assertion would grade
+    # those with a schema check that can only report "no card found" against
+    # correct behavior.
+    - type: latency
+      threshold: 180000
+
+tests:
+  - file://tests/*.yaml

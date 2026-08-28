@@ -1,0 +1,247 @@
+# Two real repos, pinned in lib/repo.js and served to both arms via repoDir
+# (prompts/arms.js). Tasks are written the way the person asking would
+# actually type them - partial, casual - and never name a section, a
+# discoverability test, or which facts are hard to find: deciding that is the
+# thing being graded.
+#
+# citedFactsExistInRepo (assertions/agentsmd.cjs) is the suite's central
+# claim: every command or path the produced file cites has to actually exist
+# in the repo it was written against. It is reused across all three cases.
+
+- description: fresh AGENTS.md for requests - nobody has one yet
+  vars:
+    repo: requests
+    task: |
+      the requests repo doesn't have any AGENTS.md yet and it shows - people
+      keep running pip install -e . then wondering why half of pytest's
+      plugins are missing, and we just had a PR closed for listing an LLM as
+      co-author. can you write us a root AGENTS.md so this stops happening
+    evidence: |
+      - `pip install -e .` alone does not install pytest or its plugins;
+        the dev setup needs `pip install -r requirements-dev.txt` (or
+        `make init`, which runs the same command).
+      - `make test` runs the suite; `make coverage` adds coverage
+        reporting; `tox` (envs `default` and `use_chardet_on_py3`) runs it
+        across every supported interpreter.
+      - pytest is configured with `--doctest-modules`, so doctests inside
+        source docstrings are collected and must pass, not only tests/.
+      - `.github/AI_POLICY.md` forbids unsupervised agentic tools and LLM
+        co-authorship on commits, and requires a human who can defend every
+        line of a contribution.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: requests
+      metric: cited_facts_exist
+
+    # Claim: "discoverability-first rubric". Source: agents.md, the
+    # community convention this file format is named for (fetched
+    # 2026-08-27; the skill itself cites no external convention by name).
+    # It defines the file's whole reason to exist as holding what a README
+    # would only clutter: "the extra, sometimes detailed context coding
+    # agents need: build steps, tests, and conventions that might clutter a
+    # README or aren't relevant to human contributors" - stated precisely to
+    # "Keep READMEs concise and focused on human contributors." A file that
+    # restates what one glance at the repo already gives an agent fails that
+    # standard as surely as one that omits a real hazard.
+    - &discoverability_filter
+      type: llm-rubric
+      # A custom rubricPrompt replaces promptfoo's default JSON-format system
+      # message wholesale (loadRubricPrompt in graders-*.cjs returns the
+      # override verbatim rather than merging it), so it has to reassert the
+      # JSON contract itself or the row dies with "Could not extract JSON" -
+      # reproduced on this exact suite, matched against adr-authoring's
+      # tests/cases.yaml, which carries this same system message and scored
+      # 120/120 llm-rubric rows with zero extraction failures historically.
+      rubricPrompt:
+        - role: system
+          content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else:
+            {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
+        - role: user
+          content: |
+            <Output>{{output}}</Output>
+            <Evidence>{{evidence}}</Evidence>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> is a candidate AGENTS.md for the psf/requests repository.
+        <Evidence> lists facts about the repository gathered independently -
+        treat it as ground truth, not as a list <Output> must quote verbatim.
+
+        Judge <Output> by whether it holds only what an agent could not
+        quickly get by reading the repo's own files, and omits what it could.
+        Answer each with a quote from <Output>, or NONE:
+
+        1. It tells the reader that installing with `pip install -e .` alone
+           is not enough for tests to run, and how to actually get a working
+           test setup (whether via requirements-dev.txt, an extra, or the
+           Makefile) - not merely "run pytest".
+        2. It surfaces the AI_POLICY.md constraint (no unsupervised agentic
+           tools, no LLM co-author, a human must own and be able to defend
+           every change) rather than omitting it or replacing it with generic
+           AI-ethics language of its own invention.
+        3. Score this item 1 if NONE of the following appear, 0 if any does:
+           a restated dependency list from pyproject.toml, a directory/file
+           tour, the MIT/Apache license text, or the CONTRIBUTING.md bug
+           report template - all one read away and not agent-specific.
+
+        Score from 0 to 1, never above 1: 0.4 for the first, 0.35 for the
+        second, 0.25 for the third. Award nothing for an item with no
+        quote to support it, except item 3 which is judged by absence.
+      threshold: 0.5
+      metric: discoverability_filter
+
+- description: nested AGENTS.md for requests/docs - people keep botching the sphinx build
+  vars:
+    repo: requests
+    existingRoot: |
+      Install dev deps before testing: `pip install -r requirements-dev.txt`
+      (plain `pip install -e .` skips pytest and its plugins).
+      Run the suite with `make test`; `make coverage` adds coverage
+      reporting; `tox` covers every supported interpreter.
+      Every PR needs a human who wrote and can defend the change. No LLM
+      co-author, no unsupervised agentic tools - see `.github/AI_POLICY.md`.
+    task: |
+      can you add a small AGENTS.md just for docs/? people keep trying to
+      build the sphinx docs and getting it wrong. we already have a root one
+      (below), don't just copy it in, only add what's specific to that folder
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: requests
+        # This file's own instructions are correctly written to run from
+        # docs/ ("build with `make html` from this directory"), so a bare
+        # `make html` has to resolve against docs/Makefile, not the root
+        # one - without this a true, accurate nested instruction was scored
+        # as invented on a live row.
+        cwd: docs
+      metric: cited_facts_exist
+
+    # Claim: "adding nested instructions" - a nested file narrows the root,
+    # it does not repeat it. Computed against the case's own vars.existingRoot,
+    # the exact root file the model was given, not a description of one.
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
+      metric: nested_not_redundant
+
+- description: AGENTS.md for is-plain-obj - five files, nothing hidden
+  vars:
+    repo: is-plain-obj
+    task: |
+      can you set up an AGENTS.md for is-plain-obj so agents know how to
+      work in this repo
+    # The judge's own ground truth. Without this the judge guessed at what
+    # index.js and .editorconfig actually contain and got it wrong twice on a
+    # live row: it called "tabs for indentation" invented when .editorconfig
+    # says `indent_style = tab` and index.js is tab-indented, and called
+    # Symbol.toStringTag/Symbol.iterator unforced when index.js literally
+    # tests `!(Symbol.toStringTag in value) && !(Symbol.iterator in value)`.
+    # Verbatim from the pinned checkout, not summarised.
+    evidence: |
+      Repository file listing (everything at the repo root): .editorconfig,
+      benchmark.js, index.d.ts, index.js, index.test-d.ts, license,
+      package.json, readme.md, test.js. A citation naming one of these files
+      is real, not invented, even though its contents are not all quoted below.
+
+      benchmark.js (what it does, not run by `npm test`): times isPlainObject
+      against a list of sample values, calling it 1e8 (100 million) times per
+      value in a loop, timed with console.time/console.timeEnd. A citation
+      matching this - "100 million iterations", "console.time", "manual
+      performance script" - is real, not invented.
+
+      test.js (what it does): the ava test suite, asserting isPlainObject
+      against plain and non-plain values including one created in a separate
+      vm context via node:vm's runInNewContext.
+
+      .editorconfig (full file):
+      root = true
+
+      [*]
+      indent_style = tab
+      end_of_line = lf
+      charset = utf-8
+      trim_trailing_whitespace = true
+      insert_final_newline = true
+
+      [*.yml]
+      indent_style = space
+      indent_size = 2
+
+      index.js (full file):
+      export default function isPlainObject(value) {
+      	if (typeof value !== 'object' || value === null) {
+      		return false;
+      	}
+
+      	const prototype = Object.getPrototypeOf(value);
+      	return (prototype === null || prototype === Object.prototype || Object.getPrototypeOf(prototype) === null) && !(Symbol.toStringTag in value) && !(Symbol.iterator in value);
+      }
+
+      package.json "scripts": { "test": "xo && ava && tsd" }. "type": "module".
+      "engines": { "node": ">=18" }. No other scripts, no build step.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: is-plain-obj
+        # The ideal answer here is a very short file, or an explicit refusal -
+        # both can legitimately cite nothing checkable at all. Contrast the
+        # other two cases, where this is left at its default (required).
+        requireCitation: false
+      metric: cited_facts_exist
+
+    # Negative control: the right answer here is a very short file, or a
+    # refusal to invent conventions the repo does not have. Source: Diátaxis
+    # (diataxis.fr/reference, fetched 2026-08-27; not cited by the skill),
+    # whose standard for reference-style technical material is that it is
+    # "austere and uncompromising", limited to describing "the machinery and
+    # how to operate it", and must avoid content that would "explain,
+    # instruct, discuss, opine" because that "run[s] counter to the needs of
+    # technical reference." A repo this thin gives an author almost nothing
+    # to describe, so padding with invented process or generic advice fails
+    # that standard directly.
+    - type: llm-rubric
+      # See discoverability_filter above: a custom rubricPrompt drops the
+      # default JSON-format instruction, so it is reasserted here explicitly.
+      rubricPrompt:
+        - role: system
+          content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else:
+            {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
+        - role: user
+          content: |
+            <Output>{{output}}</Output>
+            <Evidence>{{evidence}}</Evidence>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> answers a request for an AGENTS.md for a five-file npm
+        package (sindresorhus/is-plain-obj). <Evidence> is the verbatim,
+        complete content of every file in this repo that could possibly
+        justify a claim - treat it as ground truth, and treat anything
+        <Output> asserts that is not verifiable in <Evidence> as invented,
+        even if it happens to be true of the code in general (e.g. a claim
+        that follows from index.js's actual logic still needs to trace back
+        to <Evidence>, since that is what makes it non-invented here).
+
+        Answer each with a quote from <Output>, or NONE:
+
+        1. Score 1 if <Output> does NOT invent a repo-specific convention,
+           workflow, or constraint that <Evidence> does not support - a
+           branching model, a review process, an architecture note, a build
+           step that does not exist. Score 0 if it does. A claim that
+           <Evidence> does support (tab indentation, the realm/prototype/
+           Symbol checks index.js performs, ESM-only, Node >=18) is not
+           invented even if it is detailed.
+        2. Score 1 if <Output> does NOT pad with generic software-engineering
+           advice unconnected to this specific repo ("write clean code",
+           "add tests for new features", "follow best practices" and the
+           like). Score 0 if it does.
+        3. Score 1 if the file is either near-empty (a few lines, stating
+           only what <Evidence> actually supports) OR explicitly says there
+           is nothing here that is not already obvious from package.json.
+           Score 0 for anything longer that is not one of those two things.
+
+        Score from 0 to 1, never above 1: 0.4 for the first, 0.3 for the
+        second, 0.3 for the third.
+      threshold: 0.6
+      metric: resists_invention
