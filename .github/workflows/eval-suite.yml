@@ -1,0 +1,486 @@
+name: Evals
+
+on:
+  workflow_call:
+    inputs:
+      subject-template:
+        description: >
+          Path to the file whose effect is being measured, relative to the repo
+          root. `{suite}` expands to the suite name. Default is one skill per
+          suite; a repo testing a single shared file sets e.g. `AGENTS.md`.
+        type: string
+        default: 'skills/{suite}/SKILL.md'
+      suites-dir:
+        description: >
+          Where the suites live, relative to the caller's `evals/` directory -
+          the harness is installed there and resolves suites relative to itself.
+          `evals/skills` on disk means `skills` here.
+        type: string
+        default: 'skills'
+      harness-repo:
+        description: >
+          Repo holding evals/lib, run.sh, report.js and rollup.js. Leave EMPTY
+          when the caller IS the harness - otherwise a PR changing the harness
+          would be evaluated against the harness it is changing.
+        type: string
+        default: 'fagerbergj/dotagents'
+      harness-ref:
+        description: >
+          Ref of the harness repo to pin. Pin a tag or SHA - the harness is still
+          changing, and an unpinned `main` will move your baselines underneath you.
+          Defaults to a real commit on the harness's main rather than `main`
+          itself, since this repo does not tag releases yet; bump this default
+          deliberately as the harness moves, the same way a caller would bump
+          their own pin.
+        type: string
+        default: '03d5d3769627760940eec575ce27f8563178d529'
+      environment:
+        description: >
+          Deployment environment gating the paid job. Required - GitHub's
+          behaviour for an empty `environment` value is not documented anywhere
+          this was verified (no gate? an error? a literal environment named
+          ""?), and the dangerous reading is "no gate", so this workflow
+          refuses to guess: the eval job fails outright if this is left empty.
+          Set a real GitHub Environment name; these runs cost real money.
+        type: string
+        required: true
+      comment-prefix:
+        description: >
+          HTML-comment marker identifying this workflow's PR comments. Two
+          workflows sharing a prefix will collapse each other's comments, since
+          minimizeComment matches on it.
+        type: string
+        default: 'evals'
+      api-key-envar:
+        description: 'Name of the env var the suites read the gateway key from.'
+        type: string
+        default: 'OPENROUTER_API_KEY'
+    secrets:
+      gateway-key:
+        description: 'API key for the model gateway the suites call.'
+        required: true
+
+# Comment scheme: every run posts a NEW comment and marks this workflow's
+# earlier ones as outdated via GitHub's `minimizeComment` (see
+# .github/scripts/pr-comment.js). Nothing is overwritten, so the numbers from an
+# earlier push stay on the PR to compare against, collapsed. Two markers keep
+# the two kinds distinguishable:
+#   <!-- ${{ inputs.comment-prefix }}:plan -->     what will run, and what it costs
+#   <!-- ${{ inputs.comment-prefix }}:results -->  what happened
+# Both share the '<!-- ${{ inputs.comment-prefix }}' prefix, which is what the minimize step
+# matches on - broad enough to catch every variant of ours, narrow enough never
+# to touch a human's comment.
+
+# `.eval-harness` when the harness is checked out from another repo, `.` when the
+# caller IS the harness. Referenced by every step that runs a harness script.
+env:
+  HARNESS_DIR: ${{ inputs.harness-repo != '' && '.eval-harness' || '.' }}
+
+jobs:
+  detect:
+    name: Detect affected eval suites
+    runs-on: ubuntu-latest
+    # Fork-PR handling: this job stays on plain `pull_request` rather than switching
+    # to `pull_request_target`. `pull_request_target` runs with the base repo's write
+    # permissions and secrets even for a fork PR, and evaluates against the base
+    # branch's workflow file - a bigger blast radius the moment anything in this
+    # workflow ever checks out or runs PR-controlled code. `pull_request` keeps the
+    # standard, safer default: it checks out the harmless merge commit (fine here,
+    # since this job only reads paths, it doesn't execute anything from the PR),
+    # and the trade-off is that GITHUB_TOKEN is force-read-only for a fork PR
+    # regardless of the `permissions:` block below. So: detection and the job
+    # summary always run; the PR-comment step is skipped for fork PRs (it would
+    # 403 anyway) and those results surface only in the job summary instead.
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      suites: ${{ steps.detect.outputs.suites }}
+    steps:
+      # `required: true` on the `environment` input only rejects a caller that
+      # omits it, not one that passes an explicit empty string - and whether
+      # `environment: ""` on the eval job below would then mean "no gate" is
+      # unverified. Fail here, before any approval could be silently skipped,
+      # rather than trust that reading.
+      - name: Require a real approval environment
+        if: inputs.environment == ''
+        run: |
+          echo "::error::inputs.environment is empty. GitHub's behaviour for an empty job 'environment' is unverified and the dangerous reading is 'no approval gate', so this workflow refuses to run the paid eval job. Pass a real GitHub Environment name." >&2
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The harness lives in another repository; a reusable workflow brings no
+      # files with it, only steps. Pin the ref - an unpinned main moves the
+      # measuring instrument underneath the thing being measured.
+      - name: Check out the eval harness
+        if: inputs.harness-repo != ''
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.harness-repo }}
+          ref: ${{ inputs.harness-ref }}
+          path: .eval-harness
+
+      - name: List changed files
+        id: changed
+        run: |
+          git diff --name-only \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            > /tmp/changed-files.txt
+          echo "Changed files:"
+          cat /tmp/changed-files.txt
+
+      - name: Detect affected suites
+        id: detect
+        run: |
+          suites_json="$("${HARNESS_DIR}/.github/scripts/detect-suites.sh" "$GITHUB_WORKSPACE" "${{ inputs.suites-dir }}" "${{ inputs.subject-template }}" < /tmp/changed-files.txt)"
+          echo "$suites_json" > /tmp/suites-detail.json
+          names_json="$(jq -c '[.[].name]' /tmp/suites-detail.json)"
+          echo "suites=$names_json" >> "$GITHUB_OUTPUT"
+          echo "Detected suites: $names_json"
+
+      - name: Build estimate and comment body
+        id: report
+        run: |
+          count="$(jq 'length' /tmp/suites-detail.json)"
+          # Measured on this project: ~14 min and ~$0.05 per suite on
+          # openrouter:deepseek-v4-flash. Suites run in a matrix, so wall-clock is
+          # roughly one suite's time, not the sum; cost is per-suite so it does sum.
+          cost="$(awk -v n="$count" 'BEGIN { printf "%.2f", n * 0.05 }')"
+
+          {
+            echo "<!-- ${{ inputs.comment-prefix }}:plan -->"
+            echo "## Eval suites for this PR"
+            echo
+            if [ "$count" -eq 0 ]; then
+              echo "No eval suites are affected by the changed files (checked against \`${{ inputs.subject-template }}\` and \`evals/${{ inputs.suites-dir }}/**\`). Nothing will run."
+            else
+              echo "This PR affects **$count** eval suite(s):"
+              echo
+              echo "| Suite | Triggered by |"
+              echo "|---|---|"
+              jq -r '.[] | "| `" + .name + "` | " +
+                ( ( [ if (.skill_paths | length) > 0 then "skill changed (`" + .skill_paths[0] + "`)" else empty end,
+                      if (.suite_paths | length) > 0 then "suite changed (`" + .suite_paths[0] + "`)" else empty end
+                    ] | join("; ") )
+                ) + " |"' /tmp/suites-detail.json
+              echo
+              echo "**Estimate:** ~14 minutes wall-clock (suites run in a matrix, so this is roughly the time for one suite, not the sum) and ~\$$cost total (\$0.05/suite on \`openrouter:deepseek-v4-flash\`). An unchanged suite mostly replays from the cached promptfoo responses and costs far less than that."
+              echo
+              echo "Evals do not run automatically. A maintainer must approve the \`eval-approval\` environment before this workflow spends anything. **Approval is per run, not per PR:** every push to this branch starts a new run that has to be approved again."
+            fi
+          } > /tmp/comment-body.md
+
+          cat /tmp/comment-body.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on PR
+        # Skipped for fork PRs: GITHUB_TOKEN is read-only there under `pull_request`
+        # no matter what `permissions:` says, so this call would just 403 - and so
+        # would the minimize mutation inside the helper. The job summary written
+        # above still carries the same information.
+        #
+        # Also skipped when nothing is affected. A PR can match this workflow's
+        # `evals/**` path filter and still touch no suite - editing the reporter,
+        # say - and announcing "nothing will run" on those is noise on a PR that
+        # was never about evals. The summary still records it either way.
+        if: >-
+          github.event.pull_request.head.repo.full_name == github.repository
+          && steps.detect.outputs.suites != '[]'
+        uses: actions/github-script@v9
+        env:
+          # A job-level env is not visible to the script's process.env
+          # unless the step declares it.
+          HARNESS_DIR: ${{ env.HARNESS_DIR }}
+        with:
+          script: |
+            const fs = require('fs');
+            const post = require(`${process.env.GITHUB_WORKSPACE}/${process.env.HARNESS_DIR}/.github/scripts/pr-comment.js`);
+            const text = fs.readFileSync('/tmp/comment-body.md', 'utf8');
+            await post({
+              github,
+              context,
+              markers: ['<!-- ${{ inputs.comment-prefix }}'],
+              // Whether an eval has ever run on this PR is only knowable from the
+              // comments the helper is about to collapse, so the note is built
+              // from them. "Stale results above" and "nothing has run yet" are
+              // different states and a reader must not have to guess which it is.
+              body: (stale) => {
+                const ranBefore = stale.some((c) => c.body.includes('<!-- ${{ inputs.comment-prefix }}:results -->'));
+                return text + '\n' + (ranBefore
+                  ? '_An eval ran on an earlier push. Those results are still on this PR, collapsed as outdated - they describe the previous head, not this one._\n'
+                  : '_No eval has run on this PR yet._\n');
+              },
+            });
+
+  eval:
+    name: Eval ${{ matrix.suite }}
+    needs: detect
+    # Two separate gates, both load-bearing:
+    #   - the suites check keeps the matrix from being empty, which is a hard
+    #     workflow error rather than a skip;
+    #   - the fork check keeps PR-controlled code away from the API key. Under
+    #     plain `pull_request` a fork never receives secrets anyway, so without
+    #     this the job would burn an approval and then fail on an unset key.
+    #     Fork PRs get the detect comment and the job summary, nothing paid.
+    if: needs.detect.outputs.suites != '[]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # Nothing spends money until a maintainer approves this environment. The
+    # approval is scoped to one run, so every push needs a new one.
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    timeout-minutes: 60
+    strategy:
+      # One suite failing must not cancel the others: a red suite is still a
+      # result worth reporting, and the report job wants every artifact it can get.
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJson(needs.detect.outputs.suites) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The shipped skill is read out of the base branch for the third arm,
+          # so this job needs history, not just the merge commit.
+          fetch-depth: 0
+      # The harness lives in another repository; a reusable workflow brings no
+      # files with it, only steps. Pin the ref - an unpinned main moves the
+      # measuring instrument underneath the thing being measured.
+      - name: Check out the eval harness
+        if: inputs.harness-repo != ''
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.harness-repo }}
+          ref: ${{ inputs.harness-ref }}
+          path: .eval-harness
+
+      # Copied rather than run in place: run.sh resolves lib/, results/ and the
+      # suites relative to itself, so it has to sit beside the caller's suites.
+      - name: Install the harness beside the caller's suites
+        if: inputs.harness-repo != ''
+        run: |
+          set -euo pipefail
+          mkdir -p evals
+          cp -r .eval-harness/evals/lib evals/lib
+          cp .eval-harness/evals/run.sh .eval-harness/evals/report.js .eval-harness/evals/rollup.js evals/
+          # Only when the caller ships none of its own: a caller whose grader
+          # needs an extra package commits its own evals/package.json (starting
+          # from the harness's and adding to it) and that copy wins here. This
+          # never merges the two - a caller package.json is trusted as-is, and
+          # is the caller's responsibility to keep in sync with what the
+          # harness's suites need.
+          if [ ! -f evals/package.json ]; then
+            cp .eval-harness/evals/package.json .eval-harness/evals/package-lock.json evals/
+          fi
+          chmod +x evals/run.sh
+          # AGENTS.md is the standard the suites are written against; carry it so
+          # anyone reading the run can see the rules it was graded by.
+          cp .eval-harness/evals/AGENTS.md evals/AGENTS.md 2>/dev/null || true
+
+      - name: Stage the shipped skill for comparison
+        id: stage
+        # A PR that edits SKILL.md makes the checkout the NEW version, so
+        # `skill-current` would silently BE the change with nothing to compare
+        # against - which is why a skill fix could only ever be judged against a
+        # published run from another day. Extract the base branch's copy and name
+        # it; run.sh then adds a third arm and the report gains a column.
+        # Unchanged (a suite-only PR) means two arms and no wasted third of a run.
+        run: |
+          base="origin/${{ github.base_ref }}"
+          file="$(printf '%s' "${{ inputs.subject-template }}" | sed "s/{suite}/${{ matrix.suite }}/g")"
+          # Exposed as a step output so the cache key below can hash the exact
+          # subject path without re-deriving the substitution a second time.
+          echo "subject_path=$file" >> "$GITHUB_OUTPUT"
+          git show "$base:$file" > /tmp/shipped-SKILL.md 2>/dev/null || exit 0
+          if diff -q /tmp/shipped-SKILL.md "$file" >/dev/null 2>&1; then
+            echo "skill unchanged against $base - two arms"; exit 0
+          fi
+          v=$(sed -n 's/^[[:space:]]*version:[[:space:]]*"\?\([^"]*\)"\?[[:space:]]*$/\1/p' /tmp/shipped-SKILL.md | head -1)
+          echo "SKILL_CURRENT=/tmp/shipped-SKILL.md" >> "$GITHUB_ENV"
+          echo "SKILL_BASE_VERSION=${v:-unversioned}" >> "$GITHUB_ENV"
+          echo "comparing against shipped ${v:-unversioned}"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'   # current LTS; matches evals/package.json engines
+          cache: npm
+          cache-dependency-path: evals/package-lock.json
+
+      - name: Install eval dependencies
+        working-directory: evals
+        # Graders that need a real parser (conventional-commits-parser,
+        # markdown-it) depend on it here rather than shelling out to npx.
+        # PyYAML is for lib/check-case-vars.py and is not guaranteed on the runner.
+        run: |
+          npm ci
+          python3 -m pip install --quiet --disable-pip-version-check pyyaml
+
+      - name: Restore promptfoo response cache
+        uses: actions/cache@v4
+        with:
+          path: evals/.cache
+          # The key busts on the suite's own files and on the skill under test,
+          # which are the only two inputs that change a prompt. `restore-keys`
+          # then falls back to this suite's previous cache on a miss, which is
+          # safe and is the whole point: promptfoo keys each cached response on
+          # the request itself (prompt text, model, params), so a changed prompt
+          # cannot read a stale entry - it just misses and calls the API. What
+          # the fallback buys is the unchanged half of a run: edit a SKILL.md and
+          # the `no-skill` arm still replays for free while `skill-current`
+          # genuinely re-runs.
+          #
+          # Deliberately NOT keyed on a run id or a commit sha: that would miss
+          # on every single run and make the cache decorative.
+          key: promptfoo-${{ matrix.suite }}-${{ hashFiles(format('evals/{0}/{1}/**', inputs.suites-dir, matrix.suite), steps.stage.outputs.subject_path) }}
+          restore-keys: |
+            promptfoo-${{ matrix.suite }}-
+
+      - name: Run suite
+        working-directory: evals
+        env:
+          ${{ inputs.api-key-envar }}: ${{ secrets.gateway-key }}
+          # `evals/.env` is gitignored and does not exist in CI, so the key comes
+          # from the environment. run.sh also exports OPENAI_API_KEY from it:
+          # every provider here is `openai:chat:*` and assertion-level provider
+          # config ignores apiKeyEnvar, so the judges authenticate off the
+          # OpenAI-compatible fallback or they 401 while generations succeed.
+          PROMPTFOO_CACHE_PATH: ${{ github.workspace }}/evals/.cache
+          # promptfoo writes every run to one shared SQLite db under its config
+          # dir, and concurrent suites deadlock on it with "database is locked".
+          # Matrix jobs are separate runners so they cannot collide today; this
+          # is set anyway so the invocation matches the local one and so
+          # collapsing the matrix into a single job stays safe.
+          PROMPTFOO_CONFIG_DIR: /tmp/pf-${{ matrix.suite }}
+          # run.sh resolves these relative to itself, and it now sits in evals/.
+          EVAL_SUBJECT: ../${{ inputs.subject-template }}
+          EVAL_SUITES_DIR: ${{ inputs.suites-dir }}
+          EVAL_API_KEY_ENVAR: ${{ inputs.api-key-envar }}
+        # run.sh is the same entry point used locally, and it already does the
+        # free checks first: the suite's offline self-test (node assertions/
+        # *.test.cjs) and lib/check-case-vars.py, which fails the run if a case
+        # var holds `{{` or `{%`. nunjucks would render those and blank BOTH arms
+        # while the run still reported success - that has produced a fabricated
+        # result here before. Both run before a single token is bought.
+        run: ./run.sh "${{ matrix.suite }}"
+
+      - name: Check the suite actually ran
+        working-directory: evals
+        # Not a score gate. This fires only when no row produced a score at all,
+        # which means the eval never ran - a bad key, an unreachable gateway, a
+        # broken provider - and that is a failed job, not a result. run.sh lets
+        # promptfoo exit non-zero so the report still renders from partial rows,
+        # so without this check a total wipeout would report as a green PR with
+        # an empty table.
+        run: |
+          set -eu
+          f="$(ls results/*.json | head -1)"
+          node -e '
+            const rows = require(process.argv[1]).results.results;
+            if (!rows.length || rows.every((r) => !Object.keys(r.namedScores || {}).length)) {
+              console.error("No row produced a score. The eval did not run; this is not a result.");
+              process.exit(1);
+            }
+          ' "$PWD/$f"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # Named per suite so a reader can pull one suite's run out of a matrix
+          # of ten. Holds the raw promptfoo JSON and the rendered report table.
+          name: eval-${{ matrix.suite }}
+          path: evals/results/
+          if-no-files-found: warn
+
+  report:
+    name: Report eval results
+    needs: [detect, eval]
+    # always(), because a failed or partly-failed matrix is exactly when the
+    # comment matters most. Skipped only when nothing was ever going to run.
+    if: always() && needs.eval.result != 'skipped' && needs.detect.outputs.suites != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out the eval harness
+        if: inputs.harness-repo != ''
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.harness-repo }}
+          ref: ${{ inputs.harness-ref }}
+          path: .eval-harness
+
+      - uses: actions/download-artifact@v4
+        # A matrix where every suite died leaves nothing to download. That is
+        # the case this job most needs to report, so a failed download must not
+        # stop it - the missing suites become the CAUTION banner below.
+        continue-on-error: true
+        with:
+          path: artifacts
+          pattern: eval-*
+
+      - name: Build comment body
+        env:
+          SUITES: ${{ needs.detect.outputs.suites }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          missing=()
+          {
+            echo "<!-- ${{ inputs.comment-prefix }}:results -->"
+            echo "## Eval results for \`${HEAD_SHA:0:7}\`"
+            echo
+            echo "> [!NOTE]"
+            echo "> **This does not block your PR.** Weigh these results as part of deciding whether it should merge."
+            echo
+
+            for suite in $(printf '%s' "$SUITES" | jq -r '.[]'); do
+              # `find`, not a shallow glob: upload-artifact roots the archive at the
+              # least common ancestor, and whether that flattens `evals/results/`
+              # away is version- and input-dependent. Searching the tree is correct
+              # under either layout, and is what eval-publish.yml already does.
+              md="$(find "artifacts/eval-$suite" -name '*.md' 2>/dev/null | head -1 || true)"
+              if [ -z "$md" ]; then missing+=("$suite"); continue; fi
+              echo
+              # Demote the report's own `# suite@version` heading to sit under
+              # this comment's `##`. First line only, so nothing in a grader's
+              # quoted reason can be rewritten by accident.
+              awk 'NR==1 { sub(/^# /, "### ") } { print }' "$md"
+            done
+
+            if [ ${#missing[@]} -gt 0 ]; then
+              echo
+              echo "> [!CAUTION]"
+              echo "> **${#missing[@]} suite(s) produced no results:** $(printf '`%s` ' "${missing[@]}")"
+              echo "> The eval could not run there, which is not the same as scoring badly. Check the [job log]($RUN_URL) before comparing anything against an earlier run."
+            fi
+          } > /tmp/results-body.md
+
+          cat /tmp/results-body.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on PR
+        # Same fork constraint as the detect job: read-only GITHUB_TOKEN on a
+        # fork PR means both createComment and minimizeComment 403. The eval job
+        # never runs for a fork anyway, so this is belt and braces.
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v9
+        env:
+          # A job-level env is not visible to the script's process.env
+          # unless the step declares it.
+          HARNESS_DIR: ${{ env.HARNESS_DIR }}
+        with:
+          script: |
+            const fs = require('fs');
+            const post = require(`${process.env.GITHUB_WORKSPACE}/${process.env.HARNESS_DIR}/.github/scripts/pr-comment.js`);
+            await post({
+              github,
+              context,
+              markers: ['<!-- ${{ inputs.comment-prefix }}'],
+              body: fs.readFileSync('/tmp/results-body.md', 'utf8'),
+            });
