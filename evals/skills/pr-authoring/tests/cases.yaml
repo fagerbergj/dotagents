@@ -1,47 +1,39 @@
-# One case per point on the size range - a one-line icon swap through an
-# eleven-file refactor - because "scaled to the size of the change" is the claim
-# under test. Every diff is a real commit from a working repository with the
-# author's own commit message and PR title stripped: the model writes from the
-# diff and one line of a developer's context, never from the author's wording.
-#
-# `maxWords` is a ceiling on the whole answer (title + description) and is
-# house-calibrated, not derived from any published standard: it exists because a
-# template dumped on a one-line diff is a failure this suite has actually seen.
-# There is no floor - nothing published endorses a minimum length, and brevity
-# that fits the change is the judges' call. Length alone cannot see padding that
-# fits under the ceiling; the `pr_quality` restatement criterion catches that.
-
-- description: ui-icon-swap-one-line
+- description: bat-3885
+  # Tiniest fixture in the pool (1 line, 2 LOC): the honest ground truth is one sentence, so this
+  # is coverage's own negative control - padding here has nowhere honest to hide.
   vars:
-    note: 'tiny one - the trash can was the odd control out, everything else in the app removes with an X'
+    fixture: bat-3885
+    note: 'typo report in the tracker, one word repeated in the README'
     diff: |
-      diff --git a/frontend/src/components/MemoryEntry.tsx b/frontend/src/components/MemoryEntry.tsx
-      index 95567ba..94bf1bb 100644
-      --- a/frontend/src/components/MemoryEntry.tsx
-      +++ b/frontend/src/components/MemoryEntry.tsx
-      @@ -151,7 +151,7 @@ export function MemoryEntry({ memory, onForget }: MemoryEntryProps) {
-                   title="Forget this memory"
-                   className="w-7 h-7 flex items-center justify-center rounded text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                 >
-      -            <span aria-hidden="true">🗑</span>
-      +            <span aria-hidden="true">✕</span>
-                 </button>
-               )}
-             </div>
+      diff --git a/README.md b/README.md
+      index 9eb4c09..8826d4e 100644
+      --- a/README.md
+      +++ b/README.md
+      @@ -902,7 +902,7 @@ cargo install --path . --locked --force
+       ```
+       
+       If you want to build an application that uses `bat`'s pretty-printing
+      -features as a library, check out the [the API documentation](https://docs.rs/bat/).
+      +features as a library, check out the [API documentation](https://docs.rs/bat/).
+       Note that you have to use either `regex-onig` or `regex-fancy` as a feature
+       when you depend on `bat` as a library.
+       
+    author_description: |
+      Small doubled-word fix in the README: "check out the [the API documentation]" renders as "the the API documentation". This removes the duplicate article so it reads "check out the [API documentation]". The link target is unchanged.
   assert:
     - type: javascript
       value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 105 }
+      config: { maxWords: 110 }
       metric: proportionality
-    # Shared unchanged across every real case - individually anchored so each
-    # case can append it to its own distinct proportionality config above.
-    # what_and_why is gone: 19 of its 20 rows sat at exactly 1.00 and every
-    # question it asked is asked again by items 1-3 below.
-    - &pr_quality
+
+    - &coverage
       type: llm-rubric
-      # A rubric only ever sees {{output}} and {{rubric}}, and this suite disables
-      # templating, so a {{note}} in the value below reaches the judge as those
-      # eight literal characters. Carry it in a tag of its own instead.
+      # A rubric only ever sees {{output}} and {{rubric}} unless it carries its
+      # own rubricPrompt, and a bare `- role: user` rubricPrompt drops
+      # promptfoo's system message establishing the {reason,pass,score} JSON
+      # contract - the exact "Could not extract JSON" failure that killed
+      # 18/18 rows of this suite's old pr_quality metric. Restating that
+      # system message is required, not decoration (evals/AGENTS.md).
       rubricPrompt:
         - role: system
           content: |
@@ -51,850 +43,55 @@
             {reason: string, pass: boolean, score: number}
         - role: user
           content: |
-            <AuthorNote>{{note}}</AuthorNote>
+            <AuthorDescription>{{author_description}}</AuthorDescription>
             <Output>{{output}}</Output>
             <Rubric>{{rubric}}</Rubric>
       value: |
-        The author's own note about the change is in <AuthorNote> above.
+        <AuthorDescription> above is this pull request's own author's real
+        description, withheld from whoever wrote <Output> - the one record of
+        WHY the change was made that exists nowhere in the diff, since only the
+        author had it. Source: Google's eng-practices guide on CL descriptions
+        asks exactly this of a description - "Why are these changes being
+        made? What contexts did you have as an author when making this
+        change? Were there decisions you made that aren't reflected in the
+        source code?"
+        (https://google.github.io/eng-practices/review/developer/cl-descriptions.html).
 
-        A reviewer is about to review a code change and has seen nothing of it
-        but this pull request. Judge the pull request as delivered: do not
-        reward or penalise how it was built, which features it used, or whether
-        it followed any particular authoring convention.
+        <AuthorDescription> is evidence of what a competent author thought
+        worth saying about THIS change, not a template to imitate. Do not
+        reward <Output> for matching its tone, structure, length, or wording,
+        and do not penalise <Output> for saying something true that
+        <AuthorDescription> happened to omit.
 
-        Answer each of the six below with a quote from the pull request, or
-        NONE. Answer all six before scoring.
+        1. List every substantive point <AuthorDescription> makes - each a
+           distinct claim about what changed, why, what it affects, or what
+           the reader should know - one per line, each quoted. Skip
+           boilerplate (a bare issue link with no explanation, a sign-off).
+           Call the count P.
+        2. For each quoted point, mark COVERED if <Output> conveys the same
+           substance somewhere - paraphrase is fine, exact wording is not
+           required - or MISSING if it does not. Call the number marked
+           COVERED C.
+        3. Compare <Output>'s overall length against <AuthorDescription>'s
+           own: write SHORTER, COMPARABLE, or LONGER.
+        4. Compute base = C / P.
+        5. If step 3 was LONGER, the final score is base * 0.85: spending more
+           words than the author did to cover the same or less ground is a
+           defect, not a neutral choice - this is the suite's own house
+           calibration, not conformance to any published standard. Otherwise
+           (SHORTER or COMPARABLE) the final score is base, unchanged:
+           matching or beating the author's length earns no separate bonus,
+           only the absence of this penalty.
 
-        1. What the change does and why it was made, with a first line that says
-           specifically what is being done, written as though it were an order.
-           "Fix bug" is NONE.
-        2. The problem the change solves. Where it claims an optimisation or a
-           trade-off, quote the number behind the claim; an asserted improvement
-           with no number is NONE.
-        3. Something the diff does not already show. Restating the changed file
-           list, narrating the hunks, or paraphrasing the code back is NONE,
-           however well written.
-        4. A claim specific to this change that the reviewer could check, rather
-           than a statement true of changes in general.
-        5. How the change was verified, concretely enough that the reviewer
-           could repeat it. Treat this as a house standard rather than
-           conformance to anything published.
-        6. Detail matched to the size of the change: quote either the section
-           that earns its length on a large change, or - on a one-line change -
-           the whole description, which counts as satisfying this item when it
-           is short. This is also a house standard, and a short description of a
-           small change is not a fault on its own.
+        Score from 0 to 1, never above 1, equal to the number computed in step 5.
+      threshold: 0.6
+      metric: coverage
 
-        Score from 0 to 1, never above 1: award 0.167 for each of the six you
-        answered with a quote, and nothing for each NONE.
-      threshold: 0.7
-      metric: pr_quality
-
-- description: vendored-pin-bump
-  vars:
-    note: 'pulling the newer dotagents in, nothing of ours changed'
-    diff: |
-      diff --git a/.agents/vendor/plugins.yaml b/.agents/vendor/plugins.yaml
-      index 8af0db2..1e8bd89 100644
-      --- a/.agents/vendor/plugins.yaml
-      +++ b/.agents/vendor/plugins.yaml
-      @@ -4,7 +4,7 @@
-       plugins:
-         - name: dotagents
-           url: https://github.com/fagerbergj/dotagents
-      -    ref: 3c58752bd0218943716cecbaa3da52333aaa2177
-      +    ref: dc452ce4abf593c32d5afcc70d72f6b96db0c0f6
-           path: .agents/vendor/dotagents
-         - name: ponytail
-           url: https://github.com/DietrichGebert/ponytail
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 105 }
-      metric: proportionality
-    - *pr_quality
-
-- description: dockerfile-missing-file
-  vars:
-    note: 'every worker spawn is dying on ERR_MODULE_NOT_FOUND since 0.43.0 - the shim imports a file that never made it into the image'
-    diff: |
-      diff --git a/Dockerfile b/Dockerfile
-      index 8c4fb1a..433a651 100644
-      --- a/Dockerfile
-      +++ b/Dockerfile
-      @@ -99,7 +99,7 @@ COPY --from=backend /go/pkg/mod /usr/local/go/pkg/mod
-       # (--no-session).
-       COPY --from=pi /opt/pi/node_modules /usr/local/lib/pi/node_modules
-       RUN ln -s /usr/local/lib/pi/node_modules/.bin/pi /usr/local/bin/pi
-      -COPY tools/pi-acp/pi-acp.mjs tools/pi-acp/mcp-client.mjs /usr/local/lib/pi-acp/
-      +COPY tools/pi-acp/pi-acp.mjs tools/pi-acp/mcp-client.mjs tools/pi-acp/otel.mjs /usr/local/lib/pi-acp/
-       COPY --from=frontend /usr/local/bin/node /usr/local/bin/node
-       COPY --from=frontend /usr/local/lib/node_modules /usr/local/lib/node_modules
-       RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 125 }
-      metric: proportionality
-    - *pr_quality
-
-- description: dependency-bump
-  vars:
-    note: 'routine bump, dependabot has been nagging about it for a week'
-    diff: |
-      diff --git a/frontend/package-lock.json b/frontend/package-lock.json
-      index 3c4bdd2..7386167 100644
-      --- a/frontend/package-lock.json
-      +++ b/frontend/package-lock.json
-      @@ -8,7 +8,7 @@
-             "name": "quack-ui",
-             "version": "0.1.0",
-             "dependencies": {
-      -        "highlight.js": "11.11.1",
-      +        "highlight.js": "11.12.0",
-               "mermaid": "^11.16.1",
-               "react": "^19.2.5",
-               "react-dom": "^19.2.8",
-      @@ -6089,9 +6089,9 @@
-             }
-           },
-           "node_modules/highlight.js": {
-      -      "version": "11.11.1",
-      -      "resolved": "https://registry.npmjs.org/highlight.js/-/highlight.js-11.11.1.tgz",
-      -      "integrity": "sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==",
-      +      "version": "11.12.0",
-      +      "resolved": "https://registry.npmjs.org/highlight.js/-/highlight.js-11.12.0.tgz",
-      +      "integrity": "sha512-nbfWpyRMcMrPMmDwJB+dhX/eiaPKtc2RB+0QZskqJ3WjRA/FDS0e9hZrx8EC/lbEv8gXy98FcDbNa/dspAaJMg==",
-             "license": "BSD-3-Clause",
-             "engines": {
-               "node": ">=12.0.0"
-      @@ -7387,6 +7387,15 @@
-               "url": "https://github.com/sponsors/wooorm"
-             }
-           },
-      +    "node_modules/lowlight/node_modules/highlight.js": {
-      +      "version": "11.11.2",
-      +      "resolved": "https://registry.npmjs.org/highlight.js/-/highlight.js-11.11.2.tgz",
-      +      "integrity": "sha512-oaXMACAU0kzOMXBjWpNcX+vlwSBCIAiZ9BHa7gA15NOTtT2L/l8OSZDuqS2XppOhZBPJ7hm4o8ep2kyuip2uEQ==",
-      +      "license": "BSD-3-Clause",
-      +      "engines": {
-      +        "node": ">=12.0.0"
-      +      }
-      +    },
-           "node_modules/lru-cache": {
-             "version": "11.5.2",
-             "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-11.5.2.tgz",
-      diff --git a/frontend/package.json b/frontend/package.json
-      index 6e1a754..f8cb6a3 100644
-      --- a/frontend/package.json
-      +++ b/frontend/package.json
-      @@ -15,7 +15,7 @@
-           "knip": "knip"
-         },
-         "dependencies": {
-      -    "highlight.js": "11.11.1",
-      +    "highlight.js": "11.12.0",
-           "mermaid": "^11.16.1",
-           "react": "^19.2.5",
-           "react-dom": "^19.2.8",
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 105 }
-      metric: proportionality
-    - *pr_quality
-
-- description: flaky-test-timeout-fix
-  vars:
-    note: 'these two go red in CI and green on my laptop every single time, it is the mermaid import being slow when the whole suite runs at once'
-    diff: |
-      diff --git a/frontend/src/components/AgentParts.mermaid.test.ts b/frontend/src/components/AgentParts.mermaid.test.ts
-      index 0537bbf..3fb6eb2 100644
-      --- a/frontend/src/components/AgentParts.mermaid.test.ts
-      +++ b/frontend/src/components/AgentParts.mermaid.test.ts
-      @@ -11,6 +11,11 @@ import { AssistantText } from './AgentParts'
-       ;(SVGElement.prototype as unknown as { getBBox: () => DOMRect }).getBBox = () =>
-         ({ x: 0, y: 0, width: 100, height: 20, top: 0, right: 0, bottom: 0, left: 0, toJSON: () => '' }) as DOMRect
-      
-      +// Must exceed waitFor's own budget below, or vitest kills the test while
-      +// waitFor still thinks it has time - mermaid's ~1MB import is genuinely slow
-      +// under full-suite concurrency.
-      +const mermaidTestTimeout = 20_000
-      +
-       async function waitFor(check: () => boolean, timeoutMs = 8000) {
-         const start = Date.now()
-         while (!check()) {
-      @@ -47,7 +52,7 @@ describe('AssistantText mermaid wiring', () => {
-           mount('Here:\n\n```mermaid\nflowchart TD\n  A --> B\n```\n')
-           await waitFor(() => host!.querySelector('[data-testid="mermaid-diagram"] svg') != null)
-           expect(host!.querySelector('[data-testid="mermaid-diagram"] svg')).not.toBeNull()
-      -  })
-      +  }, mermaidTestTimeout)
-      
-         it('does not attempt to render an unclosed (streaming) mermaid block', async () => {
-           mount('Here:\n\n```mermaid\nflowchart TD\n  A --> B')
-      @@ -60,7 +65,7 @@ describe('AssistantText mermaid wiring', () => {
-           // Falls back to the plain streaming code block - the fence content is still visible as text.
-           expect(host!.querySelector('pre')).not.toBeNull()
-           expect(host!.textContent).toContain('flowchart TD')
-      -  })
-      +  }, mermaidTestTimeout)
-      
-         it('renders normal markdown untouched when there is no mermaid block', () => {
-           mount('**bold** text and a [link](https://example.com)')
-      diff --git a/frontend/src/components/MermaidDiagram.test.ts b/frontend/src/components/MermaidDiagram.test.ts
-      index 0ad47b9..e6213a5 100644
-      --- a/frontend/src/components/MermaidDiagram.test.ts
-      +++ b/frontend/src/components/MermaidDiagram.test.ts
-      @@ -11,6 +11,11 @@ import { MermaidDiagram } from './MermaidDiagram'
-       ;(SVGElement.prototype as unknown as { getBBox: () => DOMRect }).getBBox = () =>
-         ({ x: 0, y: 0, width: 100, height: 20, top: 0, right: 0, bottom: 0, left: 0, toJSON: () => '' }) as DOMRect
-      
-      +// Must exceed waitFor's own budget below, or vitest kills the test while
-      +// waitFor still thinks it has time - mermaid's ~1MB import is genuinely slow
-      +// under full-suite concurrency.
-      +const mermaidTestTimeout = 20_000
-      +
-       async function waitFor(check: () => boolean, timeoutMs = 8000) {
-         const start = Date.now()
-         while (!check()) {
-      @@ -46,7 +51,7 @@ describe('MermaidDiagram', () => {
-      
-           expect(host.querySelector('[data-testid="mermaid-diagram"] svg')).not.toBeNull()
-           expect(host.textContent).not.toContain('Diagram failed to render')
-      -  })
-      +  }, mermaidTestTimeout)
-      
-         it('falls back to the source without throwing when the diagram is invalid', async () => {
-           // @ts-expect-error react act environment flag
-      @@ -66,5 +71,5 @@ describe('MermaidDiagram', () => {
-           expect(host.querySelector('[data-testid="mermaid-diagram"]')).toBeNull()
-           expect(host.querySelector('pre')).not.toBeNull() // CopyablePre fallback shows the raw source
-           expect(host.textContent).toContain('this is not @@@ %%% a diagram')
-      -  })
-      +  }, mermaidTestTimeout)
-       })
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 160 }
-      metric: proportionality
-    - *pr_quality
-
-- description: wire-compat-fix
-  vars:
-    note: 'if we ever roll a deploy back the old binary re-sends every steer someone already got, putting the old field back on the wire'
-    diff: |
-      diff --git a/internal/dag/control.go b/internal/dag/control.go
-      index 15f6792..04a35cc 100644
-      --- a/internal/dag/control.go
-      +++ b/internal/dag/control.go
-      @@ -65,6 +65,19 @@ func (m *queuedMsg) UnmarshalJSON(b []byte) error {
-       	return nil
-       }
-      
-      +// MarshalJSON also writes the legacy Delivered bool so a row written here and
-      +// read back by an OLDER binary (a rollback) is not seen as still-queued and
-      +// re-delivered to the node.
-      +func (m queuedMsg) MarshalJSON() ([]byte, error) {
-      +	return json.Marshal(struct {
-      +		ID        string
-      +		Text      string
-      +		Status    MsgStatus
-      +		Delivered bool
-      +		CreatedAt time.Time
-      +	}{m.ID, m.Text, m.Status, m.Status != MsgQueued, m.CreatedAt})
-      +}
-      +
-       func newMsgID() string {
-       	b := make([]byte, 8)
-       	_, _ = rand.Read(b)
-      diff --git a/internal/dag/control_test.go b/internal/dag/control_test.go
-      index b30afb6..0705806 100644
-      --- a/internal/dag/control_test.go
-      +++ b/internal/dag/control_test.go
-      @@ -528,3 +528,34 @@ func TestQueuedMsg_StatusTransitions(t *testing.T) {
-       		}
-       	})
-       }
-      +
-      +// A row written by this binary must stay correct when an OLDER binary reads it
-      +// back after a rollback: without the legacy bool it would look still-queued and
-      +// be re-delivered to the node.
-      +func TestQueuedMsg_MarshalKeepsLegacyDeliveredForRollback(t *testing.T) {
-      +	for _, tc := range []struct {
-      +		status MsgStatus
-      +		want   bool
-      +	}{{MsgQueued, false}, {MsgForwarded, true}, {MsgDrained, true}} {
-      +		b, err := json.Marshal(queuedMsg{ID: "m1", Text: "hi", Status: tc.status})
-      +		if err != nil {
-      +			t.Fatalf("marshal(%s): %v", tc.status, err)
-      +		}
-      +		var old struct {
-      +			ID        string
-      +			Text      string
-      +			Delivered bool
-      +		}
-      +		if err := json.Unmarshal(b, &old); err != nil {
-      +			t.Fatalf("old-binary unmarshal(%s): %v", tc.status, err)
-      +		}
-      +		if old.Delivered != tc.want {
-      +			t.Errorf("status %s -> old Delivered = %v, want %v (rollback would re-deliver)", tc.status, old.Delivered, tc.want)
-      +		}
-      +		// And the new shape must still round-trip through our own decoder.
-      +		var back queuedMsg
-      +		if err := json.Unmarshal(b, &back); err != nil || back.Status != tc.status {
-      +			t.Errorf("round-trip(%s) = %q, err %v", tc.status, back.Status, err)
-      +		}
-      +	}
-      +}
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 175 }
-      metric: proportionality
-    - *pr_quality
-
-- description: otel-multi-exporter-feature
-  vars:
-    note: 'we want traces going to langfuse and metrics going to the collector and one endpoint cannot do both'
-    diff: |
-      diff --git a/config/quack.yaml b/config/quack.yaml
-      index e826b54..3459e1d 100644
-      --- a/config/quack.yaml
-      +++ b/config/quack.yaml
-      @@ -301,16 +301,22 @@ server:
-      
-       # OTel tracing/metrics - emission-only (Tempo/Grafana, the home-server
-       # monitoring stack, own trace/metric viewing; quack keeps no local store of
-      -# its own). enabled defaults to true; otlp_endpoint is what actually ships
-      -# spans/metrics anywhere - unset, providers are built but nothing exports.
-      +# its own). enabled defaults to true; `exporters` is what actually ships
-      +# anything - with none listed, providers are built but nothing exports.
-       observability:
-         otel:
-           enabled: ${QUACK_OTEL_ENABLED}             # unset ⇒ true
-      -    otlp_endpoint: ${QUACK_OTEL_OTLP_ENDPOINT} # unset ⇒ providers built, nothing exported
-      -    # otlp_endpoint: http://otel-collector:4318  # the deployed home-server collector
-      +    # Each exporter names one OTLP destination and the signals sent to it, so a
-      +    # trace backend and a metrics collector can be different systems. The signal
-      +    # path (/v1/traces etc) is always appended, so a base URL carrying a path -
-      +    # Langfuse's /api/public/otel - works like any other.
-      +    exporters:
-      +      - endpoint: ${QUACK_OTEL_OTLP_ENDPOINT}  # e.g. http://otel-collector:4318
-      +        signals: [traces, metrics]             # add `logs` to ALSO ship slog via OTLP (needs a collector logs pipeline; default is stdout only)
-      +    #  - endpoint: http://langfuse:3008/api/public/otel
-      +    #    signals: [traces]                     # Langfuse ingests traces only
-           sample: 1.0                                # trace sample ratio in (0,1]
-           environment: ${QUACK_OTEL_ENVIRONMENT}     # unset ⇒ production; deployment.environment.name on every span
-      -    # logs: true   # ALSO ship slog via OTLP - needs a collector logs pipeline (default: stdout only)
-           # capture_content: true # ALSO put user prompts and model responses (plus ACP tool-call args/output) on span attributes (default: off) - ships raw content to the OTLP endpoint
-           # trace_url_template: "https://tracing.example.com/trace/{trace_id}"  # unset ⇒ no deep link rendered in the UI
-         # The replay ledger (.quack/replay-log.md): every gen_ai.* log event, appended
-      diff --git a/internal/otelobs/provider.go b/internal/otelobs/provider.go
-      index 3c528d1..b96a7d3 100644
-      --- a/internal/otelobs/provider.go
-      +++ b/internal/otelobs/provider.go
-      @@ -58,14 +58,16 @@ type Providers struct {
-       // posts to / instead, which loses telemetry silently - and the deployed
-       // endpoint is path-less (http://otel-collector:4318). An endpoint that already
-       // names a path is left alone.
-      +// signalURL appends the OTLP signal path to an endpoint. It appends
-      +// unconditionally - a base URL that carries a path (Langfuse's
-      +// /api/public/otel) still needs /v1/traces on the end, and the old
-      +// path-detection rule made such endpoints unusable for every signal (#1045).
-      +// An endpoint already ending in the signal path is left alone so an
-      +// explicitly-specified full URL does not double up.
-       func signalURL(endpoint, path string) string {
-       	trimmed := strings.TrimRight(endpoint, "/")
-      -	if i := strings.Index(trimmed, "://"); i >= 0 {
-      -		if strings.Contains(trimmed[i+3:], "/") {
-      -			return endpoint
-      -		}
-      -	} else if strings.Contains(trimmed, "/") {
-      -		return endpoint
-      +	if strings.HasSuffix(trimmed, path) {
-      +		return trimmed
-       	}
-       	return trimmed + path
-       }
-      @@ -100,22 +102,27 @@ func Init(ctx context.Context, cfg config.ObservabilityConfig, ledgerStore ledge
-       	}
-       	mpOpts := []metric.Option{metric.WithResource(res)}
-       	var shutdowns []func(context.Context) error
-      -	if cfg.Otel.OTLPEndpoint != "" {
-      -		texp, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(signalURL(cfg.Otel.OTLPEndpoint, "/v1/traces")))
-      -		if err != nil {
-      -			return nil, nil, fmt.Errorf("otelobs: otlp trace exporter: %w", err)
-      +	// One exporter per destination per signal: a trace backend and a metrics
-      +	// collector are usually different systems (#1045).
-      +	for _, e := range cfg.Otel.Exporters {
-      +		if e.Wants(config.SignalTraces) {
-      +			texp, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(signalURL(e.Endpoint, "/v1/traces")))
-      +			if err != nil {
-      +				return nil, nil, fmt.Errorf("otelobs: otlp trace exporter (%s): %w", e.Endpoint, err)
-      +			}
-      +			bsp := sdktrace.NewBatchSpanProcessor(texp)
-      +			tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(bsp))
-      +			shutdowns = append(shutdowns, bsp.Shutdown)
-       		}
-      -		bsp := sdktrace.NewBatchSpanProcessor(texp)
-      -		tpOpts = append(tpOpts, sdktrace.WithSpanProcessor(bsp))
-      -		shutdowns = append(shutdowns, bsp.Shutdown)
-      -
-      -		mexp, err := otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(signalURL(cfg.Otel.OTLPEndpoint, "/v1/metrics")))
-      -		if err != nil {
-      -			return nil, nil, fmt.Errorf("otelobs: otlp metric exporter: %w", err)
-      +		if e.Wants(config.SignalMetrics) {
-      +			mexp, err := otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(signalURL(e.Endpoint, "/v1/metrics")))
-      +			if err != nil {
-      +				return nil, nil, fmt.Errorf("otelobs: otlp metric exporter (%s): %w", e.Endpoint, err)
-      +			}
-      +			periodic := metric.NewPeriodicReader(mexp)
-      +			mpOpts = append(mpOpts, metric.WithReader(periodic))
-      +			shutdowns = append(shutdowns, periodic.Shutdown)
-       		}
-      -		periodic := metric.NewPeriodicReader(mexp)
-      -		mpOpts = append(mpOpts, metric.WithReader(periodic))
-      -		shutdowns = append(shutdowns, periodic.Shutdown)
-       	}
-       	tp := sdktrace.NewTracerProvider(tpOpts...)
-       	otel.SetTracerProvider(tp)
-      diff --git a/internal/serve/serve.go b/internal/serve/serve.go
-      index cddae1d..07f9301 100644
-      --- a/internal/serve/serve.go
-      +++ b/internal/serve/serve.go
-      @@ -381,7 +381,7 @@ func buildFromConfig(ctx context.Context, cfg *config.Config, port int, reconcil
-       	})
-       	slog.SetDefault(slog.New(otelobs.WrapHandler(slog.Default().Handler())))
-       	otelobs.SetCaptureContent(cfg.Observability.Otel.Content)
-      -	if cfg.Observability.Otel.IsEnabled() && cfg.Observability.Otel.OTLPEndpoint != "" && !cfg.Observability.Otel.Content {
-      +	if cfg.Observability.Otel.IsEnabled() && len(cfg.Observability.Otel.Exporters) > 0 && !cfg.Observability.Otel.Content {
-       		slog.Info("span content capture is off (observability.otel.capture_content) - generation spans export with no prompt/response text", "component", "otelobs")
-       	}
-      
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 280 }
-      metric: proportionality
-    - *pr_quality
-
-- description: delivered-bool-to-status-enum
-  vars:
-    note: 'that delivered bool has meant two different things since the live-steer work and I keep getting it wrong, making it an enum'
-    diff: |
-      diff --git a/frontend/src/components/DagNode.test.ts b/frontend/src/components/DagNode.test.ts
-      index 0a4e94f..0a8b796 100644
-      --- a/frontend/src/components/DagNode.test.ts
-      +++ b/frontend/src/components/DagNode.test.ts
-      @@ -336,3 +336,3 @@ describe('DagNode - queued-message badge counts only parked (undelivered) messag
-         it('shows no badge once every queued message has been delivered (live or boundary)', () => {
-      -    const out = withQueue([{ id: 'm1', text: 'focus on cost', delivered: true, created_at: '' }])
-      +    const out = withQueue([{ id: 'm1', text: 'focus on cost', status: 'drained', delivered: true, created_at: '' }])
-           expect(out).not.toContain('✉')
-      @@ -342,4 +342,4 @@ describe('DagNode - queued-message badge counts only parked (undelivered) messag
-           const out = withQueue([
-      -      { id: 'm1', text: 'delivered live', delivered: true, created_at: '' },
-      -      { id: 'm2', text: 'still parked', delivered: false, created_at: '' },
-      +      { id: 'm1', text: 'delivered live', status: 'forwarded', delivered: true, created_at: '' },
-      +      { id: 'm2', text: 'still parked', status: 'queued', delivered: false, created_at: '' },
-           ])
-      diff --git a/internal/dag/control.go b/internal/dag/control.go
-      index cd8c6f2..15f6792 100644
-      --- a/internal/dag/control.go
-      +++ b/internal/dag/control.go
-      @@ -24,3 +24,12 @@ type NodeStateStore interface {
-      
-      -// queuedMsg: one message in a running node's queue. Delivered messages are kept but immutable.
-      +// MsgStatus is a queued steer message's lifecycle state.
-      +type MsgStatus string
-      +
-      +const (
-      +	MsgQueued    MsgStatus = "queued"    // accepted, nothing has picked it up yet
-      +	MsgForwarded MsgStatus = "forwarded" // injected into the live round (native BeforeModelCallback or ACP stdin)
-      +	MsgDrained   MsgStatus = "drained"   // consumed at a gate boundary (the slow path)
-      +)
-      +
-      +// queuedMsg: one message in a running node's queue. Non-queued messages are kept but immutable.
-       type queuedMsg struct {
-      @@ -28,3 +37,3 @@ type queuedMsg struct {
-       	Text      string
-      -	Delivered bool
-      +	Status    MsgStatus
-       	CreatedAt time.Time
-      @@ -32,2 +41,28 @@ type queuedMsg struct {
-      
-      +// UnmarshalJSON derives Status from a legacy row that only has the old
-      +// Delivered bool: true meant "drained" for the vast majority of historical
-      +// rows (the gate-boundary path predates live delivery, #1029/#1042).
-      +func (m *queuedMsg) UnmarshalJSON(b []byte) error {
-      +	var shape struct {
-      +		ID        string
-      +		Text      string
-      +		Status    MsgStatus
-      +		Delivered *bool
-      +		CreatedAt time.Time
-      +	}
-      +	if err := json.Unmarshal(b, &shape); err != nil {
-      +		return err
-      +	}
-      +	m.ID, m.Text, m.CreatedAt = shape.ID, shape.Text, shape.CreatedAt
-      +	switch {
-      +	case shape.Status != "":
-      +		m.Status = shape.Status
-      +	case shape.Delivered != nil && *shape.Delivered:
-      +		m.Status = MsgDrained
-      +	default:
-      +		m.Status = MsgQueued
-      +	}
-      +	return nil
-      +}
-      +
-       func newMsgID() string {
-      @@ -90,3 +125,3 @@ func (c *nodeControl) PeekQueued() string {
-       	for _, m := range c.queue {
-      -		if !m.Delivered {
-      +		if m.Status == MsgQueued {
-       			out = append(out, m.Text)
-      @@ -102,4 +137,4 @@ func (c *nodeControl) TakeQueued() string {
-       	for _, m := range c.queue {
-      -		if !m.Delivered {
-      -			m.Delivered = true
-      +		if m.Status == MsgQueued {
-      +			m.Status = MsgDrained
-       			out = append(out, m.Text)
-      @@ -206,3 +241,8 @@ func (c *nodeControl) enqueue(text string) queuedMsg {
-       	c.mu.Unlock()
-      -	delivered := live != nil && live(text)
-      +	// liveSteer is ACP-only (native rounds inject via steerCallback's own peek+dedupe),
-      +	// so a native round's steer stays "queued" here even after that callback injects it.
-      +	status := MsgQueued
-      +	if live != nil && live(text) {
-      +		status = MsgForwarded
-      +	}
-      
-      @@ -210,3 +250,3 @@ func (c *nodeControl) enqueue(text string) queuedMsg {
-       	defer c.mu.Unlock()
-      -	m := &queuedMsg{ID: newMsgID(), Text: text, Delivered: delivered, CreatedAt: time.Now().UTC()}
-      +	m := &queuedMsg{ID: newMsgID(), Text: text, Status: status, CreatedAt: time.Now().UTC()}
-       	c.queue = append(c.queue, m)
-      @@ -239,3 +279,3 @@ func (c *nodeControl) restore() {
-       	for i := range msgs {
-      -		if !msgs[i].Delivered {
-      +		if msgs[i].Status == MsgQueued {
-       			m := msgs[i]
-      @@ -252,3 +292,3 @@ func (c *nodeControl) editQueued(id, text string) bool {
-       		if m.ID == id {
-      -			if m.Delivered {
-      +			if m.Status != MsgQueued {
-       				return false
-      @@ -268,3 +308,3 @@ func (c *nodeControl) removeQueued(id string) bool {
-       		if m.ID == id {
-      -			if m.Delivered {
-      +			if m.Status != MsgQueued {
-       				return false
-      @@ -554,3 +594,4 @@ func (e *Executor) NodeQueue(chatID, nodeID string) []QueuedMessage {
-      
-      -// QueuedMessage is the REST/SSE-facing shape.
-      +// QueuedMessage is the REST/SSE-facing shape. Delivered is derived (true for
-      +// forwarded and drained) for old wire consumers; Status carries the detail.
-       type QueuedMessage struct {
-      @@ -558,2 +599,3 @@ type QueuedMessage struct {
-       	Text      string
-      +	Status    MsgStatus
-       	Delivered bool
-      @@ -563,3 +605,3 @@ type QueuedMessage struct {
-       func toQueuedMessage(m queuedMsg) QueuedMessage {
-      -	return QueuedMessage{ID: m.ID, Text: m.Text, Delivered: m.Delivered, CreatedAt: m.CreatedAt}
-      +	return QueuedMessage{ID: m.ID, Text: m.Text, Status: m.Status, Delivered: m.Status != MsgQueued, CreatedAt: m.CreatedAt}
-       }
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 260 }
-      metric: proportionality
-    - *pr_quality
-
-- description: race-gate-plus-race-fix
-  vars:
-    note: 'turning -race on in CI, plus the one test it broke the second I did'
-    diff: |
-      diff --git a/.github/workflows/ci.yaml b/.github/workflows/ci.yaml
-      index 637d0ff..c9d96c9 100644
-      --- a/.github/workflows/ci.yaml
-      +++ b/.github/workflows/ci.yaml
-      @@ -40,2 +40,4 @@ jobs:
-             - run: go test ./...
-      +      # Without -race the concurrency regression guards (#1016, #1032) pass vacuously.
-      +      - run: go test -race ./...
-      
-      diff --git a/Makefile b/Makefile
-      index 7349e6d..1fa6a96 100644
-      --- a/Makefile
-      +++ b/Makefile
-      @@ -32,2 +32,6 @@ test: plugins
-      
-      +## test-race: run Go tests under the race detector (what CI gates on)
-      +test-race: plugins
-      +	go test -race ./...
-      +
-       ## vet: go vet
-      diff --git a/internal/server/rest/livetail_test.go b/internal/server/rest/livetail_test.go
-      index 771e6f4..1418126 100644
-      --- a/internal/server/rest/livetail_test.go
-      +++ b/internal/server/rest/livetail_test.go
-      @@ -4,4 +4,6 @@ import (
-       	"context"
-      +	"net/http"
-       	"net/http/httptest"
-       	"strings"
-      +	"sync"
-       	"testing"
-      @@ -13,7 +15,49 @@ import (
-      
-      +// syncRecorder guards httptest.ResponseRecorder, whose bytes.Buffer is not safe
-      +// for the concurrent write/read these live-tail tests do (handler goroutine
-      +// writes while the test polls). Only the live tests need it.
-      +// Not embedded: promoted Result/Code/Header would bypass mu and race the
-      +// handler goroutine silently.
-      +type syncRecorder struct {
-      +	mu  sync.Mutex
-      +	rec *httptest.ResponseRecorder
-      +}
-      +
-      +func newSyncRecorder() *syncRecorder {
-      +	return &syncRecorder{rec: httptest.NewRecorder()}
-      +}
-      +
-      +func (s *syncRecorder) Header() http.Header {
-      +	s.mu.Lock()
-      +	defer s.mu.Unlock()
-      +	return s.rec.Header()
-      +}
-      +
-      +func (s *syncRecorder) Write(p []byte) (int, error) {
-      +	s.mu.Lock()
-      +	defer s.mu.Unlock()
-      +	return s.rec.Write(p)
-      +}
-      +
-      +func (s *syncRecorder) WriteHeader(code int) {
-      +	s.mu.Lock()
-      +	defer s.mu.Unlock()
-      +	s.rec.WriteHeader(code)
-      +}
-      +
-      +func (s *syncRecorder) Flush() {
-      +	s.mu.Lock()
-      +	defer s.mu.Unlock()
-      +	s.rec.Flush()
-      +}
-      +
-      +func (s *syncRecorder) body() string {
-      +	s.mu.Lock()
-      +	defer s.mu.Unlock()
-      +	return s.rec.Body.String()
-      +}
-      +
-       // waitForBody polls the recorder's accumulated body until it contains want, or
-      -// fails the test after a short timeout. httptest.ResponseRecorder's bytes.Buffer
-      -// isn't safe for concurrent read/write, but this package writes+reads only
-      -// strings, in a tight poll loop - fine for a test racing a background writer.
-      -func waitForBody(t *testing.T, rec *httptest.ResponseRecorder, want string) {
-      +// fails the test after a short timeout.
-      +func waitForBody(t *testing.T, rec *syncRecorder, want string) {
-       	t.Helper()
-      @@ -21,3 +65,3 @@ func waitForBody(t *testing.T, rec *httptest.ResponseRecorder, want string) {
-       	for {
-      -		if strings.Contains(rec.Body.String(), want) {
-      +		if strings.Contains(rec.body(), want) {
-       			return
-      @@ -26,3 +70,3 @@ func waitForBody(t *testing.T, rec *httptest.ResponseRecorder, want string) {
-       		case <-deadline:
-      -			t.Fatalf("timed out waiting for %q in body:\n%s", want, rec.Body.String())
-      +			t.Fatalf("timed out waiting for %q in body:\n%s", want, rec.body())
-       		case <-time.After(5 * time.Millisecond):
-      @@ -50,3 +94,3 @@ func TestSubscribeLiveTail(t *testing.T) {
-       	req = req.WithContext(ctx)
-      -	rec := httptest.NewRecorder()
-      +	rec := newSyncRecorder()
-       	done := make(chan struct{})
-      @@ -131,3 +175,3 @@ func TestSubscribeLiveReconnectByLastEventID(t *testing.T) {
-       	req = req.WithContext(ctx)
-      -	rec := httptest.NewRecorder()
-      +	rec := newSyncRecorder()
-       	done := make(chan struct{})
-      @@ -139,4 +183,4 @@ func TestSubscribeLiveReconnectByLastEventID(t *testing.T) {
-       	waitForBody(t, rec, "id: 2")
-      -	if strings.Contains(rec.Body.String(), "id: 1\n") {
-      -		t.Errorf("reconnect from seq 1 must not resend seq 1 (dup); body:\n%s", rec.Body.String())
-      +	if strings.Contains(rec.body(), "id: 1\n") {
-      +		t.Errorf("reconnect from seq 1 must not resend seq 1 (dup); body:\n%s", rec.body())
-       	}
-      diff --git a/internal/stream/yieldctx.go b/internal/stream/yieldctx.go
-      index 43b3919..d3f0396 100644
-      --- a/internal/stream/yieldctx.go
-      +++ b/internal/stream/yieldctx.go
-      @@ -8,4 +8,5 @@ type yieldCtxKey struct{}
-       // SSE events up through the outer SSE stream without going through the ADK
-      -// session event pipeline. The function must be called from one goroutine at a
-      -// time (the ADK runner dispatches tools synchronously).
-      +// session event pipeline. fn MUST already serialize its callers: concurrent DAG
-      +// nodes call it from their own goroutines (dag/graph.go's onQueued, vetting's
-      +// stage spans), and an unsynchronized fn panics the process (#1016, #1032).
-       func WithYield(ctx context.Context, fn func(SSEEvent)) context.Context {
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 260 }
-      metric: proportionality
-    - *pr_quality
-
-# Constructed context: the real revert (f4be7da) records no rationale beyond
-# "This reverts commit 76b7f6a", so the note says exactly that much. An author
-# who invents a reason here is fabricating, which is the point of the case.
-- description: revert-turn-input-stamp
-  vars:
-    note: 'backing #871 out for now, no clean story for it yet and I would rather not sit on it'
-    diff: |
-      diff --git a/internal/serve/extensions.go b/internal/serve/extensions.go
-      index 53eb5ae..b0451f8 100644
-      --- a/internal/serve/extensions.go
-      +++ b/internal/serve/extensions.go
-      @@ -370,11 +370,8 @@ func newExtDispatch(name string, orchRef *atomic.Pointer[orchestrator.Orchestrat
-       		ensureExtChatTitle(runCtx, st, chatID, req.Chat.Title, req.Chat.Origin)
-      
-       		turnID := uuid.NewString()
-      -		dispatchMsg := composeDispatchMessage(req)
-       		if err := st.SaveTurn(runCtx, chatID, turnID); err != nil {
-       			slog.Warn("extension dispatch: save turn failed", "component", "ext."+name, "chat", chatID, "err", err)
-      -		} else if err := st.SetTurnInput(runCtx, chatID, turnID, dispatchMsg); err != nil {
-      -			slog.Warn("extension dispatch: save turn input failed", "component", "ext."+name, "chat", chatID, "err", err)
-       		}
-      
-       		attachments := make([]*genai.Part, 0, len(req.Ask.Attachments))
-      @@ -425,7 +422,7 @@ func newExtDispatch(name string, orchRef *atomic.Pointer[orchestrator.Orchestrat
-       			runCtx = tools.WithContextItems(runCtx, toDagContextItems(req.Ask.ContextItems))
-       		}
-       		runCtx = tools.WithPlanOnly(runCtx, req.Run.ReadOnly)
-      -		go driveExtensionRun(runCtx, name, orch, st, hub, extHolder, userID, chatID, turnID, dispatchMsg, attachments, req.Run.Timeout)
-      +		go driveExtensionRun(runCtx, name, orch, st, hub, extHolder, userID, chatID, turnID, composeDispatchMessage(req), attachments, req.Run.Timeout)
-       		return nil
-       	}
-       }
-      diff --git a/internal/server/rest/handler.go b/internal/server/rest/handler.go
-      index d3b0071..d79291d 100644
-      --- a/internal/server/rest/handler.go
-      +++ b/internal/server/rest/handler.go
-      @@ -506,11 +506,8 @@ func (h *Handler) SendChatMessage(w http.ResponseWriter, r *http.Request, chatID
-       	}
-      
-       	go func() {
-      -		ctx := context.Background()
-      -		if err := h.store.SaveTurn(ctx, chatID, turnID); err != nil {
-      +		if err := h.store.SaveTurn(context.Background(), chatID, turnID); err != nil {
-       			slog.Warn("save turn failed", "component", "rest", "chat", chatID, "err", err)
-      -		} else if err := h.store.SetTurnInput(ctx, chatID, turnID, body.Content); err != nil {
-      -			slog.Warn("save turn input failed", "component", "rest", "chat", chatID, "err", err)
-       		}
-       	}()
-      
-      diff --git a/internal/store/store.go b/internal/store/store.go
-      index 9a7b8d4..0192fa1 100644
-      --- a/internal/store/store.go
-      +++ b/internal/store/store.go
-      @@ -76,11 +76,6 @@ type ChatTurn struct {
-       	ReasoningTokens  int32 `json:"reasoning_tokens,omitempty"`
-       	TotalTokens      int32 `json:"total_tokens,omitempty"`
-       	CachedTokens     int32 `json:"cached_tokens,omitempty"`
-      -	// Input is the turn's trigger text, stamped at dispatch time by SetTurnInput -
-      -	// before the run's first session event exists, so a run still queued on the
-      -	// worker semaphore has something to show. GetTurnsWithContent falls back to
-      -	// the session walk for turns that predate this column.
-      -	Input string `json:"-"`
-       }
-      
-       // GithubSnapshot stores the full GitHub state fetched at a github-origin
-      @@ -780,15 +775,6 @@ func (s *Store) SaveTurn(ctx context.Context, chatID, turnID string) error {
-       	return s.db.WithContext(ctx).Create(t).Error
-       }
-      
-      -// SetTurnInput persists the turn's trigger text at dispatch time (both
-      -// rest.SendChatMessage and an extension's Dispatch call this right after
-      -// SaveTurn), before the run's first session event exists.
-      -func (s *Store) SetTurnInput(ctx context.Context, chatID, turnID, input string) error {
-      -	return s.db.WithContext(ctx).Model(&ChatTurn{}).
-      -		Where("id = ? AND chat_id = ?", turnID, chatID).
-      -		Update("input", input).Error
-      -}
-      -
-       // TurnUsage is the orchestrator's own per-turn token usage (DAG turns credit
-       // tokens per-node on DagNode instead).
-       type TurnUsage struct {
-      @@ -943,15 +929,9 @@ func (s *Store) GetTurnsWithContent(ctx context.Context, appName, userID, chatID
-       			// walk below.
-       			PromptTokens: t.PromptTokens, CompletionTokens: t.CompletionTokens,
-       			ReasoningTokens: t.ReasoningTokens, TotalTokens: t.TotalTokens, CachedTokens: t.CachedTokens,
-      -			// Stamped by SetTurnInput at dispatch time - present even for a turn
-      -			// that's still queued, before any session event exists. Turns that
-      -			// predate that stamp fall back to the session walk below.
-      -			UserText: t.Input,
-       		}
-       		if i < len(groups) {
-      -			if tc.UserText == "" {
-      -				tc.UserText = groups[i].userText
-      -			}
-      +			tc.UserText = groups[i].userText
-       			tc.AsstText = groups[i].asstText
-       			tc.AsstThink = groups[i].asstThink
-       			tc.ToolCalls = groups[i].toolCalls
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 140 }
-      metric: proportionality
-    - *pr_quality
-
-# Negative controls. Five changes whose honest description is a sentence or two:
-# there is no design story, no risk, and nothing to verify beyond the thing still
-# building. The instinct - a full problem/approach/verification write-up - visibly
-# overshoots, and what it overshoots into is invention, so `restraint` counts
-# claims rather than measuring length. Length is `proportionality`'s job and is
-# deliberately not scored twice.
-- description: trivial-callsite-fixup
-  vars:
-    note: 'signature changed under me, fixing the one call site so the package builds again'
-    diff: |
-      diff --git a/internal/server/rest/sidebar_cost_test.go b/internal/server/rest/sidebar_cost_test.go
-      index 2789a6a..05e4a27 100644
-      --- a/internal/server/rest/sidebar_cost_test.go
-      +++ b/internal/server/rest/sidebar_cost_test.go
-      @@ -52,7 +52,7 @@ func newTestHandlerWithSessionSpy(t *testing.T) (*Handler, *sessionGetSpy) {
-       		func(string) vetting.Config { return vetting.Config{Threshold: 0.6} }, nil)
-       	planner := dag.NewPlanner(nil, nil, nil)
-       	orch := orchestrator.New(st.Sessions, stubModel{}, "You are a test duck.", planner, ex, nil, nil, nil)
-      -	return NewHandler(st, orch, nil, nil, nil, nil, "test"), spy
-      +	return NewHandler(st, orch, nil, nil, nil, nil, "test", nil, nil), spy
-       }
-      
-       // listChatsQueries runs ListChats and returns how many SELECT queries it issued.
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 55 }
-      metric: proportionality
-
-    # pr_quality is written to reward a complete what/why/verification write-up
-    # and is deliberately not aliased in here - scoring a control against it
-    # outnumbers this one criterion. Anchored so the four sibling controls below
-    # share the identical wording; each brings its own proportionality ceiling.
     - &restraint
       type: llm-rubric
-      # Step 2 below marks each claim against the diff or the note, so the judge
-      # needs both. Without this it sees neither and every claim collapses to
-      # NEITHER. Values are substituted, not re-parsed, so a diff containing its
-      # own {{ is safe here.
+      # Step 2 marks each claim against the diff or the note, so the judge
+      # needs both - without this it sees neither and every claim collapses
+      # to NEITHER.
       rubricPrompt:
         - role: system
           content: |
@@ -909,152 +106,2652 @@
             <Output>{{output}}</Output>
             <Rubric>{{rubric}}</Rubric>
       value: |
-        The author's note is in <AuthorNote> above and the change itself is in
-        <Diff>.
-
-        Judge the pull request as delivered: do not reward or penalise how it was
-        built or which authoring convention it followed.
+        The developer's own note is in <AuthorNote> above and the change
+        itself is in <Diff>. Judge <Output> as delivered: do not reward or
+        penalise how it was built or which authoring convention it followed.
 
         Work through these in order, then score.
 
-        1. List every claim the description makes, one per line, each quoted. A
-           claim is any statement about what the change does, why it was made,
-           what it affects, what was run, or what the reader should expect. The
+        1. List every claim <Output> makes, one per line, each quoted. A claim
+           is any statement about what the change does, why it was made, what
+           it affects, what was run, or what the reader should expect. The
            title is always at least one claim. Write the total as T.
         2. Against each quoted claim write exactly one of:
              DIFF    - the diff shows it
-             NOTE    - the author's note says it
+             NOTE    - the developer's note says it
              NEITHER - neither the diff nor the note contains it. An invented
                        risk, a design rationale this change does not have, a
-                       test command or a test result the author cannot have run,
-                       or a file, symbol or identifier absent from the change all
-                       count as NEITHER.
+                       test command or a test result the author cannot have
+                       run, or a file, symbol, or identifier absent from the
+                       change all count as NEITHER.
         3. Write the number of claims marked NEITHER as U.
 
-        Score from 0 to 1, never above 1: (T - U) / T.
+        Score from 0 to 1, never above 1: max(0, 1 - U / 4). Each unsupported
+        claim costs a fixed 0.25 regardless of how many total claims the
+        description makes. A ratio score - (T - U) / T - lets padding dilute
+        an invention's cost by inflating T, which rewards verbosity; this
+        fixed cost is this suite's own house calibration, chosen so one slip
+        is tolerated and two are not, not conformance to any published
+        standard: no widely cited guidance on change descriptions specifies a
+        tolerance for unsupported claims.
 
-        Counting an unrun test command or an unreproducible verification claim as
-        NEITHER is this repository's own position, not conformance to any
-        published standard: no widely cited guidance on change descriptions asks
-        one to state how the change was verified. A description that says nothing
-        at all about verification therefore loses nothing here.
-
-        Headings, sections and formatting are not scored. Length is not scored
-        here - it is measured elsewhere - so a two-sentence answer and a
-        five-paragraph answer face exactly the same arithmetic, and brevity is
-        never a deduction.
+        Headings, sections, and formatting are not scored. Overall length is
+        not scored here either - that is `coverage`'s job - so a two-sentence
+        answer and a five-paragraph answer face exactly the same arithmetic
+        for this criterion alone, and brevity is never itself a deduction.
       threshold: 0.7
       metric: restraint
 
-- description: go-module-bump
+- description: cloudflared-591
+  # 3-line log-message fix; the author's own description is two sentences plus a repro snippet -
+  # tests whether the arm resists inventing a rationale beyond "the unit suffix was redundant".
   vars:
-    note: 'patch bump from dependabot, nothing of ours calls the driver directly'
+    fixture: cloudflared-591
+    note: 'noticed while reading through the retry logs, the units look doubled'
     diff: |
-      diff --git a/go.mod b/go.mod
-      index 57834fc..ab1c124 100644
-      --- a/go.mod
-      +++ b/go.mod
-      @@ -49,7 +49,7 @@ require (
-       	google.golang.org/adk/v2 v2.2.0
-       	google.golang.org/genai v1.67.0
-       	gopkg.in/yaml.v3 v3.0.1
-      -	gorm.io/driver/postgres v1.6.0
-      +	gorm.io/driver/postgres v1.6.2
-       	gorm.io/gorm v1.31.2
-       )
- 
-      diff --git a/go.sum b/go.sum
-      index a3e46b8..93ea53a 100644
-      --- a/go.sum
-      +++ b/go.sum
-      @@ -421,8 +421,8 @@ gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EV
-       gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-       gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
-       gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-      -gorm.io/driver/postgres v1.6.0 h1:2dxzU8xJ+ivvqTRph34QX+WrRaJlmfyPqXmoGVjMBa4=
-      -gorm.io/driver/postgres v1.6.0/go.mod h1:vUw0mrGgrTK+uPHEhAdV4sfFELrByKVGnaVRkXDhtWo=
-      +gorm.io/driver/postgres v1.6.2 h1:BvXQ/cNUg63q5TFNg672DmDcowZSFrNLkkA3Xe6GXq4=
-      +gorm.io/driver/postgres v1.6.2/go.mod h1:0c4fQA44XhOklXDkgtuKqysHCycTa5i9e3EIpDGCwXk=
-       gorm.io/driver/sqlite v1.6.0 h1:WHRRrIiulaPiPFmDcod6prc4l2VGVWHz80KspNsxSfQ=
-       gorm.io/driver/sqlite v1.6.0/go.mod h1:AO9V1qIQddBESngQUKWL9yoH93HIeA1X6V633rBwyT8=
-       gorm.io/gorm v1.31.2 h1:3o8FXNo9v9S858gil+3LlZA1LkCOzgb4g5BL64FgaCo=
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 60 }
-      metric: proportionality
-    - *restraint
-
-- description: error-string-typo
-  vars:
-    note: 'someone in the tracker spotted adminstrator in the pause-jobs error text - one letter, the thee two clauses along is still there'
-    diff: |
-      diff --git a/app/cmd/upload/run.go b/app/cmd/upload/run.go
-      index 41d870c..a34a171 100644
-      --- a/app/cmd/upload/run.go
-      +++ b/app/cmd/upload/run.go
-      @@ -180,7 +180,7 @@ func (upCmd *UpCmd) run(ctx context.Context, adapter adapters.Reader, app *app.A
-       	if app.Client().PauseImmichBackgroundJobs {
-       		err := upCmd.pauseJobs(ctx, app)
-       		if err != nil {
-      -			return fmt.Errorf("Can't pause immich background jobs: %wpass an adminstrator key with the flag --admin-api-key or disable the pause with thee flag --pause-immich-jobs=FALSE", err)
-      +			return fmt.Errorf("Can't pause immich background jobs: %wpass an administrator key with the flag --admin-api-key or disable the pause with thee flag --pause-immich-jobs=FALSE", err)
+      diff --git a/supervisor/tunnel.go b/supervisor/tunnel.go
+      index 5e65f3d..d0a78b0 100644
+      --- a/supervisor/tunnel.go
+      +++ b/supervisor/tunnel.go
+      @@ -254,8 +254,9 @@ func (e *EdgeTunnelServer) Serve(ctx context.Context, connIndex uint8, protocolF
+       		if !ok {
+       			return err
        		}
+      +
+       		e.config.Observer.SendReconnect(connIndex)
+      -		connLog.Logger().Info().Msgf("Retrying connection in up to %s seconds", duration)
+      +		connLog.Logger().Info().Msgf("Retrying connection in up to %s", duration)
        	}
-       	defer func() { _ = upCmd.finishing(ctx, app) }()
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 60 }
-      metric: proportionality
-    - *restraint
+       
+       	// Check if the connection error was from an IP issue with the host or
+    author_description: |
+      printing `seconds` is superfluous since time.Duration already adds the `s` suffix
 
-- description: generated-types-regen
-  vars:
-    note: 'regenerated the client types off the same spec - the generator emits reasoning_tokens in a different position now, no schema change'
-    diff: |
-      diff --git a/frontend/src/generated/types.gen.ts b/frontend/src/generated/types.gen.ts
-      index 1580194..09aa71f 100644
-      --- a/frontend/src/generated/types.gen.ts
-      +++ b/frontend/src/generated/types.gen.ts
-      @@ -110,9 +110,9 @@ export type DagNodeState = {
-           model?: string;
-           prompt_tokens?: number;
-           completion_tokens?: number;
-      -    reasoning_tokens?: number;
-           total_tokens?: number;
-           finish_reason?: string;
-      +    reasoning_tokens?: number;
-           server_duration_ms?: number;
-           self_refined?: boolean;
-           judge_rounds?: number;
-  assert:
-    - type: javascript
-      value: file://assertions/pr.cjs:proportionateLength
-      config: { maxWords: 60 }
-      metric: proportionality
-    - *restraint
-
-- description: config-default-flip
-  vars:
-    note: 'the shipped config still defaults web_search to searxng, which needs a url nobody sets on the no-docker path; exa works with no key'
-    diff: |
-      diff --git a/config/quack.yaml b/config/quack.yaml
-      index e55ed53..0da4e02 100644
-      --- a/config/quack.yaml
-      +++ b/config/quack.yaml
-      @@ -79,7 +79,7 @@ agents:
-       # internal/tools/backends.go.
-       tools:
-         web_search:
-      -    kind: searxng                 # searxng (needs url) | exa. empty ⇒ searxng
-      +    kind: exa                     # searxng (needs url) | exa. empty ⇒ searxng
-           url: ${QUACK_SEARXNG_URL}           # SearXNG JSON API, e.g. http://searxng:8080; unused by kind: exa
-           # exa is keyless via Exa's hosted MCP by default (the no-docker path). Add an
-           # api_key to use Exa's REST API instead (structured JSON, more robust):
+      Invalid log message would be
+      ```
+      Retrying connection in up to 1s seconds
+      ```
   assert:
     - type: javascript
       value: file://assertions/pr.cjs:proportionateLength
       config: { maxWords: 70 }
       metric: proportionality
+    - *coverage
     - *restraint
+
+- description: rclone-9756
+  # 5-line docs fix with a real issue number (#7869); ground truth names the exact confusion
+  # (mount vs nfsmount) a padded description could easily blur into something vaguer.
+  vars:
+    fixture: rclone-9756
+    note: 'someone in the forum got confused between rclone mount and nfsmount, tightening up the docs'
+    diff: |
+      diff --git a/cmd/mountlib/mount.md b/cmd/mountlib/mount.md
+      index d38ceb84c..68443a7f3 100644
+      --- a/cmd/mountlib/mount.md
+      +++ b/cmd/mountlib/mount.md
+      @@ -280,6 +280,11 @@ for all `mount` and `serve` commands on macOS. For details, see [vfs-case-sensit
+       
+       #### NFS mount
+       
+      +For macOS (and other platforms where this path is supported), prefer the dedicated
+      +[rclone nfsmount](/commands/rclone_nfsmount/) command. It starts the NFS server and
+      +performs the mount for you. `rclone mount` itself still uses FUSE (macFUSE/FUSE-T)
+      +and does not switch to NFS via a flag.
+      +
+       This method spins up an NFS server using [serve nfs](/commands/rclone_serve_nfs/)
+       command and mounts it to the specified mountpoint. If you run this in background
+       mode using |--daemon|, you will need to send SIGTERM signal to the rclone process
+    author_description: |
+      The "NFS mount" bit under Mounting on macOS read like you might flip `rclone mount` over to NFS, but the thing that actually does that path is `rclone nfsmount`. Added a short pointer there.
+
+      Fixes #7869
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 110 }
+      metric: proportionality
+    - *coverage
+    - *restraint
+
+- description: caddy-7872
+  # A dependency bump that is NOT routine - the body itself flags a parameter-shape change, so
+  # this tests whether the arm notices what the lockfile churn in the diff is hiding.
+  vars:
+    fixture: caddy-7872
+    note: 'dependabot has been flagging this one for a while, catching it up'
+    diff: |
+      diff --git a/go.mod b/go.mod
+      index 4c72169..1d57499 100644
+      --- a/go.mod
+      +++ b/go.mod
+      @@ -15,7 +15,7 @@ require (
+       	github.com/dunglas/go-urlpattern v0.0.0-20260421141449-cbab7cf1e16d
+       	github.com/dustin/go-humanize v1.0.1
+       	github.com/go-chi/chi/v5 v5.2.5
+      -	github.com/google/cel-go v0.28.1
+      +	github.com/google/cel-go v0.29.2
+       	github.com/google/uuid v1.6.0
+       	github.com/klauspost/compress v1.18.6
+       	github.com/klauspost/cpuid/v2 v2.3.0
+      diff --git a/go.sum b/go.sum
+      index 3799367..103cdba 100644
+      --- a/go.sum
+      +++ b/go.sum
+      @@ -173,8 +173,8 @@ github.com/golang/snappy v0.0.4 h1:yAGX7huGHXlcLOEtBnF4w7FQwA26wojNCwOYAEhLjQM=
+       github.com/golang/snappy v0.0.4/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
+       github.com/google/btree v1.1.2 h1:xf4v41cLI2Z6FxbKm+8Bu+m8ifhj15JuZ9sa0jZCMUU=
+       github.com/google/btree v1.1.2/go.mod h1:qOPhT0dTNdNzV6Z/lhRX0YXUafgPLFUh+gZMl761Gm4=
+      -github.com/google/cel-go v0.28.1 h1:YWIwi77J4xIsYUwAF/iIuS6haffzIHS8yWI8glSbLWM=
+      -github.com/google/cel-go v0.28.1/go.mod h1:X0bD6iVNR8pkROSOoHVdgTkzmRcosof7WQqCD6wcMc8=
+      +github.com/google/cel-go v0.29.2 h1:ZtDxkeiMmz0mxbKDYiNkE5Lk7V5edMRcaaDf2jX002k=
+      +github.com/google/cel-go v0.29.2/go.mod h1:X0bD6iVNR8pkROSOoHVdgTkzmRcosof7WQqCD6wcMc8=
+       github.com/google/certificate-transparency-go v1.0.21/go.mod h1:QeJfpSbVSfYc7RgB3gJFj9cbuQMMchQxrWXz8Ruopmg=
+       github.com/google/certificate-transparency-go v1.1.8-0.20240110162603-74a5dd331745 h1:heyoXNxkRT155x4jTAiSv5BVSVkueifPUm+Q8LUXMRo=
+       github.com/google/certificate-transparency-go v1.1.8-0.20240110162603-74a5dd331745/go.mod h1:zN0wUQgV9LjwLZeFHnrAbQi8hzMVvEWePyk+MhPOk7k=
+      diff --git a/modules/caddyhttp/celmatcher.go b/modules/caddyhttp/celmatcher.go
+      index 4c79bf2..c450fc9 100644
+      --- a/modules/caddyhttp/celmatcher.go
+      +++ b/modules/caddyhttp/celmatcher.go
+      @@ -503,7 +503,7 @@ func CELMatcherDecorator(funcName string, fac any) interpreter.InterpretableDeco
+       			}
+       			return interpreter.NewCall(
+       				i.ID(), funcName, funcName+"_opt",
+      -				[]interpreter.Interpretable{reqAttr},
+      +				[]interpreter.InterpretableV2{reqAttr},
+       				func(args ...ref.Val) ref.Val {
+       					// The request value, guaranteed to be of type celHTTPRequest
+       					celReq := args[0]
+      @@ -526,7 +526,7 @@ func CELMatcherDecorator(funcName string, fac any) interpreter.InterpretableDeco
+       			}
+       			return interpreter.NewCall(
+       				i.ID(), funcName, funcName+"_opt",
+      -				[]interpreter.Interpretable{reqAttr},
+      +				[]interpreter.InterpretableV2{reqAttr},
+       				func(args ...ref.Val) ref.Val {
+       					// The request value, guaranteed to be of type celHTTPRequest
+       					celReq := args[0]
+    author_description: |
+      This bumps the cel-go dep, which normally would just be a quick `go get -u …`, however, between 0.28 and 0.29 there was a minor change to function parameters for the cel interpreter.
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 100 }
+      metric: proportionality
+    - *coverage
+    - *restraint
+
+- description: ripgrep-3212
+  # The author's own why is empirical (strace output), not guessed - a concrete, checkable claim
+  # rare enough in real PRs to be worth pinning on its own.
+  vars:
+    fixture: ripgrep-3212
+    note: 'was profiling fd startup with strace and this stood out'
+    diff: |
+      diff --git a/CHANGELOG.md b/CHANGELOG.md
+      index 2b17916..ecb564d 100644
+      --- a/CHANGELOG.md
+      +++ b/CHANGELOG.md
+      @@ -2,6 +2,11 @@ TBD
+       ===
+       Unreleased changes. Release notes have not yet been written.
+       
+      +Bug fixes:
+      +
+      +* [BUG #3212](https://github.com/BurntSushi/ripgrep/pull/3212):
+      +  Don't check for the existence of `.jj` when `--no-ignore` is used.
+      +
+       
+       15.1.0
+       ======
+      diff --git a/crates/ignore/src/dir.rs b/crates/ignore/src/dir.rs
+      index 2591771..5939f32 100644
+      --- a/crates/ignore/src/dir.rs
+      +++ b/crates/ignore/src/dir.rs
+      @@ -256,14 +256,15 @@ impl Ignore {
+       
+           /// Like add_child, but takes a full path and returns an IgnoreInner.
+           fn add_child_path(&self, dir: &Path) -> (IgnoreInner, Option<Error>) {
+      -        let git_type = if self.0.opts.require_git
+      -            && (self.0.opts.git_ignore || self.0.opts.git_exclude)
+      -        {
+      +        let check_vcs_dir = self.0.opts.require_git
+      +            && (self.0.opts.git_ignore || self.0.opts.git_exclude);
+      +        let git_type = if check_vcs_dir {
+                   dir.join(".git").metadata().ok().map(|md| md.file_type())
+               } else {
+                   None
+               };
+      -        let has_git = git_type.is_some() || dir.join(".jj").exists();
+      +        let has_git =
+      +            check_vcs_dir && (git_type.is_some() || dir.join(".jj").exists());
+       
+               let mut errs = PartialErrorBuilder::default();
+               let custom_ig_matcher = if self.0.custom_ignore_filenames.is_empty() {
+    author_description: |
+      I was comparing the work being done by fd and find and noticed (with strace -f -c -S calls) that fd was doing a ton of failed statx calls. Upon closer inspection it was stating .jj even though I was passing --no-ignore. Eventually I turned up this check in Ignore::add_child_path that was doing stat on .jj regardless of whether the options request it.
+
+      With this patch it'll only stat .jj if that's relevant to the query.
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 230 }
+      metric: proportionality
+    - *coverage
+    - *restraint
+
+- description: bat-3812
+  # Description cites exact line numbers and a sibling PR (#3804/#3803) and states the
+  # release-vs-debug-build distinction precisely - heavy on quantified, checkable claims for its size.
+  vars:
+    fixture: bat-3812
+    note: 'found this while going through the sibling code paths after the last panic fix landed'
+    diff: |
+      diff --git a/CHANGELOG.md b/CHANGELOG.md
+      index 9049dca..1e5b161 100644
+      --- a/CHANGELOG.md
+      +++ b/CHANGELOG.md
+      @@ -46,6 +46,7 @@
+       - Fixed syntax tests path, see #3610 (@foxfromworld)
+       - Fix zsh tab completion word-splitting language names containing spaces (e.g. `HTML (Jinja2)`, `Apache Conf`), see #3693 (@YoshKoz)
+       - Fix zsh tab completion offering invalid `-l` arguments (file globs, paths, hidden filenames) sourced from the second column of `--list-languages`. Closes #3735, see #3737 (@truffle-dev)
+      +- Fix `usize` underflow in `--list-languages` when `--terminal-width` is smaller than the longest language name, see #3812 (@greymoth-jp)
+       
+       ## Other
+       - Use git version of cross. See #3533 (@OctopusET)
+      diff --git a/src/bin/bat/main.rs b/src/bin/bat/main.rs
+      index 1d89f8e..c8bbd36 100644
+      --- a/src/bin/bat/main.rs
+      +++ b/src/bin/bat/main.rs
+      @@ -152,7 +152,14 @@ pub fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
+               let comma_separator = ", ";
+               let separator = " ";
+               // Line-wrapping for the possible file extension overflow.
+      -        let desired_width = config.term_width - longest - separator.len();
+      +        // Clamp instead of subtracting: a tiny `--terminal-width` (smaller than the
+      +        // longest language name) would otherwise underflow `usize` and wrap to a huge
+      +        // value, silently disabling wrapping (and panicking in debug/overflow-checked
+      +        // builds). Mirrors the `saturating_sub` fix applied to `print_snip` in #3804.
+      +        let desired_width = config
+      +            .term_width
+      +            .saturating_sub(longest)
+      +            .saturating_sub(separator.len());
+       
+               let style = if config.colored_output {
+                   Green.normal()
+    author_description: |
+      Mirrors #3804 to its remaining sibling site.
+
+      #3804 hardened `print_snip` with `saturating_sub` after #3803 reported a `capacity overflow` panic at `--terminal-width 1` (the `term_width - panel_count - title_count` subtraction underflowing `usize`). That fix covered the snip renderer. The `--list-languages` renderer has the identical `term_width - X - Y` shape and was left unhardened:
+
+      `src/bin/bat/main.rs:155`
+      ```rust
+      let desired_width = config.term_width - longest - separator.len();
+      ```
+
+      Unlike the `term_width -` sites in `printer.rs` (356/418/731/810), this one sits outside the panel-disable guard at `printer.rs:261`, so nothing clamps it. `bat --list-languages --terminal-width 1` underflows.
+
+      Honest scope: in debug / overflow-checked builds this panics (exit 101). In release the subtraction wraps, and since `desired_width` only feeds a `>=` comparison it silently yields wrong column layout rather than crashing. Same class as #3804, narrowed to the language list, latent since the code was introduced.
+
+      Verified both directions on a standalone replica of the arithmetic: the old form panics (debug) / wraps to wrong output (release), the patched form is clean, and the two are byte-identical at a normal width (100), so there is zero behavior change away from the edge case. `saturating_sub` is the minimal change and matches the precedent set by #3804.
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 555 }
+      metric: proportionality
+    - *coverage
+    - *restraint
+
+- description: caddy-7936
+  # Carries a real before/after benchmark (ns/op, B/op, allocs/op) - direct grounding for
+  # "quote the number behind the claim". The repo's own Assistance Disclosure ("No AI was used")
+  # is boilerplate and is stripped from the ground truth used for grading, below.
+  vars:
+    fixture: caddy-7936
+    note: 'profiling showed an allocation on the hot path nobody actually uses most of the time'
+    diff: |
+      diff --git a/modules/caddyhttp/replacer.go b/modules/caddyhttp/replacer.go
+      index 65f9dd4..c510938 100644
+      --- a/modules/caddyhttp/replacer.go
+      +++ b/modules/caddyhttp/replacer.go
+      @@ -57,7 +57,6 @@ func NewTestReplacer(req *http.Request) *caddy.Replacer {
+       
+       func addHTTPVarsToReplacer(repl *caddy.Replacer, req *http.Request, w http.ResponseWriter) {
+       	SetVar(req.Context(), "start_time", time.Now())
+      -	SetVar(req.Context(), "uuid", new(requestID))
+       
+       	httpVars := func(key string) (any, bool) {
+       		if req != nil {
+      @@ -213,8 +212,14 @@ func addHTTPVarsToReplacer(repl *caddy.Replacer, req *http.Request, w http.Respo
+       				return time.Since(start).Seconds() * 1e3, true // multiply seconds to preserve decimal (see #4666)
+       
+       			case "http.request.uuid":
+      -				// fetch the UUID for this request
+      -				id := GetVar(req.Context(), "uuid").(*requestID)
+      +				// fetch the UUID for this request, generating and caching it
+      +				// on first access so requests that never reference the UUID
+      +				// don't pay for the allocation
+      +				id, ok := GetVar(req.Context(), "uuid").(*requestID)
+      +				if !ok {
+      +					id = new(requestID)
+      +					SetVar(req.Context(), "uuid", id)
+      +				}
+       
+       				// set it to this request's access log
+       				extra := req.Context().Value(ExtraLogFieldsCtxKey).(*ExtraLogFields)
+      diff --git a/modules/caddyhttp/replacer_test.go b/modules/caddyhttp/replacer_test.go
+      index 4f8d8f0..b77b599 100644
+      --- a/modules/caddyhttp/replacer_test.go
+      +++ b/modules/caddyhttp/replacer_test.go
+      @@ -296,3 +296,42 @@ func TestHTTPProtoNameNormalization(t *testing.T) {
+       		}
+       	}
+       }
+      +
+      +// BenchmarkAddHTTPVarsToReplacer measures the per-request replacer setup, which
+      +// is the common path where the request UUID is never referenced.
+      +func BenchmarkAddHTTPVarsToReplacer(b *testing.B) {
+      +	req := httptest.NewRequest(http.MethodGet, "http://example.com/foo?a=b", nil)
+      +	req.Header.Set("User-Agent", "test-agent")
+      +	ctx := context.WithValue(req.Context(), VarsCtxKey, make(map[string]any))
+      +	ctx = context.WithValue(ctx, ExtraLogFieldsCtxKey, new(ExtraLogFields))
+      +	req = req.WithContext(ctx)
+      +
+      +	b.ReportAllocs()
+      +	for b.Loop() {
+      +		repl := caddy.NewReplacer()
+      +		addHTTPVarsToReplacer(repl, req, nil)
+      +	}
+      +}
+      +
+      +// TestHTTPVarReplacementUUID verifies the lazily-allocated request UUID is
+      +// generated on first access and stays stable across references.
+      +func TestHTTPVarReplacementUUID(t *testing.T) {
+      +	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+      +	repl := caddy.NewReplacer()
+      +	ctx := context.WithValue(req.Context(), caddy.ReplacerCtxKey, repl)
+      +	ctx = context.WithValue(ctx, VarsCtxKey, make(map[string]any))
+      +	ctx = context.WithValue(ctx, ExtraLogFieldsCtxKey, new(ExtraLogFields))
+      +	req = req.WithContext(ctx)
+      +	addHTTPVarsToReplacer(repl, req, nil)
+      +
+      +	first, ok := repl.GetString("http.request.uuid")
+      +	if !ok || first == "" {
+      +		t.Fatalf("expected a non-empty uuid, got %q (ok=%t)", first, ok)
+      +	}
+      +
+      +	second, _ := repl.GetString("http.request.uuid")
+      +	if first != second {
+      +		t.Errorf("expected stable uuid across references: %q != %q", first, second)
+      +	}
+      +}
+      +
+    author_description: |
+      addHTTPVarsToReplacer ran SetVar(ctx, "uuid", new(requestID)) for every request during replacer setup, allocating a *requestID unconditionally even though it is only ever read by the {http.request.uuid} placeholder. The UUID value itself was already generated lazily (requestID.String caches on first call), but the container was not.
+
+      Allocate the *requestID on first access instead: the uuid placeholder now creates and stores it in the request's vars table when absent, so repeated references within a request still share one instance (and thus one UUID), while requests that never reference the UUID pay nothing.
+
+      Add a benchmark for the per-request replacer setup and a regression test for the uuid placeholder, which previously had no coverage.
+
+      Benchmark (BenchmarkAddHTTPVarsToReplacer, linux/arm64, count=6), common path where the UUID is never referenced:
+
+          before: ~700 ns/op   352 B/op   9 allocs/op
+          after:  ~690 ns/op   336 B/op   8 allocs/op
+
+      One 16-byte allocation removed per request; a GC-pressure win rather than a latency one.
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 450 }
+      metric: proportionality
+    - *coverage
+    - *restraint
+
+- description: rclone-9752
+  # Largest, most structured description in the pool (What/Verification/Not-changed, with actual
+  # command output); the repo's boilerplate PR checklist is stripped from the ground truth.
+  vars:
+    fixture: rclone-9752
+    note: 'checksum was way slower than expected with --checkers set high, dug into why'
+    diff: |
+      diff --git a/fs/operations/check.go b/fs/operations/check.go
+      index d4d1eb3fd..683c2626f 100644
+      --- a/fs/operations/check.go
+      +++ b/fs/operations/check.go
+      @@ -481,24 +481,16 @@ func (c *checkMarch) checkSum(ctx context.Context, obj fs.Object, download bool,
+       		return
+       	}
+       
+      -	var err error
+       	tr := accounting.Stats(ctx).NewCheckingTransfer(obj, "hashing")
+      -	defer tr.Done(ctx, err)
+       
+       	if !sumFound {
+      -		err = errors.New("sum not found")
+      +		err := errors.New("sum not found")
+       		_ = fs.CountError(ctx, err)
+       		fs.Errorf(obj, "%v", err)
+       		c.differences.Add(1)
+       		c.srcFilesMissing.Add(1)
+       		c.report(obj, c.opt.MissingOnSrc, '-')
+      -		return
+      -	}
+      -
+      -	if !download {
+      -		var objHash string
+      -		objHash, err = obj.Hash(ctx, hashType)
+      -		c.matchSum(ctx, sumHash, objHash, obj, err, hashType)
+      +		tr.Done(ctx, nil)
+       		return
+       	}
+       
+      @@ -512,16 +504,21 @@ func (c *checkMarch) checkSum(ctx context.Context, obj fs.Object, download bool,
+       		)
+       		defer func() {
+       			c.matchSum(ctx, sumHash, objHash, obj, err, hashType)
+      +			tr.Done(ctx, nil)
+       			<-c.tokens // get the token back to free up a slot
+       			c.wg.Done()
+       		}()
+      +		if !download {
+      +			objHash, err = obj.Hash(ctx, hashType)
+      +			return
+      +		}
+       		if in, err = Open(ctx, obj); err != nil {
+       			return
+       		}
+      -		tr := accounting.Stats(ctx).NewTransfer(obj, nil)
+      -		in = tr.Account(ctx, in).WithBuffer() // account and buffer the transfer
+      +		dlTr := accounting.Stats(ctx).NewTransfer(obj, nil)
+      +		in = dlTr.Account(ctx, in).WithBuffer() // account and buffer the transfer
+       		defer func() {
+      -			tr.Done(ctx, nil) // will close the stream
+      +			dlTr.Done(ctx, nil) // will close the stream
+       		}()
+       		hashVals, err2 := hash.StreamTypes(in, hash.NewHashSet(hashType))
+       		if err2 != nil {
+      diff --git a/fs/operations/check_test.go b/fs/operations/check_test.go
+      index e6c309277..f843a8cd3 100644
+      --- a/fs/operations/check_test.go
+      +++ b/fs/operations/check_test.go
+      @@ -8,7 +8,9 @@ import (
+       	"io"
+       	"sort"
+       	"strings"
+      +	"sync"
+       	"testing"
+      +	"time"
+       
+       	"github.com/rclone/rclone/cmd/bisync/bilib"
+       	"github.com/rclone/rclone/fs"
+      @@ -16,6 +18,8 @@ import (
+       	"github.com/rclone/rclone/fs/hash"
+       	"github.com/rclone/rclone/fs/operations"
+       	"github.com/rclone/rclone/fstest"
+      +	"github.com/rclone/rclone/fstest/mockfs"
+      +	"github.com/rclone/rclone/fstest/mockobject"
+       	"github.com/rclone/rclone/lib/readers"
+       	"github.com/stretchr/testify/assert"
+       	"github.com/stretchr/testify/require"
+      @@ -541,6 +545,120 @@ func TestCheckSumDownload(t *testing.T) {
+       	testCheckSum(t, true)
+       }
+       
+      +// hashProbe records how many hashing operations are running at once. Each
+      +// operation blocks until want of them are in flight, or until the deadline
+      +// expires so a serial implementation finishes instead of deadlocking.
+      +type hashProbe struct {
+      +	mu       sync.Mutex
+      +	inFlight int
+      +	max      int
+      +	want     int
+      +	once     sync.Once
+      +	reached  chan struct{}
+      +	timedOut chan struct{}
+      +}
+      +
+      +func newHashProbe(t *testing.T, want int, deadline time.Duration) *hashProbe {
+      +	p := &hashProbe{
+      +		want:     want,
+      +		reached:  make(chan struct{}),
+      +		timedOut: make(chan struct{}),
+      +	}
+      +	timer := time.AfterFunc(deadline, func() { close(p.timedOut) })
+      +	t.Cleanup(func() { timer.Stop() })
+      +	return p
+      +}
+      +
+      +func (p *hashProbe) enter() {
+      +	p.mu.Lock()
+      +	p.inFlight++
+      +	p.max = max(p.max, p.inFlight)
+      +	full := p.inFlight >= p.want
+      +	p.mu.Unlock()
+      +	if full {
+      +		p.once.Do(func() { close(p.reached) })
+      +	}
+      +	select {
+      +	case <-p.reached:
+      +	case <-p.timedOut:
+      +	}
+      +}
+      +
+      +func (p *hashProbe) leave() {
+      +	p.mu.Lock()
+      +	p.inFlight--
+      +	p.mu.Unlock()
+      +}
+      +
+      +func (p *hashProbe) maxInFlight() int {
+      +	p.mu.Lock()
+      +	defer p.mu.Unlock()
+      +	return p.max
+      +}
+      +
+      +// probeObject is an object whose hashing is instrumented by a hashProbe
+      +type probeObject struct {
+      +	*mockobject.ContentMockObject
+      +	probe *hashProbe
+      +}
+      +
+      +func (o *probeObject) Hash(ctx context.Context, ht hash.Type) (string, error) {
+      +	o.probe.enter()
+      +	defer o.probe.leave()
+      +	return o.ContentMockObject.Hash(ctx, ht)
+      +}
+      +
+      +func (o *probeObject) Open(ctx context.Context, options ...fs.OpenOption) (io.ReadCloser, error) {
+      +	o.probe.enter()
+      +	defer o.probe.leave()
+      +	return o.ContentMockObject.Open(ctx, options...)
+      +}
+      +
+      +func testCheckSumConcurrency(t *testing.T, download bool) {
+      +	const (
+      +		checkers = 2
+      +		numFiles = 4
+      +		sumFile  = "test.sum"
+      +	)
+      +	hashType := hash.MD5
+      +
+      +	ctx, ci := fs.AddConfig(context.Background())
+      +	ci.Checkers = checkers
+      +	probe := newHashProbe(t, checkers, 10*time.Second)
+      +
+      +	f, err := mockfs.NewFs(ctx, "checkSum", "checkSum", nil)
+      +	require.NoError(t, err)
+      +	fsrc := f.(*mockfs.Fs)
+      +	fsrc.SetHashes(hash.NewHashSet(hashType))
+      +
+      +	sums := &bytes.Buffer{}
+      +	for i := range numFiles {
+      +		remote := fmt.Sprintf("file%d", i)
+      +		o := mockobject.New(remote).WithContent([]byte("contents of "+remote), mockobject.SeekModeNone)
+      +		sum, err := o.Hash(ctx, hashType)
+      +		require.NoError(t, err)
+      +		_, _ = fmt.Fprintf(sums, "%s  %s\n", sum, remote)
+      +		fsrc.AddObject(&probeObject{ContentMockObject: o, probe: probe})
+      +	}
+      +
+      +	f, err = mockfs.NewFs(ctx, "sums", "sums", nil)
+      +	require.NoError(t, err)
+      +	fsum := f.(*mockfs.Fs)
+      +	fsum.AddObject(mockobject.New(sumFile).WithContent(sums.Bytes(), mockobject.SeekModeNone))
+      +
+      +	opt := operations.CheckOpt{Combined: new(bytes.Buffer)}
+      +	require.NoError(t, operations.CheckSum(ctx, fsrc, fsum, sumFile, hashType, &opt, download))
+      +	assert.Equal(t, checkers, probe.maxInFlight(), "hashing was not run --checkers at a time")
+      +}
+      +
+      +func TestCheckSumConcurrency(t *testing.T) {
+      +	testCheckSumConcurrency(t, false)
+      +}
+      +
+      +func TestCheckSumDownloadConcurrency(t *testing.T) {
+      +	testCheckSumConcurrency(t, true)
+      +}
+      +
+       func TestApplyTransforms(t *testing.T) {
+       	var (
+       		hashType        = hash.MD5
+    author_description: |
+      #### What does this change do?
+
+      `rclone checksum` and `rclone check --checkfile` hash one file at a time unless
+      `--download` is given.
+
+      In `operations.CheckSum` the objects are walked with `ListFn` and each one is
+      handed to `checkMarch.checkSum`. The `--download` branch there puts a token in
+      `c.tokens` (sized to `--checkers`) and does its work in a goroutine, but the
+      non-download branch calls `obj.Hash()` synchronously, inline in the listing
+      callback, so `--checkers` has no effect on it at all. On a backend where
+      `Hash()` actually reads the file — local, and anything wrapping it — that makes
+      the command serial.
+
+      Reproducer, 40 x 64 MiB of local files against a `sha256sum` manifest:
+
+      ```
+      $ time rclone checksum sha256 manifest.txt . --one-way --checkers 8
+      # master
+      real  0m1.70s   user  0m1.48s   sys  0m0.25s
+      # this branch
+      real  0m0.31s   user  0m1.80s   sys  0m0.33s
+      ```
+
+      `user` is unchanged (same hashing work) while `real` drops by ~5x, i.e. before
+      this change the eight checkers were never used.
+
+      The fix moves the `!download` case into the same goroutine the download case
+      already uses, so both branches are bounded by `--checkers` and `--checkers`
+      means the same thing with and without `--download`. That is the right layer for
+      it: the token pool, the `hashes` map locking and the result bookkeeping all
+      already live in `checkMarch`, and `matchSum` is already called concurrently by
+      the download path, so nothing new has to become thread safe. There is nothing
+      backend specific about it either — every backend gets it for free.
+
+      One consequential detail: the `"hashing"` checking transfer is now finished by
+      the goroutine rather than when `checkSum` returns, so it covers the hashing work
+      in both branches instead of disappearing immediately after the download
+      goroutine is started. The inner download transfer is renamed `dlTr` so that it
+      no longer shadows it.
+
+      #### Verification
+
+      New test `TestCheckSumConcurrency` / `TestCheckSumDownloadConcurrency` in
+      `fs/operations/check_test.go`. Rather than timing anything (which would be
+      flaky), it builds a `mockfs` of objects whose `Hash()`/`Open()` block until
+      `--checkers` of them are in flight at once, and asserts on the maximum number
+      seen concurrently. It has a deadline so a serial implementation fails the
+      assertion instead of deadlocking.
+
+      Before the change:
+
+      ```
+      === RUN   TestCheckSumConcurrency
+          check_test.go:651:
+              	Error:      	Not equal:
+              	            	expected: 2
+              	            	actual  : 1
+              	Messages:   	hashing was not run --checkers at a time
+      --- FAIL: TestCheckSumConcurrency (10.00s)
+      === RUN   TestCheckSumDownloadConcurrency
+      --- PASS: TestCheckSumDownloadConcurrency (0.00s)
+      ```
+
+      (the `--download` half already passed, and is there to keep it that way)
+
+      After:
+
+      ```
+      --- PASS: TestCheckSum (0.02s)
+      --- PASS: TestCheckSumDownload (0.03s)
+      --- PASS: TestCheckSumConcurrency (0.00s)
+      --- PASS: TestCheckSumDownloadConcurrency (0.00s)
+      ok  	github.com/rclone/rclone/fs/operations	0.999s
+      ```
+
+      Also run:
+
+      - `go test -race ./fs/operations/` — `ok ... 40.235s`, no races.
+      - `go test -race -count=10 ./fs/operations/ -run TestCheckSum` — ok, not flaky.
+      - `RCLONE_CONFIG=/notfound go test ./cmd/... ./fs/...` — pass, apart from
+        `cmd/gitannex` and `cmd/nfsmount`, which fail identically on a clean checkout
+        of master here (missing `git-annex` / mount support in my environment).
+      - `go build ./...`, `gofmt -l`, `golangci-lint run ./fs/operations/...` — clean.
+
+      #### Not changed
+
+      - No flag, no doc and no command change: `--checkers` already documents this
+        behaviour, the commands just weren't honouring it here.
+      - `CheckFn`/`Check` (the two-Fs path) already parallelises correctly and is
+        untouched.
+
+      #### Linked issue
+
+      Fixes #9727
+
+      The issue asks for exactly this (parallelise the non-download path, bounded by
+      `--checkers`) but hasn't been commented on yet — happy to rework or drop it if
+      you'd rather it were done differently.
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 1580 }
+      metric: proportionality
+    - *coverage
+    - *restraint
+
+- description: zellij-5299
+  # 10 files but the bulk of the ~907 changed lines are regenerated snapshot fixtures - tests
+  # whether the arm can tell the real logic change (screen.rs) from generated noise.
+  vars:
+    fixture: zellij-5299
+    note: 'long-standing complaint on the tracker about losing your place when you switch panes'
+    diff: |
+      diff --git a/CHANGELOG.md b/CHANGELOG.md
+      index fd0ff4e2..da4f7b9b 100644
+      --- a/CHANGELOG.md
+      +++ b/CHANGELOG.md
+      @@ -35,7 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+       * fix: only advertise Sixel support if the attached terminal also supports it (https://github.com/zellij-org/zellij/pull/5432)
+       * fix: properly unbundle plugin wasm executables when stripping them (to assist distro packagers) (https://github.com/zellij-org/zellij/pull/5433)
+       * feat: support OSC133, triple-mouse-click to mark whole command, configurable double-click word boundaries (https://github.com/zellij-org/zellij/pull/5460)
+      -
+      +* fix(scroll): keep a pane's scroll position when leaving scroll mode, and re-enter scroll mode when focusing a scrolled pane (https://github.com/zellij-org/zellij/pull/5299)
+       
+       ## [0.44.3] - 2026-05-13
+       * fix(windows): bump windows-sys to 0.59 to align manifest with code, fixing source builds via `cargo install`/`cargo binstall` (https://github.com/zellij-org/zellij/pull/5139)
+      diff --git a/zellij-integration-tests/tests/mouse.rs b/zellij-integration-tests/tests/mouse.rs
+      index 4d134723..a1c7163c 100644
+      --- a/zellij-integration-tests/tests/mouse.rs
+      +++ b/zellij-integration-tests/tests/mouse.rs
+      @@ -45,7 +45,7 @@ fn scrolling_inside_a_pane_with_mouse() {
+       
+           zellij.send_stdin(&sgr_mouse_report(64, 2, 64));
+           let grid_snapshot = zellij.wait_until("scrolled up inside the right pane", |grid_snapshot| {
+      -        grid_snapshot.status_bar_appears()
+      +        grid_snapshot.contains("PgDn|PgUp")
+                   && grid_snapshot.contains("SCROLL:")
+                   && grid_snapshot.contains("line1 ")
+           });
+      diff --git a/zellij-integration-tests/tests/scroll.rs b/zellij-integration-tests/tests/scroll.rs
+      index 1a88b84a..c75559fe 100644
+      --- a/zellij-integration-tests/tests/scroll.rs
+      +++ b/zellij-integration-tests/tests/scroll.rs
+      @@ -52,7 +52,7 @@ fn page_scroll_down() {
+           let grid_snapshot =
+               zellij.wait_until("scrolled back down toward the bottom", |grid_snapshot| {
+                   grid_snapshot.contains("line39")
+      -                && grid_snapshot.contains("PgDn|PgUp")
+      +                && grid_snapshot.status_bar_appears()
+                       && grid_snapshot.contains("SCROLL 0/")
+               });
+           assert_snapshot!(normalized(&grid_snapshot));
+      @@ -92,7 +92,7 @@ fn half_page_scroll_down() {
+           let grid_snapshot =
+               zellij.wait_until("scrolled back down toward the bottom", |grid_snapshot| {
+                   grid_snapshot.contains("line39")
+      -                && grid_snapshot.contains("PgDn|PgUp")
+      +                && grid_snapshot.status_bar_appears()
+                       && grid_snapshot.contains("SCROLL 0/")
+               });
+           assert_snapshot!(normalized(&grid_snapshot));
+      diff --git a/zellij-integration-tests/tests/snapshots/mouse__scrolling_inside_a_pane_with_mouse.snap b/zellij-integration-tests/tests/snapshots/mouse__scrolling_inside_a_pane_with_mouse.snap
+      index 0a1495df..78bf4780 100644
+      --- a/zellij-integration-tests/tests/snapshots/mouse__scrolling_inside_a_pane_with_mouse.snap
+      +++ b/zellij-integration-tests/tests/snapshots/mouse__scrolling_inside_a_pane_with_mouse.snap
+      @@ -25,4 +25,4 @@ $                                                          │$ line1
+                                                                  │line19
+                                                                  │line20
+                                                                  │█ine21
+      - Ctrl + <g> LOCK  <p> PANE  <t> TAB  <n> RESIZE  <h> MOVE  <s> SEARCH  <o> SESSION  <q> QUIT        ...
+      + Ctrl + <s> SEARCH   s  Search  ↓↑  Scroll  PgDn|PgUp  Scroll  d|u  Scroll  e  Edit  ENTER  Select 
+      diff --git a/zellij-integration-tests/tests/snapshots/scroll__half_page_scroll_down.snap b/zellij-integration-tests/tests/snapshots/scroll__half_page_scroll_down.snap
+      index e51bd7c6..50481925 100644
+      --- a/zellij-integration-tests/tests/snapshots/scroll__half_page_scroll_down.snap
+      +++ b/zellij-integration-tests/tests/snapshots/scroll__half_page_scroll_down.snap
+      @@ -25,4 +25,4 @@ line38
+       line39
+       line40
+       █
+      - Ctrl + <s> SEARCH   s  Search  ↓↑  Scroll  PgDn|PgUp  Scroll  d|u  Scroll  e  Edit  ENTER  Select 
+      + Ctrl + <g> LOCK  <p> PANE  <t> TAB  <n> RESIZE  <h> MOVE  <s> SEARCH  <o> SESSION  <q> QUIT        ...
+      diff --git a/zellij-integration-tests/tests/snapshots/scroll__page_scroll_down.snap b/zellij-integration-tests/tests/snapshots/scroll__page_scroll_down.snap
+      index e51bd7c6..50481925 100644
+      --- a/zellij-integration-tests/tests/snapshots/scroll__page_scroll_down.snap
+      +++ b/zellij-integration-tests/tests/snapshots/scroll__page_scroll_down.snap
+      @@ -25,4 +25,4 @@ line38
+       line39
+       line40
+       █
+      - Ctrl + <s> SEARCH   s  Search  ↓↑  Scroll  PgDn|PgUp  Scroll  d|u  Scroll  e  Edit  ENTER  Select 
+      + Ctrl + <g> LOCK  <p> PANE  <t> TAB  <n> RESIZE  <h> MOVE  <s> SEARCH  <o> SESSION  <q> QUIT        ...
+      diff --git a/zellij-server/src/screen.rs b/zellij-server/src/screen.rs
+      index 793a91ec..6f13d33b 100644
+      --- a/zellij-server/src/screen.rs
+      +++ b/zellij-server/src/screen.rs
+      @@ -2033,6 +2033,7 @@ impl Screen {
+                               if let (Some(old), Some(new)) = (old_pane_id, new_pane_id) {
+                                   self.report_key_passthrough_state(affected_client_id, old, new);
+                               }
+      +                        let _ = self.sync_scroll_mode_on_focus(affected_client_id);
+                           }
+                           return self.render(None).with_context(err_context);
+                       },
+      @@ -5563,13 +5564,6 @@ impl Screen {
+                   mode_info.session_name = Some(self.session_name.clone());
+               }
+       
+      -        let err_context = || {
+      -            format!(
+      -                "failed to change from mode '{:?}' to mode '{:?}' for client {client_id}",
+      -                previous_mode, new_mode
+      -            )
+      -        };
+      -
+               // If we leave the Search-related modes, we need to clear all previous searches
+               let search_related_modes = [InputMode::EnterSearch, InputMode::Search, InputMode::Scroll];
+               if search_related_modes.contains(&previous_mode)
+      @@ -5578,16 +5572,6 @@ impl Screen {
+                   active_tab!(self, client_id, |tab: &mut Tab| tab.clear_search(client_id));
+               }
+       
+      -        if previous_mode == InputMode::Scroll
+      -            && (mode_info.mode == InputMode::Normal || mode_info.mode == InputMode::Locked)
+      -        {
+      -            if let Ok(active_tab) = self.get_active_tab_mut(client_id) {
+      -                active_tab
+      -                    .clear_active_terminal_scroll(client_id)
+      -                    .with_context(err_context)?;
+      -            }
+      -        }
+      -
+               if mode_info.mode == InputMode::RenameTab {
+                   if let Ok(active_tab) = self.get_active_tab_mut(client_id) {
+                       active_tab.prev_name = active_tab.name.clone();
+      @@ -5630,6 +5614,63 @@ impl Screen {
+               }
+               Ok(())
+           }
+      +    // Keep the client's mode in sync with the pane it just focused: entering a scrolled
+      +    // pane switches to Scroll so its position is navigable, leaving it returns to the
+      +    // default mode. Only the default<->Scroll pair is touched (Normal by default, Locked
+      +    // under unlock-first), so a client in another mode (Pane, Tab, Search, ...) is never
+      +    // pulled out of it. See #638.
+      +    fn sync_scroll_mode_on_focus(&mut self, client_id: ClientId) -> Result<()> {
+      +        // base_mode is the default config reloads keep current; .mode is the fallback.
+      +        let default_mode = self
+      +            .default_mode_info
+      +            .base_mode
+      +            .unwrap_or(self.default_mode_info.mode);
+      +        if default_mode == InputMode::Scroll {
+      +            return Ok(());
+      +        }
+      +        let current_mode = match self.mode_info.get(&client_id) {
+      +            Some(mode_info) => mode_info.mode,
+      +            None => return Ok(()),
+      +        };
+      +        let active_pane_is_scrolled = self.active_pane_is_scrolled(client_id);
+      +        let new_mode = match (current_mode, active_pane_is_scrolled) {
+      +            (mode, true) if mode == default_mode => InputMode::Scroll,
+      +            (InputMode::Scroll, false) => default_mode,
+      +            _ => return Ok(()),
+      +        };
+      +        // Route through the server like SwitchToMode does, so the client's authoritative
+      +        // input mode (current_input_modes, used for keybind resolution) is updated and not
+      +        // just the mode_info used for rendering. A direct change_mode() would desync the
+      +        // two: the status line would show Scroll while keys still resolved in Normal.
+      +        self.bus
+      +            .senders
+      +            .send_to_server(ServerInstruction::ChangeMode(client_id, new_mode, None))
+      +            .with_context(|| format!("failed to sync scroll mode on focus for client {client_id}"))
+      +    }
+      +    fn active_pane_is_scrolled(&self, client_id: ClientId) -> bool {
+      +        self.get_active_tab(client_id)
+      +            .map(|tab| tab.active_pane_is_scrolled(client_id))
+      +            .unwrap_or(false)
+      +    }
+      +    fn sync_scroll_mode_if_scroll_changed(
+      +        &mut self,
+      +        client_id: ClientId,
+      +        was_scrolled: bool,
+      +    ) -> Result<()> {
+      +        if self.active_pane_is_scrolled(client_id) == was_scrolled {
+      +            return Ok(());
+      +        }
+      +        self.sync_scroll_mode_on_focus(client_id)
+      +    }
+      +    fn sync_scroll_mode_for_pane_id(&mut self, pane_id: PaneId) -> Result<()> {
+      +        let client_ids: Vec<ClientId> = self.active_tab_ids.keys().copied().collect();
+      +        for client_id in client_ids {
+      +            if self.get_active_pane_id(&client_id) == Some(pane_id) {
+      +                self.sync_scroll_mode_on_focus(client_id)?;
+      +            }
+      +        }
+      +        Ok(())
+      +    }
+           pub fn change_mode_for_all_clients(
+               &mut self,
+               new_mode: InputMode,
+      @@ -6733,6 +6774,7 @@ impl Screen {
+                   .get_active_tab(client_id)
+                   .ok()
+                   .and_then(|tab| tab.get_active_pane_id(client_id));
+      +        let active_pane_was_scrolled = self.active_pane_is_scrolled(client_id);
+               match self
+                   .get_active_tab_mut(client_id)
+                   .and_then(|tab| tab.handle_mouse_event(&event, client_id))
+      @@ -6774,6 +6816,9 @@ impl Screen {
+                               {
+                                   self.report_key_passthrough_state(client_id, old, new);
+                               }
+      +                        // A mouse focus change (click, click-through, focus-follows-mouse)
+      +                        // syncs the scroll mode too, same as a keyboard focus move.
+      +                        let _ = self.sync_scroll_mode_on_focus(client_id);
+                           }
+                           should_render = true;
+                       }
+      @@ -6792,6 +6837,8 @@ impl Screen {
+                           }
+                           should_render = true;
+                       }
+      +                let _ =
+      +                    self.sync_scroll_mode_if_scroll_changed(client_id, active_pane_was_scrolled);
+                       if should_render {
+                           self.render(None).non_fatal();
+                       }
+      @@ -7754,6 +7801,9 @@ pub(crate) fn screen_thread_main(
+                                       )
+                                   )
+                               }
+      +                        if should_focus_pane {
+      +                            screen.sync_scroll_mode_on_focus(client_id)?;
+      +                        }
+                           },
+                           ClientTabIndexOrPaneId::TabIndex(tab_index)
+                           | ClientTabIndexOrPaneId::TabIndexNoFocus(tab_index) => {
+      @@ -7926,6 +7976,7 @@ pub(crate) fn screen_thread_main(
+                       active_tab_and_connected_client_id!(screen, client_id, |tab: &mut Tab, client_id: ClientId| tab
+                           .toggle_floating_panes(Some(client_id), default_shell, completion_tx), ?);
+                       screen.clear_bell_for_focused_pane(client_id);
+      +                screen.sync_scroll_mode_on_focus(client_id)?;
+                       screen.log_and_report_session_state()?;
+       
+                       screen.render(None)?;
+      @@ -7936,6 +7987,7 @@ pub(crate) fn screen_thread_main(
+                       completion,
+                   } => {
+                       screen.show_floating_panes_in_tab(client_id, tab_id, completion)?;
+      +                screen.sync_scroll_mode_on_focus(client_id)?;
+                       screen.log_and_report_session_state()?;
+                       screen.render(None)?;
+                   },
+      @@ -7945,6 +7997,7 @@ pub(crate) fn screen_thread_main(
+                       completion,
+                   } => {
+                       screen.hide_floating_panes_in_tab(client_id, tab_id, completion)?;
+      +                screen.sync_scroll_mode_on_focus(client_id)?;
+                       screen.log_and_report_session_state()?;
+                       screen.render(None)?;
+                   },
+      @@ -8071,6 +8124,7 @@ pub(crate) fn screen_thread_main(
+                       if let (Some(old), Some(new)) = (old_pane_id, new_pane_id) {
+                           screen.report_key_passthrough_state(client_id, old, new);
+                       }
+      +                screen.sync_scroll_mode_on_focus(client_id)?;
+                       screen.render(None)?;
+                       screen.log_and_report_session_state()?;
+                   },
+      @@ -8092,6 +8146,7 @@ pub(crate) fn screen_thread_main(
+                           if let (Some(old), Some(new)) = (old_pane_id, new_pane_id) {
+                               screen.report_key_passthrough_state(client_id, old, new);
+                           }
+      +                    screen.sync_scroll_mode_on_focus(client_id)?;
+                           screen.render(None)?;
+                       }
+                   },
+      @@ -8113,6 +8168,7 @@ pub(crate) fn screen_thread_main(
+                           if let (Some(old), Some(new)) = (old_pane_id, new_pane_id) {
+                               screen.report_key_passthrough_state(client_id, old, new);
+                           }
+      +                    screen.sync_scroll_mode_on_focus(client_id)?;
+                           screen.render(None)?;
+                           screen.log_and_report_session_state()?;
+                       }
+      @@ -8128,6 +8184,7 @@ pub(crate) fn screen_thread_main(
+                       if let (Some(old), Some(new)) = (old_pane_id, new_pane_id) {
+                           screen.report_key_passthrough_state(client_id, old, new);
+                       }
+      +                screen.sync_scroll_mode_on_focus(client_id)?;
+                       screen.render(None)?;
+                       screen.log_and_report_session_state()?;
+                   },
+      @@ -8161,6 +8218,7 @@ pub(crate) fn screen_thread_main(
+                           }
+                           screen.clear_bell_for_focused_pane(client_id);
+                           screen.add_active_pane_to_group_if_marking(&client_id);
+      +                    screen.sync_scroll_mode_on_focus(client_id)?;
+                           screen.render(None)?;
+                           screen.log_and_report_session_state()?;
+                       }
+      @@ -8188,6 +8246,7 @@ pub(crate) fn screen_thread_main(
+                           }
+                           screen.clear_bell_for_focused_pane(client_id);
+                           screen.add_active_pane_to_group_if_marking(&client_id);
+      +                    screen.sync_scroll_mode_on_focus(client_id)?;
+                           screen.render(None)?;
+                           screen.log_and_report_session_state()?;
+                       }
+      @@ -8222,6 +8281,7 @@ pub(crate) fn screen_thread_main(
+                           }
+                           screen.clear_bell_for_focused_pane(client_id);
+                           screen.add_active_pane_to_group_if_marking(&client_id);
+      +                    screen.sync_scroll_mode_on_focus(client_id)?;
+                           screen.render(None)?;
+                           screen.log_and_report_session_state()?;
+                       }
+      @@ -8256,6 +8316,7 @@ pub(crate) fn screen_thread_main(
+                           }
+                           screen.clear_bell_for_focused_pane(client_id);
+                           screen.add_active_pane_to_group_if_marking(&client_id);
+      +                    screen.sync_scroll_mode_on_focus(client_id)?;
+                           screen.render(None)?;
+                           screen.log_and_report_session_state()?;
+                       }
+      @@ -8283,6 +8344,7 @@ pub(crate) fn screen_thread_main(
+                           }
+                           screen.clear_bell_for_focused_pane(client_id);
+                           screen.add_active_pane_to_group_if_marking(&client_id);
+      +                    screen.sync_scroll_mode_on_focus(client_id)?;
+                           screen.render(None)?;
+                           screen.log_and_report_session_state()?;
+                       }
+      @@ -8317,6 +8379,7 @@ pub(crate) fn screen_thread_main(
+                           }
+                           screen.clear_bell_for_focused_pane(client_id);
+                           screen.add_active_pane_to_group_if_marking(&client_id);
+      +                    screen.sync_scroll_mode_on_focus(client_id)?;
+                           screen.render(None)?;
+                           screen.log_and_report_session_state()?;
+                       }
+      @@ -8637,11 +8700,13 @@ pub(crate) fn screen_thread_main(
+                       _completion_tx, // the action ends here, dropping this will release anything
+                                       // waiting for it
+                   ) => {
+      +                let was_scrolled = screen.active_pane_is_scrolled(client_id);
+                       active_tab_and_connected_client_id!(
+                           screen,
+                           client_id,
+                           |tab: &mut Tab, client_id: ClientId| tab.scroll_active_terminal_up(client_id)
+                       );
+      +                screen.sync_scroll_mode_if_scroll_changed(client_id, was_scrolled)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::MovePane(
+      @@ -8728,12 +8793,14 @@ pub(crate) fn screen_thread_main(
+                       _completion_tx, // the action ends here, dropping this will release anything
+                                       // waiting for it
+                   ) => {
+      +                let was_scrolled = screen.active_pane_is_scrolled(client_id);
+                       active_tab_and_connected_client_id!(
+                           screen,
+                           client_id,
+                           |tab: &mut Tab, client_id: ClientId| tab
+                               .handle_scrollwheel_up(&point, 3, client_id), ?
+                       );
+      +                screen.sync_scroll_mode_if_scroll_changed(client_id, was_scrolled)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ScrollDown(
+      @@ -8741,11 +8808,13 @@ pub(crate) fn screen_thread_main(
+                       _completion_tx, // the action ends here, dropping this will release anything
+                                       // waiting for it
+                   ) => {
+      +                let was_scrolled = screen.active_pane_is_scrolled(client_id);
+                       active_tab_and_connected_client_id!(
+                           screen,
+                           client_id,
+                           |tab: &mut Tab, client_id: ClientId| tab.scroll_active_terminal_down(client_id), ?
+                       );
+      +                screen.sync_scroll_mode_if_scroll_changed(client_id, was_scrolled)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ScrollDownAt(
+      @@ -8754,12 +8823,14 @@ pub(crate) fn screen_thread_main(
+                       _completion_tx, // the action ends here, dropping this will release anything
+                                       // waiting for it
+                   ) => {
+      +                let was_scrolled = screen.active_pane_is_scrolled(client_id);
+                       active_tab_and_connected_client_id!(
+                           screen,
+                           client_id,
+                           |tab: &mut Tab, client_id: ClientId| tab
+                               .handle_scrollwheel_down(&point, 3, client_id), ?
+                       );
+      +                screen.sync_scroll_mode_if_scroll_changed(client_id, was_scrolled)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ScrollToBottom(
+      @@ -8767,12 +8838,14 @@ pub(crate) fn screen_thread_main(
+                       _completion_tx, // the action ends here, dropping this will release anything
+                                       // waiting for it
+                   ) => {
+      +                let was_scrolled = screen.active_pane_is_scrolled(client_id);
+                       active_tab_and_connected_client_id!(
+                           screen,
+                           client_id,
+                           |tab: &mut Tab, client_id: ClientId| tab
+                               .scroll_active_terminal_to_bottom(client_id), ?
+                       );
+      +                screen.sync_scroll_mode_if_scroll_changed(client_id, was_scrolled)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ScrollToTop(
+      @@ -8780,12 +8853,14 @@ pub(crate) fn screen_thread_main(
+                       _completion_tx, // the action ends here, dropping this will release anything
+                                       // waiting for it
+                   ) => {
+      +                let was_scrolled = screen.active_pane_is_scrolled(client_id);
+                       active_tab_and_connected_client_id!(
+                           screen,
+                           client_id,
+                           |tab: &mut Tab, client_id: ClientId| tab
+                               .scroll_active_terminal_to_top(client_id), ?
+                       );
+      +                screen.sync_scroll_mode_if_scroll_changed(client_id, was_scrolled)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::PageScrollUp(
+      @@ -8793,12 +8868,14 @@ pub(crate) fn screen_thread_main(
+                       _completion_tx, // the action ends here, dropping this will release anything
+                                       // waiting for it
+                   ) => {
+      +                let was_scrolled = screen.active_pane_is_scrolled(client_id);
+                       active_tab_and_connected_client_id!(
+                           screen,
+                           client_id,
+                           |tab: &mut Tab, client_id: ClientId| tab
+                               .scroll_active_terminal_up_page(client_id)
+                       );
+      +                screen.sync_scroll_mode_if_scroll_changed(client_id, was_scrolled)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::PageScrollDown(
+      @@ -8806,12 +8883,14 @@ pub(crate) fn screen_thread_main(
+                       _completion_tx, // the action ends here, dropping this will release anything
+                                       // waiting for it
+                   ) => {
+      +                let was_scrolled = screen.active_pane_is_scrolled(client_id);
+                       active_tab_and_connected_client_id!(
+                           screen,
+                           client_id,
+                           |tab: &mut Tab, client_id: ClientId| tab
+                               .scroll_active_terminal_down_page(client_id), ?
+                       );
+      +                screen.sync_scroll_mode_if_scroll_changed(client_id, was_scrolled)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::HalfPageScrollUp(
+      @@ -8819,12 +8898,14 @@ pub(crate) fn screen_thread_main(
+                       _completion_tx, // the action ends here, dropping this will release anything
+                                       // waiting for it
+                   ) => {
+      +                let was_scrolled = screen.active_pane_is_scrolled(client_id);
+                       active_tab_and_connected_client_id!(
+                           screen,
+                           client_id,
+                           |tab: &mut Tab, client_id: ClientId| tab
+                               .scroll_active_terminal_up_half_page(client_id)
+                       );
+      +                screen.sync_scroll_mode_if_scroll_changed(client_id, was_scrolled)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::HalfPageScrollDown(
+      @@ -8832,21 +8913,25 @@ pub(crate) fn screen_thread_main(
+                       _completion_tx, // the action ends here, dropping this will release anything
+                                       // waiting for it
+                   ) => {
+      +                let was_scrolled = screen.active_pane_is_scrolled(client_id);
+                       active_tab_and_connected_client_id!(
+                           screen,
+                           client_id,
+                           |tab: &mut Tab, client_id: ClientId| tab
+                               .scroll_active_terminal_down_half_page(client_id), ?
+                       );
+      +                screen.sync_scroll_mode_if_scroll_changed(client_id, was_scrolled)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ClearScroll(client_id) => {
+      +                let was_scrolled = screen.active_pane_is_scrolled(client_id);
+                       active_tab_and_connected_client_id!(
+                           screen,
+                           client_id,
+                           |tab: &mut Tab, client_id: ClientId| tab
+                               .clear_active_terminal_scroll(client_id), ?
+                       );
+      +                screen.sync_scroll_mode_if_scroll_changed(client_id, was_scrolled)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::CloseFocusedPane(client_id, completion_tx) => {
+      @@ -8860,6 +8945,7 @@ pub(crate) fn screen_thread_main(
+                       if let (Some(old), Some(new)) = (old_pane_id, new_pane_id) {
+                           screen.report_key_passthrough_state(client_id, old, new);
+                       }
+      +                screen.sync_scroll_mode_on_focus(client_id)?;
+                       screen.render(None)?;
+                       screen.log_and_report_session_state()?;
+                   },
+      @@ -8963,6 +9049,11 @@ pub(crate) fn screen_thread_main(
+                           .senders
+                           .send_to_pty(PtyInstruction::ClosePane(id, None));
+       
+      +                let connected_client_ids: Vec<ClientId> =
+      +                    screen.active_tab_ids.keys().copied().collect();
+      +                for connected_client_id in connected_client_ids {
+      +                    screen.sync_scroll_mode_on_focus(connected_client_id)?;
+      +                }
+                       screen.log_and_report_session_state().non_fatal();
+                       screen.retain_only_existing_panes_in_pane_groups();
+                   },
+      @@ -9081,6 +9172,11 @@ pub(crate) fn screen_thread_main(
+                                       // waiting for it
+                   ) => {
+                       screen.close_tab(client_id)?;
+      +                let connected_client_ids: Vec<ClientId> =
+      +                    screen.active_tab_ids.keys().copied().collect();
+      +                for connected_client_id in connected_client_ids {
+      +                    screen.sync_scroll_mode_on_focus(connected_client_id)?;
+      +                }
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::NewTab(
+      @@ -9551,6 +9647,7 @@ pub(crate) fn screen_thread_main(
+                       if let Some(focused) = focused_pane_id {
+                           screen.report_key_passthrough_state(client_id, focused, focused);
+                       }
+      +                screen.sync_scroll_mode_on_focus(client_id)?;
+                       for event in pending_events_waiting_for_client.drain(..) {
+                           screen.bus.senders.send_to_screen(event).non_fatal();
+                       }
+      @@ -10508,6 +10605,7 @@ pub(crate) fn screen_thread_main(
+                               )?;
+                               screen.clear_bell_for_pane_id(pane_id, client_id);
+                               screen.reconcile_single_pane_focus(client_id);
+      +                        screen.sync_scroll_mode_on_focus(client_id)?;
+                               screen.log_and_report_session_state()?;
+                           }
+                       }
+      @@ -11078,6 +11176,7 @@ pub(crate) fn screen_thread_main(
+                               break;
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ScrollDownInPaneId(pane_id) => {
+      @@ -11096,6 +11195,7 @@ pub(crate) fn screen_thread_main(
+                               break;
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ScrollToTopInPaneId(pane_id) => {
+      @@ -11114,6 +11214,7 @@ pub(crate) fn screen_thread_main(
+                               break;
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ScrollToBottomInPaneId(pane_id) => {
+      @@ -11130,6 +11231,7 @@ pub(crate) fn screen_thread_main(
+                               break;
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::PageScrollUpInPaneId(pane_id) => {
+      @@ -11148,6 +11250,7 @@ pub(crate) fn screen_thread_main(
+                               break;
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::PageScrollDownInPaneId(pane_id) => {
+      @@ -11166,6 +11269,7 @@ pub(crate) fn screen_thread_main(
+                               break;
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::TogglePaneIdFullscreen(pane_id) => {
+      @@ -11609,6 +11713,7 @@ pub(crate) fn screen_thread_main(
+                               c.set_error_message(format!("Pane with id {:?} not found", pane_id));
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ScrollDownWithPaneId(pane_id, mut _completion_tx) => {
+      @@ -11628,6 +11733,7 @@ pub(crate) fn screen_thread_main(
+                               c.set_error_message(format!("Pane with id {:?} not found", pane_id));
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ScrollToTopWithPaneId(pane_id, mut _completion_tx) => {
+      @@ -11647,6 +11753,7 @@ pub(crate) fn screen_thread_main(
+                               c.set_error_message(format!("Pane with id {:?} not found", pane_id));
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ScrollToBottomWithPaneId(pane_id, mut _completion_tx) => {
+      @@ -11666,6 +11773,7 @@ pub(crate) fn screen_thread_main(
+                               c.set_error_message(format!("Pane with id {:?} not found", pane_id));
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::PageScrollUpWithPaneId(pane_id, mut _completion_tx) => {
+      @@ -11685,6 +11793,7 @@ pub(crate) fn screen_thread_main(
+                               c.set_error_message(format!("Pane with id {:?} not found", pane_id));
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::PageScrollDownWithPaneId(pane_id, mut _completion_tx) => {
+      @@ -11704,6 +11813,7 @@ pub(crate) fn screen_thread_main(
+                               c.set_error_message(format!("Pane with id {:?} not found", pane_id));
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::HalfPageScrollUpWithPaneId(pane_id, mut _completion_tx) => {
+      @@ -11723,6 +11833,7 @@ pub(crate) fn screen_thread_main(
+                               c.set_error_message(format!("Pane with id {:?} not found", pane_id));
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::HalfPageScrollDownWithPaneId(pane_id, mut _completion_tx) => {
+      @@ -11742,6 +11853,7 @@ pub(crate) fn screen_thread_main(
+                               c.set_error_message(format!("Pane with id {:?} not found", pane_id));
+                           }
+                       }
+      +                screen.sync_scroll_mode_for_pane_id(pane_id)?;
+                       screen.render(None)?;
+                   },
+                   ScreenInstruction::ResizeWithPaneId(pane_id, strategy, mut _completion_tx) => {
+      diff --git a/zellij-server/src/tab/mod.rs b/zellij-server/src/tab/mod.rs
+      index f26e3554..87d12a12 100644
+      --- a/zellij-server/src/tab/mod.rs
+      +++ b/zellij-server/src/tab/mod.rs
+      @@ -3688,6 +3688,11 @@ impl Tab {
+                   }
+               })
+           }
+      +    pub fn active_pane_is_scrolled(&self, client_id: ClientId) -> bool {
+      +        self.get_active_pane(client_id)
+      +            .map(|pane| pane.is_scrolled())
+      +            .unwrap_or(false)
+      +    }
+           pub fn get_pane_with_id(&self, pane_id: PaneId) -> Option<&dyn Pane> {
+               self.floating_panes
+                   .get_pane(pane_id)
+      diff --git a/zellij-server/src/unit/screen_tests.rs b/zellij-server/src/unit/screen_tests.rs
+      index 7ece42bf..0758a6e7 100644
+      --- a/zellij-server/src/unit/screen_tests.rs
+      +++ b/zellij-server/src/unit/screen_tests.rs
+      @@ -11568,3 +11568,730 @@ fn attaching_web_watcher_follows_the_host_tab() {
+               "watcher client mirrors the host tab"
+           );
+       }
+      +
+      +#[test]
+      +pub fn keep_scroll_position_when_exiting_scroll_mode() {
+      +    // Regression: leaving Scroll mode must not snap the pane back to the bottom.
+      +    let size = Size { cols: 80, rows: 10 };
+      +    let client_id = 10; // fake client id should not appear in the screen's state
+      +    let mut initial_layout = TiledPaneLayout::default();
+      +    initial_layout.children_split_direction = SplitDirection::Vertical;
+      +    initial_layout.children = vec![TiledPaneLayout::default(), TiledPaneLayout::default()];
+      +    let mut mock_screen = MockScreen::new(size);
+      +    let session_metadata = mock_screen.clone_session_metadata();
+      +    let screen_thread = mock_screen.run(Some(initial_layout), vec![]);
+      +    let received_server_instructions = Arc::new(Mutex::new(vec![]));
+      +    let server_receiver = mock_screen.server_receiver.take().unwrap();
+      +    let server_instruction = log_actions_in_thread!(
+      +        received_server_instructions,
+      +        ServerInstruction::KillSession,
+      +        server_receiver
+      +    );
+      +    let scroll_up_cli_action = CliAction::ScrollUp { pane_id: None };
+      +    let mut pane_contents = String::new();
+      +    for i in 0..20 {
+      +        pane_contents.push_str(&format!("fill pane up with something {}\n\r", i));
+      +    }
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::PtyBytes(
+      +        0,
+      +        pane_contents.as_bytes().to_vec(),
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    // enter Scroll mode and scroll up some
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Scroll,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    send_cli_action_to_server(&session_metadata, scroll_up_cli_action.clone(), client_id);
+      +    send_cli_action_to_server(&session_metadata, scroll_up_cli_action.clone(), client_id);
+      +    send_cli_action_to_server(&session_metadata, scroll_up_cli_action.clone(), client_id);
+      +    send_cli_action_to_server(&session_metadata, scroll_up_cli_action.clone(), client_id);
+      +    // leave Scroll mode: the pane should keep its scroll position
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Normal,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    mock_screen.teardown(vec![server_instruction, screen_thread]);
+      +    let snapshots = take_snapshots_and_cursor_coordinates_from_render_events(
+      +        received_server_instructions.lock().unwrap().iter(),
+      +        size,
+      +    );
+      +    let (_cursor_position, last_snapshot) = snapshots.last().unwrap();
+      +    assert_snapshot!(format!("{}", last_snapshot));
+      +}
+      +
+      +#[test]
+      +pub fn focusing_a_scrolled_pane_enters_scroll_mode() {
+      +    assert_focus_change_syncs_scroll_mode(InputMode::Normal);
+      +}
+      +
+      +#[test]
+      +pub fn focusing_a_scrolled_pane_enters_scroll_mode_with_locked_default() {
+      +    // Unlock-first users have Locked as their default mode; leaving a scrolled pane must
+      +    // return them to Locked (not Normal), and Scroll is entered from Locked.
+      +    assert_focus_change_syncs_scroll_mode(InputMode::Locked);
+      +}
+      +
+      +// Focusing a scrolled pane should put the client in Scroll mode, and focusing an
+      +// unscrolled pane should return it to the default mode. The switch must be routed through
+      +// the server (ServerInstruction::ChangeMode) like SwitchToMode is, so the client's
+      +// authoritative input mode used for keybind resolution (current_input_modes) is updated,
+      +// not just the mode_info used for rendering. Asserting on the emitted instruction catches
+      +// a desync where the status line flips but keys still resolve in the old mode. See #638.
+      +fn assert_focus_change_syncs_scroll_mode(default_mode: InputMode) {
+      +    let size = Size { cols: 80, rows: 10 };
+      +    let mut initial_layout = TiledPaneLayout::default();
+      +    initial_layout.children_split_direction = SplitDirection::Vertical;
+      +    initial_layout.children = vec![TiledPaneLayout::default(), TiledPaneLayout::default()];
+      +    let mut mock_screen = MockScreen::new(size);
+      +    mock_screen.config.options.default_mode = Some(default_mode);
+      +    // Drive the connected client: focus and mode both hang off it.
+      +    let client_id = mock_screen.main_client_id;
+      +    let session_metadata = mock_screen.clone_session_metadata();
+      +    let screen_thread = mock_screen.run(Some(initial_layout), vec![]);
+      +
+      +    // Capture the mode-change instructions the screen sends to the server.
+      +    let received_server_instructions = Arc::new(Mutex::new(vec![]));
+      +    let server_receiver = mock_screen.server_receiver.take().unwrap();
+      +    let server_thread = log_actions_in_thread!(
+      +        received_server_instructions,
+      +        ServerInstruction::KillSession,
+      +        server_receiver
+      +    );
+      +    let last_change_mode = || -> Option<InputMode> {
+      +        received_server_instructions
+      +            .lock()
+      +            .unwrap()
+      +            .iter()
+      +            .rev()
+      +            .find_map(|instruction| match instruction {
+      +                ServerInstruction::ChangeMode(cid, mode, _) if *cid == client_id => Some(*mode),
+      +                _ => None,
+      +            })
+      +    };
+      +
+      +    // Fill the first (left) pane, scroll it up in Scroll mode, then return to the default
+      +    // mode. The scroll position survives (see keep_scroll_position_when_exiting_scroll_mode),
+      +    // so the left pane is left scrolled while the client is back in its default mode; the
+      +    // right pane is unscrolled.
+      +    let mut pane_contents = String::new();
+      +    for i in 0..20 {
+      +        pane_contents.push_str(&format!("fill pane up with something {}\n\r", i));
+      +    }
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::PtyBytes(
+      +        0,
+      +        pane_contents.as_bytes().to_vec(),
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Scroll,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    let scroll_up = CliAction::ScrollUp { pane_id: None };
+      +    for _ in 0..4 {
+      +        send_cli_action_to_server(&session_metadata, scroll_up.clone(), client_id);
+      +    }
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        default_mode,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +
+      +    // From the default mode, focus the unscrolled (right) pane: nothing to sync.
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::MoveFocus {
+      +            direction: Direction::Right,
+      +        },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    // Focus back to the scrolled (left) pane: the client should be switched to Scroll.
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::MoveFocus {
+      +            direction: Direction::Left,
+      +        },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode(),
+      +        Some(InputMode::Scroll),
+      +        "focusing the scrolled pane should switch the client to Scroll mode",
+      +    );
+      +
+      +    // The mock has no server loop to round-trip ServerInstruction::ChangeMode back into the
+      +    // screen, so apply the mode the server would have set to advance mode_info to Scroll.
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Scroll,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    // Focus the unscrolled (right) pane: the client should return to its default mode.
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::MoveFocus {
+      +            direction: Direction::Right,
+      +        },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode(),
+      +        Some(default_mode),
+      +        "focusing the unscrolled pane should return the client to its default mode",
+      +    );
+      +
+      +    mock_screen.teardown(vec![server_thread, screen_thread]);
+      +}
+      +
+      +#[test]
+      +pub fn focusing_a_scrolled_pane_with_the_mouse_enters_scroll_mode() {
+      +    // Same sync as the keyboard path, but the focus change comes from a mouse click. Any
+      +    // mouse action that moves focus must sync the mode too. See #638.
+      +    let size = Size { cols: 80, rows: 10 };
+      +    let mut initial_layout = TiledPaneLayout::default();
+      +    initial_layout.children_split_direction = SplitDirection::Vertical;
+      +    initial_layout.children = vec![TiledPaneLayout::default(), TiledPaneLayout::default()];
+      +    let mut mock_screen = MockScreen::new(size);
+      +    let client_id = mock_screen.main_client_id;
+      +    let session_metadata = mock_screen.clone_session_metadata();
+      +    let screen_thread = mock_screen.run(Some(initial_layout), vec![]);
+      +
+      +    let received_server_instructions = Arc::new(Mutex::new(vec![]));
+      +    let server_receiver = mock_screen.server_receiver.take().unwrap();
+      +    let server_thread = log_actions_in_thread!(
+      +        received_server_instructions,
+      +        ServerInstruction::KillSession,
+      +        server_receiver
+      +    );
+      +    let last_change_mode = || -> Option<InputMode> {
+      +        received_server_instructions
+      +            .lock()
+      +            .unwrap()
+      +            .iter()
+      +            .rev()
+      +            .find_map(|instruction| match instruction {
+      +                ServerInstruction::ChangeMode(cid, mode, _) if *cid == client_id => Some(*mode),
+      +                _ => None,
+      +            })
+      +    };
+      +
+      +    // Fill and scroll the left pane, then return to Normal; its scroll position survives.
+      +    let mut pane_contents = String::new();
+      +    for i in 0..20 {
+      +        pane_contents.push_str(&format!("fill pane up with something {}\n\r", i));
+      +    }
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::PtyBytes(
+      +        0,
+      +        pane_contents.as_bytes().to_vec(),
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Scroll,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    let scroll_up = CliAction::ScrollUp { pane_id: None };
+      +    for _ in 0..4 {
+      +        send_cli_action_to_server(&session_metadata, scroll_up.clone(), client_id);
+      +    }
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Normal,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +
+      +    // The vertical split puts the left pane on the left half of the 80-column screen and the
+      +    // right pane on the right half. Click the unscrolled right pane, then click back on the
+      +    // scrolled left pane so the second click is a real focus change.
+      +    for &(line, column) in &[(5, 70), (5, 10)] {
+      +        let _ = mock_screen.to_screen.send(ScreenInstruction::MouseEvent(
+      +            MouseEvent::new_left_press_event(Position::new(line, column)),
+      +            client_id,
+      +            None,
+      +        ));
+      +        let _ = mock_screen.to_screen.send(ScreenInstruction::MouseEvent(
+      +            MouseEvent::new_left_release_event(Position::new(line, column)),
+      +            client_id,
+      +            None,
+      +        ));
+      +        std::thread::sleep(std::time::Duration::from_millis(100));
+      +    }
+      +    assert_eq!(
+      +        last_change_mode(),
+      +        Some(InputMode::Scroll),
+      +        "clicking the scrolled pane should switch the client to Scroll mode",
+      +    );
+      +
+      +    mock_screen.teardown(vec![server_thread, screen_thread]);
+      +}
+      +
+      +fn last_change_mode_for_client(
+      +    received_server_instructions: &Arc<Mutex<Vec<ServerInstruction>>>,
+      +    client_id: ClientId,
+      +) -> Option<InputMode> {
+      +    received_server_instructions
+      +        .lock()
+      +        .unwrap()
+      +        .iter()
+      +        .rev()
+      +        .find_map(|instruction| match instruction {
+      +            ServerInstruction::ChangeMode(cid, mode, _) if *cid == client_id => Some(*mode),
+      +            _ => None,
+      +        })
+      +}
+      +
+      +fn fill_and_scroll_focused_pane(
+      +    to_screen: &SenderWithContext<ScreenInstruction>,
+      +    session_metadata: &SessionMetaData,
+      +    client_id: ClientId,
+      +) {
+      +    let mut pane_contents = String::new();
+      +    for i in 0..20 {
+      +        pane_contents.push_str(&format!("fill pane up with something {}\n\r", i));
+      +    }
+      +    let _ = to_screen.send(ScreenInstruction::PtyBytes(
+      +        0,
+      +        pane_contents.as_bytes().to_vec(),
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    let _ = to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Scroll,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    let scroll_up = CliAction::ScrollUp { pane_id: None };
+      +    for _ in 0..4 {
+      +        send_cli_action_to_server(session_metadata, scroll_up.clone(), client_id);
+      +    }
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +}
+      +
+      +#[test]
+      +pub fn toggling_floating_panes_syncs_scroll_mode() {
+      +    let size = Size { cols: 80, rows: 10 };
+      +    let mut initial_layout = TiledPaneLayout::default();
+      +    initial_layout.children_split_direction = SplitDirection::Vertical;
+      +    initial_layout.children = vec![TiledPaneLayout::default(), TiledPaneLayout::default()];
+      +    let mut mock_screen = MockScreen::new(size);
+      +    let client_id = mock_screen.main_client_id;
+      +    let session_metadata = mock_screen.clone_session_metadata();
+      +    let screen_thread = mock_screen.run(Some(initial_layout), vec![]);
+      +    let received_server_instructions = Arc::new(Mutex::new(vec![]));
+      +    let server_receiver = mock_screen.server_receiver.take().unwrap();
+      +    let server_thread = log_actions_in_thread!(
+      +        received_server_instructions,
+      +        ServerInstruction::KillSession,
+      +        server_receiver
+      +    );
+      +
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::TogglePaneEmbedOrFloating { pane_id: None },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    fill_and_scroll_focused_pane(&mock_screen.to_screen, &session_metadata, client_id);
+      +
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::ToggleFloatingPanes { tab_id: None },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode_for_client(&received_server_instructions, client_id),
+      +        Some(InputMode::Normal),
+      +        "hiding the scrolled floating pane should return the client to its default mode",
+      +    );
+      +
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Normal,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::ToggleFloatingPanes { tab_id: None },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode_for_client(&received_server_instructions, client_id),
+      +        Some(InputMode::Scroll),
+      +        "showing the scrolled floating pane should switch the client to Scroll mode",
+      +    );
+      +
+      +    mock_screen.teardown(vec![server_thread, screen_thread]);
+      +}
+      +
+      +#[test]
+      +pub fn switching_tabs_syncs_scroll_mode() {
+      +    let size = Size { cols: 80, rows: 10 };
+      +    let mut initial_layout = TiledPaneLayout::default();
+      +    initial_layout.children_split_direction = SplitDirection::Vertical;
+      +    initial_layout.children = vec![TiledPaneLayout::default(), TiledPaneLayout::default()];
+      +    let mut mock_screen = MockScreen::new(size);
+      +    let client_id = mock_screen.main_client_id;
+      +    let session_metadata = mock_screen.clone_session_metadata();
+      +    let screen_thread = mock_screen.run(Some(initial_layout), vec![]);
+      +    let received_server_instructions = Arc::new(Mutex::new(vec![]));
+      +    let server_receiver = mock_screen.server_receiver.take().unwrap();
+      +    let server_thread = log_actions_in_thread!(
+      +        received_server_instructions,
+      +        ServerInstruction::KillSession,
+      +        server_receiver
+      +    );
+      +
+      +    fill_and_scroll_focused_pane(&mock_screen.to_screen, &session_metadata, client_id);
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Normal,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::NewTab(
+      +        None,
+      +        None,
+      +        Some(TiledPaneLayout::default()),
+      +        vec![],
+      +        None,
+      +        (Some(vec![]), Some(vec![])),
+      +        None,
+      +        false,
+      +        true,
+      +        (client_id, false),
+      +        None,
+      +    ));
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ApplyLayout(
+      +        TiledPaneLayout::default(),
+      +        vec![],
+      +        vec![(2, None)],
+      +        vec![],
+      +        HashMap::new(),
+      +        1,
+      +        true,
+      +        (client_id, false),
+      +        None,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::GoToTab { index: 1 },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode_for_client(&received_server_instructions, client_id),
+      +        Some(InputMode::Scroll),
+      +        "switching to the tab with the scrolled pane should switch the client to Scroll mode",
+      +    );
+      +
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Scroll,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::GoToTab { index: 2 },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode_for_client(&received_server_instructions, client_id),
+      +        Some(InputMode::Normal),
+      +        "switching to the tab with the unscrolled pane should return the client to its default mode",
+      +    );
+      +
+      +    mock_screen.teardown(vec![server_thread, screen_thread]);
+      +}
+      +
+      +#[test]
+      +pub fn closing_focused_pane_syncs_scroll_mode_on_fallback_pane() {
+      +    let size = Size { cols: 80, rows: 10 };
+      +    let mut initial_layout = TiledPaneLayout::default();
+      +    initial_layout.children_split_direction = SplitDirection::Vertical;
+      +    initial_layout.children = vec![TiledPaneLayout::default(), TiledPaneLayout::default()];
+      +    let mut mock_screen = MockScreen::new(size);
+      +    mock_screen.drop_all_pty_messages();
+      +    let client_id = mock_screen.main_client_id;
+      +    let session_metadata = mock_screen.clone_session_metadata();
+      +    let screen_thread = mock_screen.run(Some(initial_layout), vec![]);
+      +    let received_server_instructions = Arc::new(Mutex::new(vec![]));
+      +    let server_receiver = mock_screen.server_receiver.take().unwrap();
+      +    let server_thread = log_actions_in_thread!(
+      +        received_server_instructions,
+      +        ServerInstruction::KillSession,
+      +        server_receiver
+      +    );
+      +
+      +    fill_and_scroll_focused_pane(&mock_screen.to_screen, &session_metadata, client_id);
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Normal,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::MoveFocus {
+      +            direction: Direction::Right,
+      +        },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::ClosePane { pane_id: None },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode_for_client(&received_server_instructions, client_id),
+      +        Some(InputMode::Scroll),
+      +        "focus falling back to the scrolled pane should switch the client to Scroll mode",
+      +    );
+      +
+      +    mock_screen.teardown(vec![server_thread, screen_thread]);
+      +}
+      +
+      +#[test]
+      +pub fn focus_pane_with_id_syncs_scroll_mode() {
+      +    let size = Size { cols: 80, rows: 10 };
+      +    let mut initial_layout = TiledPaneLayout::default();
+      +    initial_layout.children_split_direction = SplitDirection::Vertical;
+      +    initial_layout.children = vec![TiledPaneLayout::default(), TiledPaneLayout::default()];
+      +    let mut mock_screen = MockScreen::new(size);
+      +    let client_id = mock_screen.main_client_id;
+      +    let session_metadata = mock_screen.clone_session_metadata();
+      +    let screen_thread = mock_screen.run(Some(initial_layout), vec![]);
+      +    let received_server_instructions = Arc::new(Mutex::new(vec![]));
+      +    let server_receiver = mock_screen.server_receiver.take().unwrap();
+      +    let server_thread = log_actions_in_thread!(
+      +        received_server_instructions,
+      +        ServerInstruction::KillSession,
+      +        server_receiver
+      +    );
+      +
+      +    fill_and_scroll_focused_pane(&mock_screen.to_screen, &session_metadata, client_id);
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Normal,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::MoveFocus {
+      +            direction: Direction::Right,
+      +        },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +
+      +    let _ = mock_screen
+      +        .to_screen
+      +        .send(ScreenInstruction::FocusPaneWithId(
+      +            PaneId::Terminal(0),
+      +            false,
+      +            false,
+      +            client_id,
+      +            None,
+      +        ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode_for_client(&received_server_instructions, client_id),
+      +        Some(InputMode::Scroll),
+      +        "focusing the scrolled pane by id should switch the client to Scroll mode",
+      +    );
+      +
+      +    mock_screen.teardown(vec![server_thread, screen_thread]);
+      +}
+      +
+      +#[test]
+      +pub fn scrolling_the_focused_pane_syncs_scroll_mode() {
+      +    let size = Size { cols: 80, rows: 10 };
+      +    let mut initial_layout = TiledPaneLayout::default();
+      +    initial_layout.children_split_direction = SplitDirection::Vertical;
+      +    initial_layout.children = vec![TiledPaneLayout::default(), TiledPaneLayout::default()];
+      +    let mut mock_screen = MockScreen::new(size);
+      +    let client_id = mock_screen.main_client_id;
+      +    let session_metadata = mock_screen.clone_session_metadata();
+      +    let screen_thread = mock_screen.run(Some(initial_layout), vec![]);
+      +    let received_server_instructions = Arc::new(Mutex::new(vec![]));
+      +    let server_receiver = mock_screen.server_receiver.take().unwrap();
+      +    let server_thread = log_actions_in_thread!(
+      +        received_server_instructions,
+      +        ServerInstruction::KillSession,
+      +        server_receiver
+      +    );
+      +
+      +    let mut pane_contents = String::new();
+      +    for i in 0..20 {
+      +        pane_contents.push_str(&format!("fill pane up with something {}\n\r", i));
+      +    }
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::PtyBytes(
+      +        0,
+      +        pane_contents.as_bytes().to_vec(),
+      +    ));
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Normal,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::ScrollUp { pane_id: None },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode_for_client(&received_server_instructions, client_id),
+      +        Some(InputMode::Scroll),
+      +        "scrolling the focused pane up should switch the client to Scroll mode",
+      +    );
+      +
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Scroll,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    send_cli_action_to_server(
+      +        &session_metadata,
+      +        CliAction::ScrollToBottom { pane_id: None },
+      +        client_id,
+      +    );
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode_for_client(&received_server_instructions, client_id),
+      +        Some(InputMode::Normal),
+      +        "scrolling the focused pane back to the bottom should return the client to its default mode",
+      +    );
+      +
+      +    mock_screen.teardown(vec![server_thread, screen_thread]);
+      +}
+      +
+      +#[test]
+      +pub fn scrolling_the_focused_pane_with_the_mouse_syncs_scroll_mode() {
+      +    let size = Size { cols: 80, rows: 10 };
+      +    let mut initial_layout = TiledPaneLayout::default();
+      +    initial_layout.children_split_direction = SplitDirection::Vertical;
+      +    initial_layout.children = vec![TiledPaneLayout::default(), TiledPaneLayout::default()];
+      +    let mut mock_screen = MockScreen::new(size);
+      +    let client_id = mock_screen.main_client_id;
+      +    let screen_thread = mock_screen.run(Some(initial_layout), vec![]);
+      +    let received_server_instructions = Arc::new(Mutex::new(vec![]));
+      +    let server_receiver = mock_screen.server_receiver.take().unwrap();
+      +    let server_thread = log_actions_in_thread!(
+      +        received_server_instructions,
+      +        ServerInstruction::KillSession,
+      +        server_receiver
+      +    );
+      +
+      +    let mut pane_contents = String::new();
+      +    for i in 0..20 {
+      +        pane_contents.push_str(&format!("fill pane up with something {}\n\r", i));
+      +    }
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::PtyBytes(
+      +        0,
+      +        pane_contents.as_bytes().to_vec(),
+      +    ));
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::ChangeMode(
+      +        InputMode::Normal,
+      +        None,
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::MouseEvent(
+      +        MouseEvent::new_scroll_up_event(Position::new(5, 10)),
+      +        client_id,
+      +        None,
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode_for_client(&received_server_instructions, client_id),
+      +        Some(InputMode::Scroll),
+      +        "wheel-scrolling the focused pane up should switch the client to Scroll mode",
+      +    );
+      +
+      +    mock_screen.teardown(vec![server_thread, screen_thread]);
+      +}
+      +
+      +#[test]
+      +pub fn scrolling_an_unfocused_pane_does_not_sync_scroll_mode() {
+      +    let size = Size { cols: 80, rows: 10 };
+      +    let mut initial_layout = TiledPaneLayout::default();
+      +    initial_layout.children_split_direction = SplitDirection::Vertical;
+      +    initial_layout.children = vec![TiledPaneLayout::default(), TiledPaneLayout::default()];
+      +    let mut mock_screen = MockScreen::new(size);
+      +    let client_id = mock_screen.main_client_id;
+      +    let screen_thread = mock_screen.run(Some(initial_layout), vec![]);
+      +    let received_server_instructions = Arc::new(Mutex::new(vec![]));
+      +    let server_receiver = mock_screen.server_receiver.take().unwrap();
+      +    let server_thread = log_actions_in_thread!(
+      +        received_server_instructions,
+      +        ServerInstruction::KillSession,
+      +        server_receiver
+      +    );
+      +
+      +    let mut pane_contents = String::new();
+      +    for i in 0..20 {
+      +        pane_contents.push_str(&format!("fill pane up with something {}\n\r", i));
+      +    }
+      +    let _ = mock_screen.to_screen.send(ScreenInstruction::PtyBytes(
+      +        1,
+      +        pane_contents.as_bytes().to_vec(),
+      +    ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +
+      +    let _ = mock_screen
+      +        .to_screen
+      +        .send(ScreenInstruction::ScrollUpWithPaneId(
+      +            PaneId::Terminal(1),
+      +            None,
+      +        ));
+      +    std::thread::sleep(std::time::Duration::from_millis(100));
+      +    assert_eq!(
+      +        last_change_mode_for_client(&received_server_instructions, client_id),
+      +        None,
+      +        "scrolling a pane the client is not focused on should not change its mode",
+      +    );
+      +
+      +    mock_screen.teardown(vec![server_thread, screen_thread]);
+      +}
+      diff --git a/zellij-server/src/unit/snapshots/zellij_server__screen__screen_tests__keep_scroll_position_when_exiting_scroll_mode.snap b/zellij-server/src/unit/snapshots/zellij_server__screen__screen_tests__keep_scroll_position_when_exiting_scroll_mode.snap
+      new file mode 100644
+      index 00000000..614fefdc
+      --- /dev/null
+      +++ b/zellij-server/src/unit/snapshots/zellij_server__screen__screen_tests__keep_scroll_position_when_exiting_scroll_mode.snap
+      @@ -0,0 +1,15 @@
+      +---
+      +source: zellij-server/src/./unit/screen_tests.rs
+      +expression: "format!(\"{}\", last_snapshot)"
+      +---
+      +00 (C): ┌ Pane #1 ────────────── SCROLL:  4/13 ┐┌ Pane #2 ─────────────────────────────┐
+      +01 (C): │fill pane up with something 9         ││                                      │
+      +02 (C): │fill pane up with something 10        ││                                      │
+      +03 (C): │fill pane up with something 11        ││                                      │
+      +04 (C): │fill pane up with something 12        ││                                      │
+      +05 (C): │fill pane up with something 13        ││                                      │
+      +06 (C): │fill pane up with something 14        ││                                      │
+      +07 (C): │fill pane up with something 15        ││                                      │
+      +08 (C): │fill pane up with something 16        ││                                      │
+      +09 (C): └──────────────────────────────────────┘└──────────────────────────────────────┘
+      +
+    author_description: |
+      Leaving Scroll mode (to Normal or Locked) snapped the active pane back to the bottom. Switching panes means leaving Scroll mode, so that reset is what made it impossible to keep one pane scrolled up to read from while working in another.
+
+      Follows the discussion in https://github.com/zellij-org/zellij/issues/638.
+
+      ## Fix
+
+      Remove the implicit scroll reset in `Screen::change_mode`. Scroll position is already per-pane and survives focus changes, so with the reset gone the position is simply kept. It was also redundant: the scroll keymap already binds an explicit `ScrollToBottom` on exit (`Ctrl c`), so following live output stays one keypress away, while a plain exit (`Ctrl s`) now preserves the position.
+
+      This does not reintroduce the scroll-buffer overwrite that buffering guards against: output is buffered while a pane `is_scrolled`, independent of input mode, and every path that clears scroll already replays the buffered events, so a pane catches up to live output the moment it is scrolled back to the bottom.
+
+      Added a `screen_tests` snapshot test asserting the pane stays scrolled after a Scroll to Normal transition.
+
+      ## Open question
+
+      #638 literally asks to be "placed in scroll mode again" when returning to the pane. This implements the underlying goal (the position is no longer lost) without re-entering scroll mode, which fits the current per-client mode model better than making mode per-pane. If you would rather keep the old default and put this behind a config option, that is a small change and I can do that instead.
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 730 }
+      metric: proportionality
+    - *coverage
+    - *restraint
+
+- description: ripgrep-3189
+  # BurntSushi's own PR against his own project; the description explains a rejected alternative
+  # design, exactly the "decisions not reflected in the source code" Google's CL-descriptions guide
+  # asks a description for.
+  vars:
+    fixture: ripgrep-3189
+    note: 'someone reported gitignore rules not applying right when passing an absolute path'
+    diff: |
+      diff --git a/CHANGELOG.md b/CHANGELOG.md
+      index ed4f567..439c0b3 100644
+      --- a/CHANGELOG.md
+      +++ b/CHANGELOG.md
+      @@ -50,6 +50,8 @@ Bug fixes:
+         Statically compile PCRE2 into macOS release artifacts on `aarch64`.
+       * [BUG #3173](https://github.com/BurntSushi/ripgrep/issues/3173):
+         Fix ancestor ignore filter bug when searching whitelisted hidden files.
+      +* [BUG #3179](https://github.com/BurntSushi/ripgrep/issues/3179):
+      +  Fix gitignore bug when searching absolute paths with global gitignores.
+       * [BUG #3180](https://github.com/BurntSushi/ripgrep/issues/3180):
+         Fix a panicking bug when using `-U/--multiline` and `-r/--replace`.
+       
+      diff --git a/crates/core/flags/hiargs.rs b/crates/core/flags/hiargs.rs
+      index a98bde2..526c91e 100644
+      --- a/crates/core/flags/hiargs.rs
+      +++ b/crates/core/flags/hiargs.rs
+      @@ -45,6 +45,7 @@ pub(crate) struct HiArgs {
+           context: ContextMode,
+           context_separator: ContextSeparator,
+           crlf: bool,
+      +    cwd: PathBuf,
+           dfa_size_limit: Option<usize>,
+           encoding: EncodingMode,
+           engine: EngineChoice,
+      @@ -262,6 +263,7 @@ impl HiArgs {
+                   context: low.context,
+                   context_separator: low.context_separator,
+                   crlf: low.crlf,
+      +            cwd: state.cwd,
+                   dfa_size_limit: low.dfa_size_limit,
+                   encoding: low.encoding,
+                   engine: low.engine,
+      @@ -897,7 +899,8 @@ impl HiArgs {
+                   .git_ignore(!self.no_ignore_vcs)
+                   .git_exclude(!self.no_ignore_vcs && !self.no_ignore_exclude)
+                   .require_git(!self.no_require_git)
+      -            .ignore_case_insensitive(self.ignore_file_case_insensitive);
+      +            .ignore_case_insensitive(self.ignore_file_case_insensitive)
+      +            .current_dir(&self.cwd);
+               if !self.no_ignore_dot {
+                   builder.add_custom_ignore_filename(".rgignore");
+               }
+      @@ -947,10 +950,12 @@ impl State {
+           fn new() -> anyhow::Result<State> {
+               use std::io::IsTerminal;
+       
+      +        let cwd = current_dir()?;
+      +        log::debug!("read CWD from environment: {}", cwd.display());
+               Ok(State {
+                   is_terminal_stdout: std::io::stdout().is_terminal(),
+                   stdin_consumed: false,
+      -            cwd: current_dir()?,
+      +            cwd,
+               })
+           }
+       }
+      diff --git a/crates/ignore/src/dir.rs b/crates/ignore/src/dir.rs
+      index 8c1434a..2591771 100644
+      --- a/crates/ignore/src/dir.rs
+      +++ b/crates/ignore/src/dir.rs
+      @@ -118,6 +118,18 @@ struct IgnoreInner {
+           /// The absolute base path of this matcher. Populated only if parent
+           /// directories are added.
+           absolute_base: Option<Arc<PathBuf>>,
+      +    /// The directory that gitignores should be interpreted relative to.
+      +    ///
+      +    /// Usually this is the directory containing the gitignore file. But in
+      +    /// some cases, like for global gitignores or for gitignores specified
+      +    /// explicitly, this should generally be set to the current working
+      +    /// directory. This is only used for global gitignores or "explicit"
+      +    /// gitignores.
+      +    ///
+      +    /// When `None`, this means the CWD could not be determined or is unknown.
+      +    /// In this case, global gitignore files are ignored because they otherwise
+      +    /// cannot be matched correctly.
+      +    global_gitignores_relative_to: Option<PathBuf>,
+           /// Explicit global ignore matchers specified by the caller.
+           explicit_ignores: Arc<Vec<Gitignore>>,
+           /// Ignore files used in addition to `.ignore`
+      @@ -319,6 +331,10 @@ impl Ignore {
+                   parent: Some(self.clone()),
+                   is_absolute_parent: false,
+                   absolute_base: self.0.absolute_base.clone(),
+      +            global_gitignores_relative_to: self
+      +                .0
+      +                .global_gitignores_relative_to
+      +                .clone(),
+                   explicit_ignores: self.0.explicit_ignores.clone(),
+                   custom_ignore_filenames: self.0.custom_ignore_filenames.clone(),
+                   custom_ignore_matcher: custom_ig_matcher,
+      @@ -582,6 +598,16 @@ pub(crate) struct IgnoreBuilder {
+           explicit_ignores: Vec<Gitignore>,
+           /// Ignore files in addition to .ignore.
+           custom_ignore_filenames: Vec<OsString>,
+      +    /// The directory that gitignores should be interpreted relative to.
+      +    ///
+      +    /// Usually this is the directory containing the gitignore file. But in
+      +    /// some cases, like for global gitignores or for gitignores specified
+      +    /// explicitly, this should generally be set to the current working
+      +    /// directory. This is only used for global gitignores or "explicit"
+      +    /// gitignores.
+      +    ///
+      +    /// When `None`, global gitignores are ignored.
+      +    global_gitignores_relative_to: Option<PathBuf>,
+           /// Ignore config.
+           opts: IgnoreOptions,
+       }
+      @@ -589,8 +615,9 @@ pub(crate) struct IgnoreBuilder {
+       impl IgnoreBuilder {
+           /// Create a new builder for an `Ignore` matcher.
+           ///
+      -    /// All relative file paths are resolved with respect to the current
+      -    /// working directory.
+      +    /// It is likely a bug to use this without also calling `current_dir()`
+      +    /// outside of tests. This isn't made mandatory because this is an internal
+      +    /// abstraction and it's annoying to update tests.
+           pub(crate) fn new() -> IgnoreBuilder {
+               IgnoreBuilder {
+                   dir: Path::new("").to_path_buf(),
+      @@ -598,6 +625,7 @@ impl IgnoreBuilder {
+                   types: Arc::new(Types::empty()),
+                   explicit_ignores: vec![],
+                   custom_ignore_filenames: vec![],
+      +            global_gitignores_relative_to: None,
+                   opts: IgnoreOptions {
+                       hidden: true,
+                       ignore: true,
+      @@ -616,10 +644,20 @@ impl IgnoreBuilder {
+           /// The matcher returned won't match anything until ignore rules from
+           /// directories are added to it.
+           pub(crate) fn build(&self) -> Ignore {
+      +        self.build_with_cwd(None)
+      +    }
+      +
+      +    /// Builds a new `Ignore` matcher using the given CWD directory.
+      +    ///
+      +    /// The matcher returned won't match anything until ignore rules from
+      +    /// directories are added to it.
+      +    pub(crate) fn build_with_cwd(&self, cwd: Option<PathBuf>) -> Ignore {
+      +        let global_gitignores_relative_to =
+      +            cwd.or_else(|| self.global_gitignores_relative_to.clone());
+               let git_global_matcher = if !self.opts.git_global {
+                   Gitignore::empty()
+      -        } else {
+      -            let mut builder = GitignoreBuilder::new("");
+      +        } else if let Some(ref cwd) = global_gitignores_relative_to {
+      +            let mut builder = GitignoreBuilder::new(cwd);
+                   builder
+                       .case_insensitive(self.opts.ignore_case_insensitive)
+                       .unwrap();
+      @@ -628,6 +666,11 @@ impl IgnoreBuilder {
+                       log::debug!("{}", err);
+                   }
+                   gi
+      +        } else {
+      +            log::debug!(
+      +                "ignoring global gitignore file because CWD is not known"
+      +            );
+      +            Gitignore::empty()
+               };
+       
+               Ignore(Arc::new(IgnoreInner {
+      @@ -638,6 +681,7 @@ impl IgnoreBuilder {
+                   parent: None,
+                   is_absolute_parent: true,
+                   absolute_base: None,
+      +            global_gitignores_relative_to,
+                   explicit_ignores: Arc::new(self.explicit_ignores.clone()),
+                   custom_ignore_filenames: Arc::new(
+                       self.custom_ignore_filenames.clone(),
+      @@ -652,6 +696,15 @@ impl IgnoreBuilder {
+               }))
+           }
+       
+      +    /// Set the current directory used for matching global gitignores.
+      +    pub(crate) fn current_dir(
+      +        &mut self,
+      +        cwd: impl Into<PathBuf>,
+      +    ) -> &mut IgnoreBuilder {
+      +        self.global_gitignores_relative_to = Some(cwd.into());
+      +        self
+      +    }
+      +
+           /// Add an override matcher.
+           ///
+           /// By default, no override matcher is used.
+      diff --git a/crates/ignore/src/gitignore.rs b/crates/ignore/src/gitignore.rs
+      index 17eb3bd..e3c604f 100644
+      --- a/crates/ignore/src/gitignore.rs
+      +++ b/crates/ignore/src/gitignore.rs
+      @@ -128,7 +128,10 @@ impl Gitignore {
+           /// `$XDG_CONFIG_HOME/git/ignore` is read. If `$XDG_CONFIG_HOME` is not
+           /// set or is empty, then `$HOME/.config/git/ignore` is used instead.
+           pub fn global() -> (Gitignore, Option<Error>) {
+      -        GitignoreBuilder::new("").build_global()
+      +        match std::env::current_dir() {
+      +            Ok(cwd) => GitignoreBuilder::new(cwd).build_global(),
+      +            Err(err) => (Gitignore::empty(), Some(err.into())),
+      +        }
+           }
+       
+           /// Creates a new empty gitignore matcher that never matches anything.
+      diff --git a/crates/ignore/src/walk.rs b/crates/ignore/src/walk.rs
+      index 3e06fb3..f697c50 100644
+      --- a/crates/ignore/src/walk.rs
+      +++ b/crates/ignore/src/walk.rs
+      @@ -4,8 +4,8 @@ use std::{
+           fs::{self, FileType, Metadata},
+           io,
+           path::{Path, PathBuf},
+      -    sync::Arc,
+           sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
+      +    sync::{Arc, OnceLock},
+       };
+       
+       use {
+      @@ -492,6 +492,18 @@ pub struct WalkBuilder {
+           threads: usize,
+           skip: Option<Arc<Handle>>,
+           filter: Option<Filter>,
+      +    /// The directory that gitignores should be interpreted relative to.
+      +    ///
+      +    /// Usually this is the directory containing the gitignore file. But in
+      +    /// some cases, like for global gitignores or for gitignores specified
+      +    /// explicitly, this should generally be set to the current working
+      +    /// directory. This is only used for global gitignores or "explicit"
+      +    /// gitignores.
+      +    ///
+      +    /// When `None`, the CWD is fetched from `std::env::current_dir()`. If
+      +    /// that fails, then global gitignores are ignored (an error is logged).
+      +    global_gitignores_relative_to:
+      +        OnceLock<Result<PathBuf, Arc<std::io::Error>>>,
+       }
+       
+       #[derive(Clone)]
+      @@ -512,8 +524,15 @@ impl std::fmt::Debug for WalkBuilder {
+                   .field("min_depth", &self.min_depth)
+                   .field("max_filesize", &self.max_filesize)
+                   .field("follow_links", &self.follow_links)
+      +            .field("same_file_system", &self.same_file_system)
+      +            .field("sorter", &"<...>")
+                   .field("threads", &self.threads)
+                   .field("skip", &self.skip)
+      +            .field("filter", &"<...>")
+      +            .field(
+      +                "global_gitignores_relative_to",
+      +                &self.global_gitignores_relative_to,
+      +            )
+                   .finish()
+           }
+       }
+      @@ -538,6 +557,7 @@ impl WalkBuilder {
+                   threads: 0,
+                   skip: None,
+                   filter: None,
+      +            global_gitignores_relative_to: OnceLock::new(),
+               }
+           }
+       
+      @@ -582,7 +602,10 @@ impl WalkBuilder {
+                   })
+                   .collect::<Vec<_>>()
+                   .into_iter();
+      -        let ig_root = self.ig_builder.build();
+      +        let ig_root = self
+      +            .get_or_set_current_dir()
+      +            .map(|cwd| self.ig_builder.build_with_cwd(Some(cwd.to_path_buf())))
+      +            .unwrap_or_else(|| self.ig_builder.build());
+               Walk {
+                   its,
+                   it: None,
+      @@ -600,9 +623,13 @@ impl WalkBuilder {
+           /// Instead, the returned value must be run with a closure. e.g.,
+           /// `builder.build_parallel().run(|| |path| { println!("{path:?}"); WalkState::Continue })`.
+           pub fn build_parallel(&self) -> WalkParallel {
+      +        let ig_root = self
+      +            .get_or_set_current_dir()
+      +            .map(|cwd| self.ig_builder.build_with_cwd(Some(cwd.to_path_buf())))
+      +            .unwrap_or_else(|| self.ig_builder.build());
+               WalkParallel {
+                   paths: self.paths.clone().into_iter(),
+      -            ig_root: self.ig_builder.build(),
+      +            ig_root,
+                   max_depth: self.max_depth,
+                   min_depth: self.min_depth,
+                   max_filesize: self.max_filesize,
+      @@ -679,12 +706,25 @@ impl WalkBuilder {
+           ///
+           /// This has lower precedence than all other sources of ignore rules.
+           ///
+      +    /// # Errors
+      +    ///
+           /// If there was a problem adding the ignore file, then an error is
+           /// returned. Note that the error may indicate *partial* failure. For
+           /// example, if an ignore file contains an invalid glob, all other globs
+           /// are still applied.
+      +    ///
+      +    /// An error will also occur if this walker could not get the current
+      +    /// working directory (and `WalkBuilder::current_dir` isn't set).
+           pub fn add_ignore<P: AsRef<Path>>(&mut self, path: P) -> Option<Error> {
+      -        let mut builder = GitignoreBuilder::new("");
+      +        let path = path.as_ref();
+      +        let Some(cwd) = self.get_or_set_current_dir() else {
+      +            let err = std::io::Error::other(format!(
+      +                "CWD is not known, ignoring global gitignore {}",
+      +                path.display()
+      +            ));
+      +            return Some(err.into());
+      +        };
+      +        let mut builder = GitignoreBuilder::new(cwd);
+               let mut errs = PartialErrorBuilder::default();
+               errs.maybe_push(builder.add(path));
+               match builder.build() {
+      @@ -937,6 +977,55 @@ impl WalkBuilder {
+               self.filter = Some(Filter(Arc::new(filter)));
+               self
+           }
+      +
+      +    /// Set the current working directory used for matching global gitignores.
+      +    ///
+      +    /// If this is not set, then this walker will attempt to discover the
+      +    /// correct path from the environment's current working directory. If
+      +    /// that fails, then global gitignore files will be ignored.
+      +    ///
+      +    /// Global gitignore files come from things like a user's git configuration
+      +    /// or from gitignore files added via [`WalkBuilder::add_ignore`].
+      +    pub fn current_dir(
+      +        &mut self,
+      +        cwd: impl Into<PathBuf>,
+      +    ) -> &mut WalkBuilder {
+      +        let cwd = cwd.into();
+      +        self.ig_builder.current_dir(cwd.clone());
+      +        if let Err(cwd) = self.global_gitignores_relative_to.set(Ok(cwd)) {
+      +            // OK because `Err` from `set` implies a value exists.
+      +            *self.global_gitignores_relative_to.get_mut().unwrap() = cwd;
+      +        }
+      +        self
+      +    }
+      +
+      +    /// Gets the currently configured CWD on this walk builder.
+      +    ///
+      +    /// This is "lazy." That is, we only ask for the CWD from the environment
+      +    /// if `WalkBuilder::current_dir` hasn't been called yet. And we ensure
+      +    /// that we only do it once.
+      +    fn get_or_set_current_dir(&self) -> Option<&Path> {
+      +        let result = self.global_gitignores_relative_to.get_or_init(|| {
+      +            let result = std::env::current_dir().map_err(Arc::new);
+      +            match result {
+      +                Ok(ref path) => {
+      +                    log::trace!(
+      +                        "automatically discovered CWD: {}",
+      +                        path.display()
+      +                    );
+      +                }
+      +                Err(ref err) => {
+      +                    log::debug!(
+      +                        "failed to find CWD \
+      +                         (global gitignores will be ignored): \
+      +                         {err}"
+      +                    );
+      +                }
+      +            }
+      +            result
+      +        });
+      +        result.as_ref().ok().map(|path| &**path)
+      +    }
+       }
+       
+       /// Walk is a recursive directory iterator over file paths in one or more
+      diff --git a/tests/regression.rs b/tests/regression.rs
+      index 93e4ba6..a196b40 100644
+      --- a/tests/regression.rs
+      +++ b/tests/regression.rs
+      @@ -1655,6 +1655,56 @@ rgtest!(r3173_hidden_whitelist_only_dot, |dir: Dir, _: TestCommand| {
+           eqnice!(cmd().args(&["--files", "./"]).stdout(), "./.foo.txt\n");
+       });
+       
+      +// See: https://github.com/BurntSushi/ripgrep/issues/3179
+      +rgtest!(r3179_global_gitignore_cwd, |dir: Dir, mut cmd: TestCommand| {
+      +    dir.create_dir("a/b/c");
+      +    dir.create("a/b/c/haystack", "");
+      +    dir.create(".test.gitignore", "/haystack");
+      +
+      +    // I'm not sure in which cases this can fail. If it
+      +    // does and it's unavoidable, feel free to submit a
+      +    // patch that skips this test when this canonicalization
+      +    // fails.
+      +    //
+      +    // The reason we canonicalize here is strange, and it is
+      +    // perhaps papering over a bug in ripgrep. But on macOS,
+      +    // `TMPDIR` is set to `/var/blah/blah`. However, `/var`
+      +    // is symlinked to `/private/var`. So the CWD detected by
+      +    // the process is `/private/var`. So it turns out that the
+      +    // CWD is not a proper prefix of `dir.path()` here. So we
+      +    // cheat around this by forcing our path to be canonicalized
+      +    // so it's `/private/var` everywhere.
+      +    //
+      +    // Arguably, ripgrep should still work here without
+      +    // canonicalization. But it's not actually quite clear
+      +    // to me how to do it. I *believe* the solution here is
+      +    // that gitignore matching should be relative to the directory
+      +    // path given to `WalkBuider::{add,new}`, and *not* to the
+      +    // CWD. But this is a very big change to how `ignore` works
+      +    // I think. At least conceptually. So that will need to be
+      +    // something we do when we rewrite `ignore`. Sigh.
+      +    //
+      +    // ...  but, on Windows, path canonicalization seems to
+      +    // totally fuck things up, so skip it there. HEAVY sigh.
+      +    let dir_path = if cfg!(windows) {
+      +        dir.path().to_path_buf()
+      +    } else {
+      +        dir.path().canonicalize().unwrap()
+      +    };
+      +    let ignore_file_path = dir_path.join(".test.gitignore");
+      +    cmd.current_dir("a/b/c")
+      +        .arg("--files")
+      +        .arg("--ignore-file")
+      +        .arg(ignore_file_path.display().to_string())
+      +        // This is a key part of the reproduction. When just providing `.`
+      +        // to ignore's walker (as ripgrep does when a path to search isn't
+      +        // provided), then everything works as one expects. Because there's
+      +        // nothing to strip off of the paths being searched. But when one
+      +        // provides an absolute path, the stripping didn't work.
+      +        .arg(&dir_path)
+      +        .assert_err();
+      +});
+      +
+       // See: https://github.com/BurntSushi/ripgrep/issues/3180
+       rgtest!(r3180_look_around_panic, |dir: Dir, mut cmd: TestCommand| {
+           dir.create("haystack", " b b b b b b b b\nc\n");
+    author_description: |
+      The `ignore` crate currently handles two different kinds of "global"
+      gitignore files: gitignores from `~/.gitconfig`'s `core.excludesFile`
+      and gitignores passed in via `WalkBuilder::add_ignore` (corresponding to
+      ripgrep's `--ignore-file` flag).
+
+      In contrast to any other kind of gitignore file, these gitignore files
+      should have their patterns interpreted relative to the current working
+      directory. (Arguably there are other choices we could make here, e.g.,
+      based on the paths given. But the `ignore` infrastructure can't handle
+      that, and it's not clearly correct to me.) Normally, a gitignore file
+      has its patterns interpreted relative to where the gitignore file is.
+      This relative interpretation matters for patterns like `/foo`, which are
+      anchored to _some_ directory.
+
+      Previously, we would generally get the global gitignores correct because
+      it's most common to use ripgrep without providing a path. Thus, it
+      searches the current working directory. In this case, no stripping of
+      the paths is needed in order for the gitignore patterns to be applied
+      directly.
+
+      But if one provides an absolute path (or something else) to ripgrep to
+      search, the paths aren't stripped correctly. Indeed, in the core, I had
+      just given up and not provided a "root" path to these global gitignores.
+      So it had no hope of getting this correct.
+
+      We fix this assigning the CWD to the `Gitignore` values created from
+      global gitignore files. This was a painful thing to do because we'd
+      ideally:
+
+      1. Call `std::env::current_dir()` at most once for each traversal.
+      2. Provide a way to avoid the library calling `std::env::current_dir()`
+         at all. (Since this is global process state and folks might want to
+         set it to different values for $reasons.)
+
+      The `ignore` crate's internals are a total mess. But I think I've
+      addressed the above 2 points in a semver compatible manner.
+
+      Fixes #3179
+  assert:
+    - type: javascript
+      value: file://assertions/pr.cjs:proportionateLength
+      config: { maxWords: 870 }
+      metric: proportionality
+    - *coverage
+    - *restraint
+
