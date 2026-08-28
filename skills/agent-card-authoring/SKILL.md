@@ -12,6 +12,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
+  version: "1.0.1"
 ---
 
 # Agent Card Authoring - A2A Agent Discovery Metadata
@@ -67,14 +68,14 @@ Save at `/.well-known/agent-card.json` (also supported: `/.well-known/agent.json
   ],
   "capabilities": {
     "streaming": false,
-    "pushNotifications": false,
-    "stateTransitionHistory": false
+    "pushNotifications": false
   },
   "securitySchemes": {
     "bearerAuth": {
-      "type": "http",
-      "scheme": "bearer",
-      "bearerFormat": "JWT"
+      "httpAuthSecurityScheme": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
     }
   },
   "defaultInputModes": ["text/plain", "application/json"],
