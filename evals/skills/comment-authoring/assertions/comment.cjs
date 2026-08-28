@@ -1,4 +1,5 @@
 const { spawnSync } = require('node:child_process');
+const { unwrapFence } = require('../../../lib/strip-reasoning.js');
 'use strict';
 
 // Two graders that genuinely compute, against the case's own input var:
@@ -19,9 +20,11 @@ function testVars(context) {
   return (context && context.vars) || {};
 }
 
+// Depth-tracking, not a non-greedy regex: an answer whose code block contains a
+// fence of its own was cut at the inner fence and only the fragment was graded.
 function firstFence(output) {
-  const match = String(output || '').match(/```[A-Za-z0-9_+#.-]*[^\S\r\n]*\r?\n([\s\S]*?)```/);
-  return match ? match[1] : '';
+  const block = unwrapFence(String(output || ''), /^[A-Za-z0-9_+#.-]*$/);
+  return block === null ? '' : block;
 }
 
 // ---------------------------------------------------------------------------
@@ -291,4 +294,5 @@ module.exports = {
   docstringOnFunctions,
   codePreserved,
   scan,
+  firstFence,
 };
