@@ -33,9 +33,11 @@ ${vars.diff}
 Write the title on the first line, then a blank line, then the description. Output only that.`);
 
 // repoDir goes to EVERY arm, same rule review-code follows for read_source: the
-// tree a change was opened against is the subject matter, not a skill
-// affordance. Gating it on the skill would make the delta measure file access
-// instead of the skill. skillDir stays skill-only.
+// tree the change PROPOSES - fixtures.js materialises it at `reviewed`, the PR's
+// own head - is the subject matter, not a skill affordance. That is deliberate:
+// an author describes the code as it will land, not as it was before. Gating it
+// on the skill would make the delta measure file access instead of the skill.
+// skillDir stays skill-only.
 const withRepo = (fn, extra = {}) => (ctx) => ({
   prompt: fn(ctx),
   config: { repoDir: repoDir(ctx.vars), ...extra },
