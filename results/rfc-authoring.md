@@ -4,12 +4,12 @@
 
 | model | metric | no-skill | skill@1.0 | skill@1.0.1 | Δ |
 | --- | --- | ---: | ---: | ---: | ---: |
-| ci:deepseek-v4-flash | control_quality | 0.68 | 0.92 | 0.48 | −0.20 |
-| ci:deepseek-v4-flash | honest_tradeoffs | 0.41 | 0.62 | 0.79 | +0.38 |
-| ci:deepseek-v4-flash | latency | 0.92 | 1.00 | 1.00 | +0.1 |
-| ci:deepseek-v4-flash | latency max (s) | 227.90 | 68.40 | 38.20 | −189.7 |
-| ci:deepseek-v4-flash | latency p50 (s) | 7.40 | 43.10 | 24.60 | +17.2 |
-| ci:deepseek-v4-flash | latency_s | 25.64 | 37.25 | 23.10 | −2.5 |
-| ci:deepseek-v4-flash | proposal_quality | 0.81 | 1.00 | 0.78 | −0.03 |
-| ci:deepseek-v4-flash | tokens p50 | 624 | 6155 | 3150 | +2526 |
-| ci:deepseek-v4-flash | tokens total | 8093 | 74925 | 51627 | +43534 |
+| ci:deepseek-v4-flash | control_quality | 0.32 | 0.92 | 0.80 | +0.48 |
+| ci:deepseek-v4-flash | honest_tradeoffs | 0.54 | 0.62 | 1.00 | +0.46 |
+| ci:deepseek-v4-flash | latency | 1.00 | 1.00 | 1.00 | +0.0 |
+| ci:deepseek-v4-flash | latency max (s) | 33.90 | 68.40 | 85.10 | +51.2 |
+| ci:deepseek-v4-flash | latency p50 (s) | 10.20 | 43.10 | 32.40 | +22.2 |
+| ci:deepseek-v4-flash | latency_s | 12.72 | 37.25 | 36.45 | +23.7 |
+| ci:deepseek-v4-flash | proposal_quality | 0.66 | 1.00 | 0.88 | +0.22 |
+| ci:deepseek-v4-flash | tokens p50 | 528 | 6155 | 5142 | +4614 |
+| ci:deepseek-v4-flash | tokens total | 7393 | 74925 | 63651 | +56258 |
