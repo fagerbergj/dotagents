@@ -166,9 +166,6 @@
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
       metric: names_existing_solution
-    - type: javascript
-      value: file://assertions/plan.cjs:noInventedCitations
-      metric: no_invented_citations
     - &plan_quality_reuse
       type: llm-rubric
       # The system half of promptfoo's own DEFAULT_GRADING_PROMPT, restated
@@ -209,7 +206,11 @@
 
         Do not reward structure, headings or length - only substance.
 
-        Answer each with a quote from <Output>, or NONE.
+        Answer each with a quote from <Output>, or NONE. A quote must be text
+        that appears inside <Output>. <FeatureRequest> and <ExistingMechanism>
+        are not part of <Output>: quoting either of them back is not evidence
+        about the plan, and an item whose only support is that the identifier
+        appears in <ExistingMechanism> scores 0.
 
         1. The plan is built around <ExistingMechanism> as the mechanism it
            extends or wires into, not named once and then set aside for a
@@ -243,6 +244,65 @@
         for. Brevity is never a deduction. State the arithmetic.
       threshold: 0.5
       metric: plan_quality
+    # "gate on functional tests" is a claim the frontmatter description makes
+    # and nothing here graded. It was the largest unmeasured difference in the
+    # raw artifacts of the 66-row run: the skill arm mentioned tests on 96% of
+    # positive-case rows against the baseline's 63%, and named a test together
+    # with what it asserts on 54% against 29%. Positive cases only - on the
+    # three negative controls the right answer is that nothing gets built, so
+    # there is nothing to gate.
+    - &tests_as_gate
+      type: llm-rubric
+      # System half of DEFAULT_GRADING_PROMPT restated - see the
+      # plan_quality_reuse anchor above for why.
+      rubricPrompt:
+        - role: system
+          content: |
+            You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}
+
+            Examples:
+
+            <Output>Hello world</Output>
+            <Rubric>Content contains a greeting</Rubric>
+            {"reason": "the content contains the word 'Hello'", "pass": true, "score": 1.0}
+
+            <Output>Avast ye swabs, repel the invaders!</Output>
+            <Rubric>Does not speak like a pirate</Rubric>
+            {"reason": "'avast ye' is a common pirate term", "pass": false, "score": 0.0}
+        - role: user
+          content: |
+            <FeatureRequest>{{request}}</FeatureRequest>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> is an implementation PLAN, not code, written against the
+        cli/cli (GitHub CLI, Go) codebase in response to <FeatureRequest>.
+        Grade only how the plan proposes to establish that the change works.
+
+        Do not reward structure, headings or length - only substance.
+
+        Answer each with a quote from <Output>, or NONE.
+
+        1. It names the specific tests that would show this change works -
+           what each one exercises and what it asserts - rather than a
+           generic line item such as "add tests", "update the test suite" or
+           "add unit and integration tests". Martin Fowler, "Self Testing
+           Code" (martinfowler.com/bliki/SelfTestingCode.html): "No
+           programming episode is complete without working code and the tests
+           to keep it working." A list of test names with no statement of what
+           any of them checks fails this.
+        2. Those tests are tied to the codebase's own test setup - the
+           existing test file they go in, or the existing test they extend or
+           replace - not described free-floating. House position: this suite
+           treats a test placed in the repo's existing test setup as evidence
+           the plan actually looked at that setup, the same claim it makes
+           about source files elsewhere; Fowler takes no position on this.
+
+        Score from 0 to 1, never above 1: 0.6 for the first, 0.4 for the
+        second. Award nothing for an item you cannot quote for. Brevity is
+        never a deduction. State the arithmetic.
+      threshold: 0.5
+      metric: tests_as_gate
 
 - description: "gh agent-task create dumps a bare url instead of opening it"
   vars:
@@ -252,10 +312,8 @@
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
       metric: names_existing_solution
-    - type: javascript
-      value: file://assertions/plan.cjs:noInventedCitations
-      metric: no_invented_citations
     - *plan_quality_reuse
+    - *tests_as_gate
 
 - description: "worried about fat-fingering gh release delete"
   vars:
@@ -265,10 +323,8 @@
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
       metric: names_existing_solution
-    - type: javascript
-      value: file://assertions/plan.cjs:noInventedCitations
-      metric: no_invented_citations
     - *plan_quality_reuse
+    - *tests_as_gate
 
 - description: "want to script against pr list output"
   vars:
@@ -278,9 +334,6 @@
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
       metric: names_existing_solution
-    - type: javascript
-      value: file://assertions/plan.cjs:noInventedCitations
-      metric: no_invented_citations
     - &plan_quality_negative
       type: llm-rubric
       # See the plan_quality_reuse anchor above for why the system message is
@@ -335,7 +388,14 @@
         is three sentences long and correct on both counts should score 1.
         State the arithmetic.
       threshold: 0.5
-      metric: plan_quality
+      # Its own metric, not `plan_quality`. Sharing the name with the reuse
+      # rubric above averaged two opposite things: on a 66-row run the eight
+      # reuse cases moved +0.146 for the skill arm while these three negative
+      # controls moved -0.278 against it (the skill's observed failure mode is
+      # designing something when the answer is "it's already there"), and the
+      # rollup reported the sum as +0.03 - "no effect" assembled out of two
+      # real effects with opposite signs.
+      metric: recognizes_existing
 
 - description: "gh issue create should let me see it before it actually posts"
   vars:
@@ -345,10 +405,8 @@
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
       metric: names_existing_solution
-    - type: javascript
-      value: file://assertions/plan.cjs:noInventedCitations
-      metric: no_invented_citations
     - *plan_quality_reuse
+    - *tests_as_gate
 
 - description: "always have to copy the url gh release create prints"
   vars:
@@ -358,10 +416,8 @@
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
       metric: names_existing_solution
-    - type: javascript
-      value: file://assertions/plan.cjs:noInventedCitations
-      metric: no_invented_citations
     - *plan_quality_reuse
+    - *tests_as_gate
 
 - description: "gh extension upgrade nags about updates that aren't real"
   vars:
@@ -371,10 +427,8 @@
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
       metric: names_existing_solution
-    - type: javascript
-      value: file://assertions/plan.cjs:noInventedCitations
-      metric: no_invented_citations
     - *plan_quality_reuse
+    - *tests_as_gate
 
 - description: "gh gist create makes you have a file first"
   vars:
@@ -384,10 +438,8 @@
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
       metric: names_existing_solution
-    - type: javascript
-      value: file://assertions/plan.cjs:noInventedCitations
-      metric: no_invented_citations
     - *plan_quality_reuse
+    - *tests_as_gate
 
 - description: "want to script against gh org list output too"
   vars:
@@ -397,10 +449,8 @@
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
       metric: names_existing_solution
-    - type: javascript
-      value: file://assertions/plan.cjs:noInventedCitations
-      metric: no_invented_citations
     - *plan_quality_reuse
+    - *tests_as_gate
 
 - description: "gh release list is cluttered with stuff we never actually shipped"
   vars:
@@ -410,9 +460,6 @@
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
       metric: names_existing_solution
-    - type: javascript
-      value: file://assertions/plan.cjs:noInventedCitations
-      metric: no_invented_citations
     - *plan_quality_negative
 
 - description: "gh version nag is polluting our ci logs"
@@ -423,7 +470,4 @@
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
       metric: names_existing_solution
-    - type: javascript
-      value: file://assertions/plan.cjs:noInventedCitations
-      metric: no_invented_citations
     - *plan_quality_negative

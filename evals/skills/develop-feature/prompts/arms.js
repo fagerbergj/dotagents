@@ -6,14 +6,21 @@ const { withPersonaEveryArm } = require('../../../lib/arms.js');
 // solve because a review is graded against what a diff actually does. A plan
 // is graded against the repo it was written for instead: does it name what's
 // already there before proposing to build.
+// The task text names no part of the workflow the graders score. An earlier
+// version asked for "what you found already in the codebase that's relevant,
+// and what you're deliberately not building" - which told BOTH arms to do the
+// reuse lookup namesExistingSolution grades and the scoping the plan_quality
+// rubric's item 3 grades, so neither could separate the arms (evals/AGENTS.md
+// "Foreclosed by the prompt"). It showed in the artifacts: the baseline named
+// something it was deliberately not building on 91% of rows. "Give me the
+// plan" also presupposed there was something to build, which fought the three
+// negative controls whose correct answer is "nothing to build".
 const arms = require('../../../lib/arms.js')('develop-feature', (vars) => `${vars.request}
 
 We're working in the cli/cli codebase (the GitHub CLI, Go). You have a
 read_source tool to look around the tree before you answer - use it.
 
-Don't write the implementation. Give me the plan first: what you'd do and why,
-what you found already in the codebase that's relevant, and what you're
-deliberately not building.`);
+Don't write the implementation - tell me how you'd approach this.`);
 
 // repoDir goes to EVERY arm, exactly as in review-code's prompts/arms.js: the
 // codebase a plan is written against is the subject matter, not a skill
