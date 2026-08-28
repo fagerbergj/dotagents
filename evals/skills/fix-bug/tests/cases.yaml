@@ -1,0 +1,1601 @@
+# Real bug-fix commits, each pinned at the fix's PARENT commit so the model
+# has to produce the fix rather than read it (see lib/bugfix-fixtures.js).
+#
+# 18 real bugs across Python (flask, jinja, click), TypeScript (vue), and Go
+# (cobra, chi, gorilla/mux, echo, urfave/cli), plus 3 negative controls:
+# cobra-2285 and click-3055 are real bugs whose accepted fix is a 1-2 line
+# change to one file - the correct answer stays that small. requests-7006 and
+# echo-3052 have no source fix at all: requests-7006's traceback fingerprints
+# the reporter's own environment, not a defect in requests; echo-3052's
+# "bug" is a maintainer-acknowledged surprising-but-intended default (quoted
+# in its rootCause) where the accepted PR adds only tests, no source change.
+# Every issue and PR quoted as ground truth was authored by a human
+# (user.type == "User"), checked individually against the GitHub API, not a
+# bot - including a check of issue/PR body text for an AI-authorship
+# disclosure, which excluded two otherwise-qualifying labstack/echo PRs
+# ("Generated with Claude Code") that would have made their own ground truth
+# circular.
+#
+# `rootCause` and `fixScope` are the ground truth the three rubric metrics
+# below are judged against. Where an authentic human quote exists (the
+# reporter's own diagnosis, or the fix author's PR description) it is quoted
+# verbatim, not paraphrased - paraphrasing would put my reading of the bug
+# between the real explanation and the judge. Where no such quote exists
+# (chi-1029), that is stated explicitly and the synopsis is a plain
+# description of the accepted diff instead of an invented attribution.
+#
+# Metric triage (evals/AGENTS.md's standing rule): no_invented_file_refs and
+# touches_real_fix are javascript graders computed against the fixture's own
+# tree and the withheld diff - grounded in fetched input, not prose-matched -
+# and are kept as regression guards even though no_invented_file_refs sits
+# near ceiling in both arms; a hallucinated file path is rare but the guard is
+# free (no judge call) and catches the requests-7006/echo-3052 cases where the
+# correct move is citing nothing. root_cause_depth and proportionate_fix were
+# considered for a MERGE (both judge the fix's substance) but kept separate:
+# chi-1029's own rows show them diverging in the same output (a fix graded
+# 1.0 for naming the mechanism and 0.0 for landing in the wrong file), so
+# collapsing them into one score would erase a real distinction rather than
+# remove a redundant one. regression_proof is grounded in a declared house
+# position (Fowler's "Self-Testing Code") and kept.
+#
+# {{/{% sequences quoted from real Go text/template and Jinja syntax inside
+# vars below are written as `{ {` / `{ %` (space-broken), matching this
+# suite's own top note about nunjucks parsing a real diff's literal braces -
+# rubricPrompt's {{issueBody}} etc. render even with PROMPTFOO_DISABLE_TEMPLATING
+# set (graders are exempt from that flag per evals/AGENTS.md), so an unbroken
+# {{ inside issueBody would be live template syntax at grading time, not just
+# at prompt time. Untested here whether nunjucks would actually re-parse a
+# substituted value's contents; breaking the sequence removes the question.
+
+- description: 'flask#6096 - IPv6 addresses parsed incorrectly because of .partition'
+  vars:
+    fixture: flask-6096
+    title: 'IPv6 addresses parsed incorrectly because of `.partition(":")`?'
+    issueBody: |2
+      Hi, I checked the code and saw that two places use `.partition(":")` on addresses, and IPv6 addresses contain ":".
+
+      This breaks 1. `session_transaction` value setting, and 2. `Flask.run()` if `SERVER_NAME` is set. I've already prepared two tests that fail, you can use them to reproduce:
+
+      1. In `test_testing.py`
+      ```
+      def test_session_transaction_ipv6(app):
+          base_url = "http://[::1]:8000/"
+          client = app.test_client()
+
+          @app.get("/")
+          def index():
+              return str(flask.session.get("value"))
+
+          with client.session_transaction(base_url=base_url) as sess:
+              sess["value"] = 42
+
+          assert client.get("/", base_url=base_url).text == "42"
+      ```
+
+      2. Add one case to `test_run_from_config`
+      ```
+      (None, None, "[::1]:8080", "::1", 8080),
+      ```
+
+      Is this known and intended? I could send the patches for these two places.
+    verdict: 'bug'
+    rootCause: |2
+      The reporter, who also wrote the fix: "I checked the code and saw that two places use `.partition(":")` on addresses, and IPv6 addresses contain `:`. This breaks 1. `session_transaction` value setting, and 2. `Flask.run()` if `SERVER_NAME` is set."
+    fixScope: |2
+      2 source files changed (src/flask/app.py, src/flask/testing.py), both call sites of the same broken parsing pattern switched to `urllib.parse.urlsplit`, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - &root_cause_depth
+      type: llm-rubric
+      rubricPrompt:
+        # A custom rubricPrompt replaces promptfoo's ENTIRE grading prompt,
+        # not just the user turn - omitting this system message drops the
+        # JSON-output contract and the judge answers in prose, which then
+        # fails "Could not extract JSON" on every row. See evals/AGENTS.md's
+        # harness facts; this is DEFAULT_GRADING_PROMPT's system message,
+        # verbatim, restated because a custom rubricPrompt must supply it.
+        - role: system
+          content: |
+            You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}
+
+            Examples:
+
+            <Output>Hello world</Output>
+            <Rubric>Content contains a greeting</Rubric>
+            {"reason": "the content contains the word 'Hello'", "pass": true, "score": 1.0}
+
+            <Output>Avast ye swabs, repel the invaders!</Output>
+            <Rubric>Does not speak like a pirate</Rubric>
+            {"reason": "'avast ye' is a common pirate term", "pass": false, "score": 0.0}
+        - role: user
+          content: |
+            <BugReport>{{issueBody}}</BugReport>
+            <ActualRootCause>{{rootCause}}</ActualRootCause>
+            <Verdict>{{verdict}}</Verdict>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> is a response to the real bug report in <BugReport>.
+        <ActualRootCause> is what actually turned out to be true, in the
+        reporter's or fixer's own words - ground truth for the underlying
+        mechanism, not for how an answer should read. <Verdict> is "bug" when
+        a real defect lives in this codebase, or "not-a-bug" when it does
+        not.
+
+        If <Output> is empty, whitespace-only, or a truncated stub with no
+        content addressing the bug report, score 0 and stop - do not credit
+        it just because there is nothing in it to contradict <Verdict>.
+
+        Root cause analysis exists because investigators keep stopping too
+        early. Wikipedia's summary of the Five Whys technique names the
+        failure mode directly: a "tendency for investigators to stop at
+        symptoms rather than going on to lower-level root causes." Judge
+        whether <Output> made that mistake.
+
+        Answer 1 and 2 with a quote from <Output>, or NONE.
+
+        1. It names the actual mechanism in <ActualRootCause> - or, for a
+           "not-a-bug" <Verdict>, correctly locates the cause outside this
+           codebase - rather than restating the reported symptom. "the value
+           comes out wrong" or "add more validation" is a symptom
+           description, not a mechanism: NONE if the answer never gets past
+           the symptom.
+        2. It reasons about something the bug report itself does not show -
+           a call site, a related code path, an existing test, an invariant
+           elsewhere in the codebase - rather than only restating what the
+           report already said. NONE if the entire theory is the report
+           copied back with different words.
+        3. No quote needed. Does <Output>'s conclusion about whether a code
+           change belongs in this codebase match <Verdict>? Prescribing a
+           confident code fix for a "not-a-bug" report is exactly as wrong as
+           missing a real defect.
+
+        Score from 0 to 1, never above 1: 0.4 for the first, 0.3 for the
+        second, 0.3 for the third. Award nothing for an item you cannot quote
+        for. Brevity is never a deduction. State the arithmetic.
+      threshold: 0.5
+      metric: root_cause_depth
+    - &regression_proof
+      type: llm-rubric
+      rubricPrompt:
+        # A custom rubricPrompt replaces promptfoo's ENTIRE grading prompt,
+        # not just the user turn - omitting this system message drops the
+        # JSON-output contract and the judge answers in prose, which then
+        # fails "Could not extract JSON" on every row. See evals/AGENTS.md's
+        # harness facts; this is DEFAULT_GRADING_PROMPT's system message,
+        # verbatim, restated because a custom rubricPrompt must supply it.
+        - role: system
+          content: |
+            You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}
+
+            Examples:
+
+            <Output>Hello world</Output>
+            <Rubric>Content contains a greeting</Rubric>
+            {"reason": "the content contains the word 'Hello'", "pass": true, "score": 1.0}
+
+            <Output>Avast ye swabs, repel the invaders!</Output>
+            <Rubric>Does not speak like a pirate</Rubric>
+            {"reason": "'avast ye' is a common pirate term", "pass": false, "score": 0.0}
+        - role: user
+          content: |
+            <BugReport>{{issueBody}}</BugReport>
+            <ActualRootCause>{{rootCause}}</ActualRootCause>
+            <Verdict>{{verdict}}</Verdict>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> is addressed to a colleague who will act on it, about the
+        real bug report in <BugReport>. <ActualRootCause> is the true
+        mechanism (or, when <Verdict> is "not-a-bug", why there is none
+        here) - ground truth, not a style guide.
+
+        If <Output> is empty, whitespace-only, or a truncated stub with no
+        content addressing the bug report, score 0 and stop - do not credit
+        it just because there is nothing in it to contradict <Verdict>.
+
+        Martin Fowler's "Self-Testing Code" states the standard this is
+        judged against: "The usual reaction of a team using self-testing
+        code is to first write a test that exposes the bug, and only then to
+        try to fix it... This is useful as a debugging technique, it's also
+        essential to ensure that once the bug is fixed it stays fixed."
+        Judge whether <Output> follows that discipline - proof the theory is
+        right before or alongside the fix - not whether it uses the word
+        "test" anywhere.
+
+        Answer each with a quote from <Output>, or NONE.
+
+        1. For a "bug" <Verdict>: it describes or includes a concrete test
+           or reproduction step that would fail against the CURRENT code
+           specifically because of the mechanism in <ActualRootCause> - not
+           a generic "add tests" aside. For a "not-a-bug" <Verdict>: it
+           explains what a reader could go check to confirm there is nothing
+           to reproduce here.
+        2. That test or reproduction step and the proposed fix (or
+           explanation) are about the same mechanism - not two disconnected
+           paragraphs that happen to sit next to each other.
+
+        Score from 0 to 1, never above 1: 0.6 for the first, 0.4 for the
+        second. Award nothing for an item you cannot quote for. Brevity is
+        never a deduction. State the arithmetic.
+      threshold: 0.5
+      metric: regression_proof
+    - &proportionate_fix
+      type: llm-rubric
+      rubricPrompt:
+        # See the other two metrics' comment: a custom rubricPrompt drops
+        # promptfoo's JSON-output system message unless restated here.
+        - role: system
+          content: |
+            You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}
+
+            Examples:
+
+            <Output>Hello world</Output>
+            <Rubric>Content contains a greeting</Rubric>
+            {"reason": "the content contains the word 'Hello'", "pass": true, "score": 1.0}
+
+            <Output>Avast ye swabs, repel the invaders!</Output>
+            <Rubric>Does not speak like a pirate</Rubric>
+            {"reason": "'avast ye' is a common pirate term", "pass": false, "score": 0.0}
+        - role: user
+          content: |
+            <ActualRootCause>{{rootCause}}</ActualRootCause>
+            <ActualFixScope>{{fixScope}}</ActualFixScope>
+            <Verdict>{{verdict}}</Verdict>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> proposes a fix for a real bug. <ActualFixScope> describes
+        how large the real, accepted change actually was - ground truth for
+        how much this defect warrants, not for exact wording or style.
+
+        If <Output> is empty, whitespace-only, or a truncated stub with no
+        content addressing the bug report, score 0 and stop - do not credit
+        it just because a scope of nothing happens to look proportionate
+        when <ActualFixScope> is itself small or zero.
+
+        Google's engineering practices for code review state the standard:
+        "The CL makes a minimal change that addresses just one thing... In
+        general it's better to err on the side of writing CLs that are too
+        small vs. CLs that are too large." Judge <Output>'s proposed scope
+        against that, given what <ActualFixScope> shows was actually needed
+        - in both directions: padding a small fix with unrelated work is a
+        failure here, and so is a fix too thin to actually address
+        <ActualRootCause>.
+
+        1. Quote the part of <Output> that states or implies the shape of
+           the proposed change - files touched, new abstractions or config,
+           refactoring beyond the mechanism itself - or NONE if <Output>
+           never says.
+        2. No quote needed. Verdict: does the proposed scope stay close to
+           <ActualFixScope>, or does it add machinery the mechanism does not
+           need, or fall short of what the mechanism requires?
+
+        Score from 0 to 1, never above 1: 1 if proportionate, 0.5 if
+        somewhat over- or under-built but still recognizably the one
+        mechanism, 0 if it proposes sweeping unrelated change or a fix that
+        could not actually work. These are the only three valid scores -
+        never output 0.3, 0.7, 0.9, or any other number as a way to land
+        "between" two of them; pick the closest of the three and say why in
+        the reasoning instead. State the reasoning behind the score.
+      threshold: 0.5
+      metric: proportionate_fix
+
+- description: 'vue#15328 - looseEqual() reports Map and Set instances with different contents as equal'
+  vars:
+    fixture: vue-15328
+    title: 'looseEqual() reports Map and Set instances with different contents as equal'
+    issueBody: |2
+      ### Vue version
+
+      3.5.x / `main` (verified at `a2b40db`)
+
+      ### Link to minimal reproduction
+
+      Reproducible directly against the repo (see below) — `looseEqual` is not exported publicly, so the SFC Playground can only show the `v-model` symptom, not the root cause.
+
+      ### Steps to reproduce
+
+      `looseEqual()` in `packages/shared/src/looseEqual.ts` reports unrelated `Map` and `Set` instances as equal:
+
+      ```ts
+      import { looseEqual } from '@vue/shared'
+
+      looseEqual(new Map([['a', 1]]), new Map([['b', 2]])) // true, expected false
+      looseEqual(new Set([1]), new Set([2]))               // true, expected false
+      looseEqual(new Map([['a', 1]]), new Map())           // true, expected false
+      ```
+
+      This surfaces to users through `v-model` on `<select>`. The following selects the **wrong** option:
+
+      ```ts
+      const mapA = new Map([['id', 1]])
+      const mapB = new Map([['id', 2]])
+      const selected = ref(mapB)
+      ```
+
+      ```vue
+      <select v-model="selected">
+        <option :value="mapA">A</option>
+        <option :value="mapB">B</option>
+      </select>
+      ```
+
+      `el.selectedIndex` is `0` (option A) when it should be `1`, because `looseEqual(mapA, mapB)` returns `true` and the loop in `setSelected` stops at the first option.
+
+      ### What is expected?
+
+      `Map`/`Set` values with different contents compare as not equal, so `v-model` selects the option that actually matches.
+
+      ### What is actually happening?
+
+      `Map` and `Set` fall through to the generic object branch. `Object.keys()` on either is always `[]`, so the key-count check passes and the `for...in` loop body never executes — entries are never compared. Execution then reaches the final line:
+
+      ```ts
+      return String(a) === String(b)
+      ```
+
+      Every `Map` stringifies to `'[object Map]'` and every `Set` to `'[object Set]'`, so any two of the same type are reported equal.
+
+      Note this differs from `Date` and `Symbol`, which are given explicit branches above, and from arrays and plain objects, which compare correctly:
+
+      ```ts
+      looseEqual([1], [2])       // false, correct
+      looseEqual({ a: 1 }, { a: 2 }) // false, correct
+      ```
+
+      `packages/shared/__tests__/looseEqual.spec.ts` has 13 cases but none for `Map`/`Set`, which is why this hasn't been caught.
+
+      ### Possible fix
+
+      Add explicit branches before the generic object check, mirroring the existing `Date`/`Symbol` pattern. `isMap` and `isSet` already exist in `packages/shared/src/general.ts`. `Set` needs content comparison rather than reference lookup to stay consistent with `looseEqual`'s semantics (e.g. `new Set([{ a: 1 }])` vs `new Set([{ a: 1 }])`).
+
+      Worth confirming the intended semantics first: should `Map` comparison be key-order-insensitive, and should `Set` compare loosely (`looseEqual` per element) or strictly? Happy to open a PR with tests once the direction is confirmed.
+
+      ### System Info
+
+      ```
+      Vue: 3.5.x / main @ a2b40db
+      ```
+
+      ### Any additional comments?
+
+      Unrelated to #15298, which touches only `vModel.ts`.
+    verdict: 'bug'
+    rootCause: |2
+      The reporter, in the issue: "`Map` and `Set` fall through to the generic object branch. `Object.keys()` on either is always `[]`, so the key-count check passes and the `for...in` loop body never executes - entries are never compared."
+    fixScope: |2
+      1 source file changed (packages/shared/src/looseEqual.ts): one new ~20-line helper function plus two branches added to the existing dispatch, reusing the isMap/isSet helpers already in the codebase.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'cobra#2356 - Completions modify os.Args'
+  vars:
+    fixture: cobra-2356
+    title: 'Completions modify os.Args'
+    issueBody: |2
+      I'm trying to workaround https://github.com/spf13/cobra/issues/1877 by inspecting `os.Args` by hand. In some cases cobra accidentally inserts `--` into `os.Args`.
+
+      Minimal example:
+      ```go
+      package main
+
+      import (
+      	"os"
+      	"strings"
+
+      	"github.com/spf13/cobra"
+      )
+
+      func main() {
+      	cmd := &cobra.Command{
+      		TraverseChildren: true,
+      		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+      			cobra.CompErrorln(strings.Join(os.Args[1:], ", "))
+      			return nil, cobra.ShellCompDirectiveDefault
+      		},
+      	}
+      	if err := cmd.Execute(); err != nil {
+      		panic(err)
+      	}
+      }
+
+      ```
+
+      Expected behaviour:
+      ```console
+      $ go run . __complete x
+      [Debug] [Error] __complete, x
+      :0
+      Completion ended with directive: ShellCompDirectiveDefault
+      ```
+
+      Actual behaviour:
+      ```console
+      $ go run . __complete x
+      [Debug] [Error] __complete, --
+      :0
+      Completion ended with directive: ShellCompDirectiveDefault
+      ```
+    verdict: 'bug'
+    rootCause: |2
+      From the fix's own PR description: "getCompletions() accidentally mutates os.Args by writing "--" into the shared backing array via an append with spare capacity... finalArgs is a sub-slice of the original args (derived from os.Args[1:]), and if it has spare capacity in its backing array, append writes "--" directly into the shared memory rather than allocating a new slice."
+    fixScope: |2
+      1 source file changed (completions.go): the trimmed args slice is copied into a fresh backing array before the later append, a handful of lines, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'chi#1029 - Duplicate HTTP methods in 405 Allow header'
+  vars:
+    fixture: chi-1029
+    title: 'Duplicate HTTP methods in 405 Allow header'
+    issueBody: |2
+      It seems like when routes are registered which 'overlap' due to their wildcards, their methods are repeated in the Allow header in 405 responses.
+
+      Minimal runnable example: https://go.dev/play/p/wm5Roz8MSRJ
+
+      ```go
+      package main
+
+      import (
+      	"fmt"
+      	"log"
+      	"net/http"
+      	"net/http/httptest"
+
+      	"github.com/go-chi/chi/v5"
+      )
+
+      func main() {
+      	r := chi.NewRouter()
+
+      	r.Post("/article/1-2-3", func(w http.ResponseWriter, r *http.Request) {
+      		w.WriteHeader(http.StatusOK)
+
+      	})
+
+      	r.Post("/article/{a}", func(w http.ResponseWriter, r *http.Request) {
+      		w.WriteHeader(http.StatusOK)
+
+      	})
+
+      	r.Post("/article/{b}-{c}", func(w http.ResponseWriter, r *http.Request) {
+      		w.WriteHeader(http.StatusOK)
+      	})
+
+      	r.Post("/article/{b}-{c}-{d}", func(w http.ResponseWriter, r *http.Request) {
+      		w.WriteHeader(http.StatusOK)
+      	})
+
+      	server := httptest.NewServer(r)
+      	defer server.Close()
+
+      	// Send a request with an unsupported method
+      	res, err := http.Get(server.URL + "/article/1-2-3")
+      	if err != nil {
+      		log.Fatal(err)
+      	}
+
+      	fmt.Println("Status:", res.Status)
+      	fmt.Println("Header:", res.Header)
+      }
+      ```
+
+      Outputs:
+
+      ```
+      Status: 405 Method Not Allowed
+      Header: map[Allow:[POST POST POST POST] Content-Length:[0] Date:[Tue, 10 Nov 2009 23:00:00 GMT]]
+      ```
+
+      The `POST` value in the `Allow` header is duplicated four times, which seems strange, and I think ideally it would only appear once.
+    verdict: 'bug'
+    rootCause: |2
+      Derived directly from the accepted diff (no maintainer comment was left explaining it in words): findRoute appends every matching method straight onto rctx.methodsAllowed with no de-duplication, so a path matched by more than one overlapping route pattern adds the same HTTP method to the Allow header once per match. NOTE FOR THE GRADER: methodsAllowed is only ever read in one place, methodNotAllowedHandler in mux.go, which writes one Allow header line per entry with no de-duplication of its own either. A theory that names methodNotAllowedHandler's unguarded loop (rather than, or in addition to, findRoute's appends) as the mechanism is naming the same duplication correctly, just from the read side instead of the write side - credit it exactly as you would findRoute. Do not require the word "findRoute" specifically.
+    fixScope: |2
+      1 source file changed (tree.go): the same one-line guard (skip the append if the method is already present, via the stdlib slices.Contains) added at the two call sites inside findRoute, ~6 lines total. NOTE FOR THE GRADER: a guard at the one call site that actually consumes methodsAllowed - methodNotAllowedHandler in mux.go, deduplicating before (or while) writing the Allow header - fixes the exact same reported symptom with a comparably small, single-file, no-new-abstraction change. Score that placement as proportionate too; do not penalize it for landing in mux.go instead of tree.go. Only penalize a fix that is materially larger than a single small guard (a new type, a rewrite of the traversal, deduplication scattered across multiple files) or that does not actually deduplicate the Allow header's contents.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'cobra#2285 - command line args should be quoted in generated fish completion script (negative control: keep it small)'
+  vars:
+    fixture: cobra-2285
+    title: 'command line args should be quoted in generated fish completion script'
+    issueBody: |2
+      more specifically here in [fish_completions.go:56][1]:
+
+      ```fish
+      set -l requestComp "%[10]s=0 $args[1] %[3]s $args[2..-1] $lastArg"
+      ```
+
+      where the references `$args[1]`, `$args[2..-1]` and `$lastArg` should have been quoted.
+
+      [1]: https://github.com/spf13/cobra/blob/c8a20a16bafa2dc85d304b59b2e677c7f75a73a6/fish_completions.go#L56
+
+      Downstream issue: https://github.com/mikefarah/yq/issues/1502
+    verdict: 'bug'
+    rootCause: |2
+      From the fix's own PR description: "The arguments used for dynamic completions in fish were missing quotes. This resulted in an error when one of the arguments had a `*` in it whose expansion matched no file... Don't quote the first argument as that is the name of the binary."
+    fixScope: |2
+      NEGATIVE CONTROL - keep this small. 1 source file changed (fish_completions.go), 2 lines net: the whole-string escape is switched to escaping each argument individually before joining. No new file, no new abstraction, no rewrite of the surrounding completion function - a fix that rewrites more than this line is over-engineered for what the defect actually is.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'requests#7006 - ModuleNotFoundError (negative control: not a bug in requests)'
+  vars:
+    fixture: requests-7006
+    title: 'ModuleNotFoundError'
+    issueBody: |2
+        File "/usr/lib/python3.13/site-packages/requests/__init__.py", line 43, in <module>
+          import urllib3
+        File "/usr/lib/python3.13/site-packages/urllib3/__init__.py", line 14, in <module>
+          from . import exceptions
+        File "/usr/lib/python3.13/site-packages/urllib3/exceptions.py", line 7, in <module>
+          from http.client import IncompleteRead as httplib_IncompleteRead
+      ModuleNotFoundError: No module named 'http.client'; 'http' is not a package
+    verdict: 'not-a-bug'
+    rootCause: |2
+      NEGATIVE CONTROL - there is no fix. The maintainer's full reply, verbatim: "You likely have a file named http.py. This is not a big in requests or it's dependencies" (their typo, quoted as written). The traceback's own text - "No module named 'http.client'; 'http' is not a package" - is the fingerprint of a local module or package literally named http shadowing the stdlib http package on sys.path; nothing in requests or urllib3 is at fault.
+    fixScope: |2
+      NEGATIVE CONTROL - the correct scope is zero lines changed in requests. Any diff against this codebase is wrong regardless of how small it is.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'chi#843 - Router hangs (infinite loop / goroutine leak) when Mount()ed onto itself'
+  vars:
+    fixture: chi-1159
+    title: 'Router hangs (infinite loop / goroutine leak) when Mount()ed onto itself'
+    issueBody: |2
+      I was implementing an HTTP server for my service and noticed that when I use 'chi' as shown below, the router does not respond to undefined routes. Additionally, I suspect the router gets stuck in an infinite loop, leading to a memory leak in the service.
+
+      ```go
+      package main
+
+      import (
+      	"fmt"
+      	"github.com/go-chi/chi/v5"
+      	"github.com/go-chi/chi/v5/middleware"
+      	"net/http"
+      	_ "net/http/pprof"
+      )
+
+      func main() {
+      	r := chi.NewRouter().With(middleware.Logger)
+      	r.Mount("/", r.Group(func(r chi.Router) {
+      		r.Get("/ping", func(writer http.ResponseWriter, request *http.Request) {
+      			writer.WriteHeader(http.StatusOK)
+      			writer.Write([]byte("pong"))
+      		})
+      	}))
+
+      	fmt.Println("%v", http.ListenAndServe(":8080", r))
+      }
+      ```
+
+      For the above-mentioned code, `GET /ping` request will be handled properly, but router never returns a response for an undefined request path.
+    verdict: 'bug'
+    rootCause: |2
+      From the fix's own PR description: "With() and Group() return a new inline *Mux that shares the same underlying tree pointer as the original router rather than copying it... a request that doesn't match /ping falls through to the same '/*' mount node, calls the same mountHandler, recomputes the same RoutePath, and re-enters routing with zero state change - an infinite loop that pins one goroutine per bad request forever."
+    fixScope: |2
+      1 source file changed (mux.go): a panic guard added in Mount(), checking tree-pointer identity (subr.tree == mx.tree) before wiring the mount, ~7 lines, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'chi#746 - ContentCharset should skip requests without a body'
+  vars:
+    fixture: chi-1158
+    title: 'ContentCharset should skip requests without a body'
+    issueBody: |2
+      I could be wrong about this but I feel like the `ContentCharset` middleware should skip processing if the `ContentLength == 0`, just like the `AllowContentType` and `AllowContentEncoding` middleware. I also feel like it for consistency it should be `AllowContentCharset`? Some of the functions names in the `content_charset.go` file are confusing as well as they are named `contentEncoding`, etc.
+
+      I can create a PR if you want.
+    verdict: 'bug'
+    rootCause: |2
+      The reporter's own diagnosis, in the issue: "the ContentCharset middleware should skip processing if the ContentLength == 0, just like the AllowContentType and AllowContentEncoding middleware." The middleware validated the Content-Type charset unconditionally, including on bodyless requests (a GET or DELETE with no body and therefore no charset to validate), incorrectly rejecting them with a 415.
+    fixScope: |2
+      1 source file changed (middleware/content_charset.go): an early return added when r.ContentLength == 0, before the charset check, ~5 lines, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'chi#1067 - httpFancyWriter.ReadFrom double-counts bytes written when a Tee writer is set'
+  vars:
+    fixture: chi-1085
+    title: 'httpFancyWriter.ReadFrom double-counts bytes written when a Tee writer is set'
+    issueBody: |2
+      ## Description
+
+      `httpFancyWriter.ReadFrom` in `middleware/wrap_writer.go` double-counts the bytes written when a `Tee` writer is set.
+
+      When `tee != nil`, `ReadFrom` uses `io.Copy(&f.basicWriter, r)` which routes writes through `basicWriter.Write()`. The `Write` method already increments `basicWriter.bytes` on line 112. However, after `io.Copy` returns, `ReadFrom` also adds `n` to `basicWriter.bytes` again on line 212:
+
+      ```go
+      func (f *httpFancyWriter) ReadFrom(r io.Reader) (int64, error) {
+      	if f.basicWriter.tee != nil {
+      		n, err := io.Copy(&f.basicWriter, r)
+      		f.basicWriter.bytes += int(n)  // BUG: double-counts, basicWriter.Write already incremented bytes
+      		return n, err
+      	}
+      	// ...non-tee path correctly counts since rf.ReadFrom bypasses basicWriter.Write
+      }
+      ```
+
+      This causes `BytesWritten()` to return double the actual number of bytes when using `ReadFrom` with a `Tee` writer.
+
+      ## Reproduction
+
+      ```go
+      func TestHttpFancyWriterReadFromWithTee(t *testing.T) {
+      	original := &httptest.ResponseRecorder{
+      		HeaderMap: make(http.Header),
+      		Body:      new(bytes.Buffer),
+      	}
+      	f := &httpFancyWriter{basicWriter: basicWriter{ResponseWriter: original}}
+
+      	var teeBuf bytes.Buffer
+      	f.Tee(&teeBuf)
+
+      	input := "hello world"
+      	n, err := f.ReadFrom(strings.NewReader(input))
+      	// n == 11, err == nil
+      	// f.BytesWritten() == 22  -- BUG: should be 11
+      }
+      ```
+
+      ## Fix
+
+      Remove the redundant `f.basicWriter.bytes += int(n)` line in the tee branch, since `io.Copy` through `basicWriter.Write` already handles byte counting.
+    verdict: 'bug'
+    rootCause: |2
+      The reporter, in the issue: "ReadFrom uses io.Copy(&f.basicWriter, r) which routes writes through basicWriter.Write(). The Write method already increments basicWriter.bytes... However, after io.Copy returns, ReadFrom also adds n to basicWriter.bytes again... This causes BytesWritten() to return double the actual number of bytes when using ReadFrom with a Tee writer."
+    fixScope: |2
+      1 source file changed (middleware/wrap_writer.go): the redundant `f.basicWriter.bytes += int(n)` line removed from the Tee branch of ReadFrom, 1 line, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'mux#534 - CORSMethodMiddleware leaks allowed methods from other routes on a subrouter'
+  vars:
+    fixture: mux-535
+    title: 'CORSMethodMiddleware leaks allowed methods from other routes on a subrouter'
+    issueBody: |2
+      **Describe the bug**
+      When using `CORSMethodMiddleware` in a Subrouter it can add allowed methods from other routes that shouldn't be present.
+
+      The issue seems to be that in `getAllMethodsForRoute` the matcher matches substrings.
+
+      **Versions**
+      > Go version: `go version`
+      ```
+      % go version
+      go version go1.12.1 darwin/amd64
+      ```
+
+      > package version: run `git rev-parse HEAD` inside the repo
+
+      Sorry, I'm not using the repo of mux, but my `go.mod` has
+
+      `github.com/gorilla/mux v1.7.3`
+
+
+      **Steps to Reproduce**
+      > How can the bug be triggered?
+
+      Create a PathPrefix with a sub router, add two routes with paths where one is a substring of the other. Eg. `/hello` and `/hello/name`. Add different allowed methods to these routes.
+
+      You can see the allowed methods of both routes when requesting the route with the longer path.
+
+      Using the code example below the response header for `/test/hello/name` looks like
+
+      `Access-Control-Allow-Methods: GET,OPTIONS,POST,GET,OPTIONS`
+
+      **Expected behavior**
+      > What output or behaviour were you expecting instead?
+
+      I would expect to see only the allowed methods of the route in the `Access-Control-Allow-Methods` which would be `Access-Control-Allow-Methods: GET,OPTIONS`
+
+      **Code Snippets**
+      > A minimum viable code snippet can be useful! (use backticks to format it).
+      ```golang
+      package main
+
+      import (
+      	"fmt"
+      	"net/http"
+
+      	"github.com/gorilla/mux"
+      )
+
+      func Hello(w http.ResponseWriter, r *http.Request) {
+      	fmt.Fprint(w, "Hello")
+      }
+
+      func HelloName(w http.ResponseWriter, r *http.Request) {
+      	fmt.Fprint(w, "Hello")
+      }
+
+      func main() {
+      	router := mux.NewRouter().StrictSlash(true)
+
+      	subrouter := router.PathPrefix("/test").Subrouter()
+      	subrouter.HandleFunc("/hello", Hello).Methods(http.MethodGet, http.MethodOptions, http.MethodPost)
+      	subrouter.HandleFunc("/hello/{name}", HelloName).Methods(http.MethodGet, http.MethodOptions)
+
+      	subrouter.Use(mux.CORSMethodMiddleware(subrouter))
+
+      	http.ListenAndServe(":8081", router)
+      }
+
+      ```
+    verdict: 'bug'
+    rootCause: |2
+      The reporter's own diagnosis, in the issue: "The issue seems to be that in getAllMethodsForRoute the matcher matches substrings." getAllMethodsForRoute walked every route and tested only its first routeRegexp matcher directly, rather than calling the route's own full Match against the actual request - so a route whose path pattern was a prefix of the requested path (e.g. /hello short-matching a request meant for /hello/name) contributed its methods too, and CORS responses listed methods that did not belong to the matched route.
+    fixScope: |2
+      1 source file changed (middleware.go): getAllMethodsForRoute rewritten to call route.Match(req, &match) directly for each route instead of manually testing route.matchers, ~15 lines net, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'mux#704 - Query mismatch reports 405 instead of 404 when another route at the same path differs only by method'
+  vars:
+    fixture: mux-712
+    title: 'Query mismatch reports 405 instead of 404 when another route at the same path differs only by method'
+    issueBody: |2
+      **Describe the bug**
+      Adding the same endpoint POST with different Queries ends up with incosnsistent error messages
+
+
+      **Versions**
+       Go version: 1.18
+
+
+
+      **Steps to Reproduce**
+      Playground: https://go.dev/play/p/xzoAkpEhGgy
+
+      ```go
+      // You can edit this code!
+      // Click here and start typing.
+      package main
+
+      import (
+      	"encoding/json"
+      	"fmt"
+      	"net/http"
+      	"net/http/httptest"
+      	"time"
+
+      	"github.com/gorilla/mux"
+      )
+
+      func main() {
+
+      	r := mux.NewRouter()
+
+      	r.HandleFunc("/api/v2", func(w http.ResponseWriter, r *http.Request) {
+      		// an example API handler
+      		fmt.Fprintf(w, "You made a POST request")
+      		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+      	}).Methods("POST")
+
+      	r.HandleFunc("/api/v2", func(w http.ResponseWriter, r *http.Request) {
+      		// an example API handler
+      		fmt.Fprintf(w, "You made a GET request")
+      		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+      	}).
+      		Queries("from", "{from:[0-9]+}",
+      			"to", "{to:[0-9]+}").Methods("GET")
+
+
+      	srv := &http.Server{
+      		Handler: r,
+      		Addr:    "127.0.0.1:8000",
+      		// Good practice: enforce timeouts for servers you create!
+      		WriteTimeout: 15 * time.Second,
+      		ReadTimeout:  15 * time.Second,
+      	}
+      	go srv.ListenAndServe()
+
+
+      	req2 := httptest.NewRequest("GET", "/api/v2?from=3&to=-5", nil)
+      	out2 := httptest.NewRecorder()
+
+      	r.ServeHTTP(out2, req2)
+
+      	fmt.Println(out2.Code)
+      	fmt.Println(out2)
+
+      }
+      ```
+
+      ENDS with the result, I was expecting 404:
+      ```go
+      405
+      ```
+      HOWEVER
+
+      When I remove the POST request
+      playground: https://go.dev/play/p/EXiF00_WrFW
+
+      ```go
+      // You can edit this code!
+      // Click here and start typing.
+      package main
+
+      import (
+      	"encoding/json"
+      	"fmt"
+      	"net/http"
+      	"net/http/httptest"
+      	"time"
+
+      	"github.com/gorilla/mux"
+      )
+
+      func main() {
+
+      	r := mux.NewRouter()
+
+      	r.HandleFunc("/api/v2", func(w http.ResponseWriter, r *http.Request) {
+      		// an example API handler
+      		fmt.Fprintf(w, "You made a GET request")
+      		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+      	}).
+      		Queries("from", "{from:[0-9]+}",
+      			"to", "{to:[0-9]+}").Methods("GET")
+
+
+      	srv := &http.Server{
+      		Handler: r,
+      		Addr:    "127.0.0.1:8000",
+      		// Good practice: enforce timeouts for servers you create!
+      		WriteTimeout: 15 * time.Second,
+      		ReadTimeout:  15 * time.Second,
+      	}
+      	go srv.ListenAndServe()
+
+
+      	req2 := httptest.NewRequest("GET", "/api/v2?from=3&to=-5", nil)
+      	out2 := httptest.NewRecorder()
+
+      	r.ServeHTTP(out2, req2)
+
+      	fmt.Println(out2.Code)
+
+      }
+      ```
+
+      Result is
+      ```go
+       404
+      ```
+
+
+      **Expected behavior**
+      Both cases should end in only 404-s
+
+
+      …
+    verdict: 'bug'
+    rootCause: |2
+      Derived directly from the accepted diff's own comment in route.go (no maintainer prose explains it elsewhere): "Multiple routes may share the same path but use different HTTP methods... The router must handle these cases correctly... For a GET request to '/users/abc' with 'id' as '-2', the router should return a 'Not Found' error as no route fully matches this request." Trying the POST route first set match.MatchErr to ErrMethodMismatch and left it set; the GET route's own subsequent query-mismatch was then reported using that stale ErrMethodMismatch (405) instead of the correct ErrNotFound (404).
+    fixScope: |2
+      1 source file changed (route.go): match.MatchErr reset to nil after a method mismatch is observed on one route, so a later route's own query mismatch is not misreported as a method mismatch, ~10 lines, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'echo#3052 - RouteNotFound on a group with middleware doesn''t fall back to root (negative control: no source fix, intended behavior)'
+  vars:
+    fixture: echo-3052
+    title: 'RouteNotFound handler on a group with middleware does not fall back to the root RouteNotFound handler'
+    issueBody: |2
+      ### Issue Description
+
+      I think I found a bug in how `RouteNotFound` handler is propagated to route groups.
+
+      When using groups with a dedicated middleware there is no fallback to the root `RouteNotFound` handler, while that happens when no middleware is specified.
+
+      ### Checklist
+
+      - [ ] Dependencies installed (not sure what this means)
+      - [x] No typos
+      - [x] Searched existing issues and docs
+
+      ### Expected behaviour
+
+      The root `RouteNotFound` handler is used.
+
+      ### Actual behaviour
+
+      An internal(?) handler is used
+
+      ### Steps to reproduce
+
+      Put the code below in a test file, run `go test ./...`
+
+      ### Working code to debug
+
+      This is a test file that reproduce the issue.
+
+      ```go
+      package main_test
+
+      import (
+      	"io"
+      	"net/http"
+      	"net/http/httptest"
+      	"testing"
+
+      	"github.com/labstack/echo/v4"
+      	"github.com/stretchr/testify/require"
+      )
+
+      func server() http.Handler {
+      	e := echo.New()
+      	e.HideBanner = true
+      	e.HidePort = true
+
+      	// expect this handler is used as fallback unless a more specific is present
+      	e.RouteNotFound("/*", missingRouteHandler)
+
+      	// addig a middleware to the group overrides the RouteNotFound handler
+      	v0 := e.Group("/v0", func(next echo.HandlerFunc) echo.HandlerFunc {
+      		return func(c echo.Context) error {
+      			return next(c)
+      		}
+      	})
+      	// adding this would make it work
+      	// v0.RouteNotFound("/*", missingRouteHandler)
+      	v0.POST("/resource", handler)
+
+      	// the same does not happen when no middleware is set
+      	v1 := e.Group("/v1")
+      	v1.POST("/resource", handler)
+
+      	return e
+      }
+
+      func missingRouteHandler(c echo.Context) error {
+      	return c.NoContent(http.StatusNotFound)
+      }
+
+      func handler(c echo.Context) error {
+      	return nil
+      }
+
+      func TestMissing(t *testing.T) {
+      	srv := httptest.NewServer(server())
+
+      	routes := []string{
+      		// this is successful
+      		"/foo",
+      		// this fails
+              //   Error Trace:    /home/endorama/code/REDACTED/main_test.go:68
+              //   Error:          "{"message":"Not Found"}
+              //                   " should have 0 item(s), but has 24
+              //   Test:           TestMissing//v0/foo
+      		"/v0/foo",
+      		// this is successful
+      		"/v1/foo",
+      	}
+
+      	for _, path := range routes {
+      		t.Run(path, func(t *testing.T) {
+      			req, _ := http.NewRequest("POST", srv.URL+path, nil)
+
+      			resp, err := srv.Client().Do(req)
+      			require.NoError(t, err)
+      			defer resp.Body.Close()
+
+      			b, err := io.ReadAll(resp.Body)
+      			require.NoError(t, err)
+
+      			require.Equal(t, http.StatusNotFound, resp.StatusCode)
+      			require.Len(t, b, 0)
+      			require.Equal(t, "0", resp.Header.Get("Content-Length"))
+      		})
+      	}
+      }
+
+      ```
+
+      ### Version/commit
+
+      `github.com/labstack/echo/v4 v4.11.1`
+    verdict: 'not-a-bug'
+    rootCause: |2
+      NEGATIVE CONTROL. Maintainer aldas, on the issue: "this is somewhat of a 'feature' because of this block" (linking group.go's existing nil-handler auto-404 registration). The fix author's own final comment on the PR, after an earlier version that changed routing behavior was reverted: "this PR now just documents + tests the existing intended behaviour rather than changing routing... the group's nil-handler 404 routes resolve to [RouterConfig.NotFoundHandler] at registration time, and group middleware still wraps them." There is no defect in the routing code; the surprising part is undocumented default behavior, not a bug.
+    fixScope: |2
+      NEGATIVE CONTROL - the correct scope is zero source lines changed. The merged PR touches only group_test.go (new tests documenting the existing behavior); the maintainer's guidance is to configure RouterConfig.NotFoundHandler, not to edit echo's routing code.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'echo#2775 - HTML5 static middleware serves index.html over a real 404 from a matched API handler'
+  vars:
+    fixture: echo-3043
+    title: 'HTML5 static middleware serves index.html over a real 404 from a matched API handler'
+    issueBody: |2
+      Hello,
+
+      I've encountered a situation which seems to be a bug to me.
+
+      In the following code, I set up the static middleware with HTML5 param to true so I can have my SPA embedded. In my API, I could have endpoints that would return legit 404 (id not found in database, whatever..) but when this happens, it conflicts with the static middleware (because of `HTML5: true`). It would catch the error and return the `index.html` with a 200 instead of a JSON with a 404 that could be handled by the SPA.
+
+      Is this intended? Would you have suggestions? Thanks :)
+
+      ```
+      package main
+
+      import (
+      	"embed"
+      	"errors"
+      	"log/slog"
+      	"net/http"
+
+      	"github.com/labstack/echo/v4"
+      	"github.com/labstack/echo/v4/middleware"
+      )
+
+      //go:embed all:dist
+      var ui embed.FS
+
+      func main() {
+      	// Echo instance
+      	e := echo.New()
+
+      	// Middleware
+      	e.Use(middleware.Logger())
+      	e.Use(middleware.Recover())
+
+      	// Serve static files
+      	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
+      		HTML5:      true,
+      		Root:       "dist",
+      		Filesystem: http.FS(ui),
+      	}))
+
+      	// Routes
+      	api := e.Group("/api")
+      	api.GET("/test/:id", func(c echo.Context) error {
+      		id := c.Param("id")
+      		if id == "3" {
+      			return echo.NewHTTPError(http.StatusNotFound, "not found")
+      		}
+      		return c.String(http.StatusOK, "ID: "+id)
+      	})
+
+      	// Start server
+      	if err := e.Start(":8080"); err != nil && !errors.Is(err, http.ErrServerClosed) {
+      		slog.Error("failed to start server", "error", err)
+      	}
+      }
+      ```
+    verdict: 'bug'
+    rootCause: |2
+      From the fix's own PR description: "Preserves 404 responses from matched handlers when HTML5 static fallback is enabled, while retaining the index fallback for router misses." The static middleware's error handling treated any echo.HTTPStatusCoder with a 404 status the same way, whether it came from the router failing to match a route at all or from an application handler that matched successfully and deliberately returned 404 (e.g. `echo.NewHTTPError(http.StatusNotFound, "not found")` for a missing database record) - both fell through to serving config.Index, so a real API 404 was silently replaced with the SPA's index page and a 200.
+    fixScope: |2
+      1 source file changed (middleware/static.go): the HTML5 fallback branch now also checks whether the current context actually has a matched route (c.Path() != "" && c.RouteInfo().Method != echo.RouteNotFound) before falling back to serving the index file, ~4 lines, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'cli#2373 - Order of shell completion subcommands in help output is non-deterministic'
+  vars:
+    fixture: cli-2374
+    title: 'Order of shell completion subcommands in help output is non-deterministic'
+    issueBody: |2
+      ## My urfave/cli version is
+
+      [v3.10.0](https://github.com/urfave/cli/releases/tag/v3.10.0) (the bug was introduced in [v3.9.1](https://github.com/urfave/cli/releases/tag/v3.9.1))
+
+      ## Checklist
+
+      - [x] Are you running the latest v3 release? The list of releases is [here](https://github.com/urfave/cli/releases).
+      - [x] Did you check the manual for your release? The v3 manual is [here](https://cli.urfave.org/v3/getting-started/)
+      - [x] Did you perform a search about this problem? Here's the [GitHub guide](https://help.github.com/en/github/managing-your-work-on-github/using-search-to-filter-issues-and-pull-requests) about searching.
+
+      ## Dependency Management
+
+      - My project is using go modules.
+
+      ## Describe the bug
+
+      The order of the shell completion subcommands (`bash`, `zsh`, `fish`, `pwsh`) in help output is non-deterministic across process runs.
+
+      `completion` was changed in #2279 (commit e8afe93601d05d891ad44ad846288ee352142a0b, released in [v3.9.1](https://github.com/urfave/cli/releases/tag/v3.9.1)) to expose each shell as its own subcommand. Those subcommands are generated by ranging over the `shellCompletions` map in `buildCompletionCommand` (`completion.go`):
+
+      ```go
+      for shell, render := range shellCompletions {
+          cmd.Commands = append(cmd.Commands, buildShellCompletionSubcommand(shell, render, appName))
+      }
+      ```
+
+      Go randomizes map iteration order per process, so the order of these subcommands — and therefore the `COMMANDS:` section of `completion --help` — changes between runs.
+
+      This breaks downstream projects that generate documentation from `--help` output and commit it (e.g. via CI). The generated docs flip-flop depending on which run produced them, creating spurious diffs and noise commits.
+
+      ## To reproduce
+
+      ```go
+      package main
+
+      import (
+      	"context"
+      	"os"
+
+      	cli "github.com/urfave/cli/v3"
+      )
+
+      func main() {
+      	cmd := &cli.Command{
+      		Name:                  "app",
+      		EnableShellCompletion: true,
+      	}
+      	_ = cmd.Run(context.Background(), []string{"app", "completion", "--help"})
+      	_ = os.Stdout
+      }
+      ```
+
+      Build the binary and run `app completion --help` several times (each run is a separate process). The order of the commands under `COMMANDS:` varies.
+
+      It can also be reproduced directly with a small test that builds the completion command repeatedly across `go test` invocations; the subcommand name order is usually `bash,zsh,fish,pwsh` but occasionally `pwsh,bash,zsh,fish`, etc.
+
+      ## Observed behavior
+
+      The completion subcommands appear in a random order that differs between process runs, e.g. one run prints:
+
+      ```
+      COMMANDS:
+         bash  Output bash completion script
+         zsh   Output zsh completion script
+         fish  Output fish completion script
+         pwsh  Output pwsh completion script
+      ```
+
+      and another run prints:
+
+      ```
+      COMMANDS:
+         pwsh  Output pwsh completion script
+         bash  Output bash completion script
+         zsh   Output zsh completion script
+         fish  Output fish completion script
+      ```
+
+      ## Expected behavior
+
+      The completion subcommands should appear in a fixed, deterministic order (e.g. `bash, zsh, fish, pwsh`) on every run, so that help output and any documentation generated from it are stable.
+
+      ## Additional context
+
+      Real-world impact (CI repeatedly committing reordered docs): https://github.com/suzuki-shunsuke/ghtkn/pull/454
+
+      The fix is to iterate over an explicitly ordered list of shells instead of ranging over the map.
+
+      <img width="909" height="160" alt="Image" src="https://github.com/user-attachments/assets/1352c89a-75f3-4a42-90ba-0e003cf2afd8" />
+
+      ## Want to fix this yourself?
+
+      Yes — I'll open a PR.
+
+      ## Run `go version` and paste its output here
+
+      ```
+      go version go1.26.4 darwin/arm64
+      ```
+
+      ## Run `go env` and paste its output here
+
+      ```
+      GOOS=darwin
+      GOARCH=arm64
+      GOVERSION=go1.26.4
+      CGO_ENABLED=1
+      ```
+    verdict: 'bug'
+    rootCause: |2
+      From the issue (and the fix's own PR description, verbatim the same text): "Go randomizes map iteration order per process, so the order of these subcommands - and therefore the COMMANDS: section of completion --help - changed between runs. This breaks downstream projects that generate documentation from --help output and commit it via CI: the generated docs flip-flop depending on which run produced them."
+    fixScope: |2
+      1 source file changed (completion.go): an explicitly ordered slice (completionShells) added and iterated for display order instead of ranging over the shellCompletions map directly - the map stays as the renderer registry - ~6 lines, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'cli#2076 - SubcommandHelpTemplate is missing the GLOBAL OPTIONS section for persistent flags'
+  vars:
+    fixture: cli-2359
+    title: 'SubcommandHelpTemplate is missing the GLOBAL OPTIONS section for persistent flags'
+    issueBody: |2
+      Version: 706f78e
+
+      My initial look for a the cause is that the default `SubcommandHelpTemplate` does not contain:
+      ```
+      { {if .VisiblePersistentFlags}}
+
+      GLOBAL OPTIONS:{ {template "visiblePersistentFlagTemplate" .}}{ {end}}
+      ```
+
+      See `CommandHelpTemplate` where this is implemented.
+    verdict: 'bug'
+    rootCause: |2
+      The reporter, in the issue: "the default SubcommandHelpTemplate does not contain: { {if .VisiblePersistentFlags}}...GLOBAL OPTIONS:{ {template \"visiblePersistentFlagTemplate\" .}}{ {end}}... See CommandHelpTemplate where this is implemented." CommandHelpTemplate already rendered a GLOBAL OPTIONS section for persistent (parent-defined) flags; SubcommandHelpTemplate, used whenever a subcommand itself has subcommands, never had that block, so persistent flags were silently omitted from that help output.
+    fixScope: |2
+      1 source file changed (template.go, the SubcommandHelpTemplate string) plus two generated doc snapshots regenerated from it: the same GLOBAL OPTIONS block CommandHelpTemplate already had, copied in, ~3 lines, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'cli#2257 - A positional argument matching a flag''s name gets replaced with an empty string'
+  vars:
+    fixture: cli-2280
+    title: 'A positional argument matching a flag''s name gets replaced with an empty string'
+    issueBody: |2
+      https://github.com/urfave/cli/blob/fd14621cbcd644aa35483480d40f7cdf7b69f4c0/command_run.go#L276
+
+      In the case where a command has no DefaultCommand and has a flag with the name of the next argument, the line above inserts a spurious empty string ahead of the flag name. This causes existing code expecting the flag name in element zero to fail because an empty string is there instead and the expected flag name is in element one.
+    verdict: 'bug'
+    rootCause: |2
+      The reporter, in the issue: "In the case where a command has no DefaultCommand and has a flag with the name of the next argument, [this] line inserts a spurious empty string ahead of the flag name. This causes existing code expecting the flag name in element zero to fail because an empty string is there instead and the expected flag name is in element one." The fix author's own PR description confirms the mechanism: with no default command configured, checking whether the next argument merely shared a name with a flag still routed into the same argsWithDefaultCommand() branch used for an actual default command, prepending an empty placeholder command name that a caller never asked for.
+    fixScope: |2
+      1 source file changed (command_run.go): the isFlagName check removed from the condition, since it has no legitimate effect on subcommand resolution when there is no default command, 2 lines net, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'jinja#2021 - Compiled template output is non-deterministic for tuple-unpacking { % set %}'
+  vars:
+    fixture: jinja-2022
+    title: 'Compiled template output is non-deterministic for tuple-unpacking { % set %}'
+    issueBody: |2
+      <!--
+      This issue tracker is a tool to address bugs in Jinja itself. Please use
+      GitHub Discussions or the Pallets Discord for questions about your own code.
+
+      Replace this comment with a clear outline of what the bug is.
+      -->
+      Ideally compile_templates will have deterministic output so we can use git diff etc
+
+      See also https://github.com/pallets/jinja/issues/1453 and https://github.com/pallets/jinja/issues/1452
+
+      Found another case where this occurs, e.g. I'm randomly getting these changes or their inverse:
+
+      ```diff
+      -    context.vars.update({'triage_reports': l_0_triage_reports, 'open_group_index': l_0_open_group_index})
+      -    context.exported_vars.update(('triage_reports', 'open_group_index'))
+      +    context.vars.update({'open_group_index': l_0_open_group_index, 'triage_reports': l_0_triage_reports})
+      +    context.exported_vars.update(('open_group_index', 'triage_reports'))
+      ```
+      or:
+      ```diff
+      -                _loop_vars.update({'row_spans': l_2_row_spans, 'row': l_2_row})
+      +                _loop_vars.update({'row': l_2_row, 'row_spans': l_2_row_spans})
+      ```
+      <!--
+      Describe how to replicate the bug.
+
+      Include a minimal reproducible example that demonstrates the bug.
+      Include the full traceback if there was an exception.
+      -->
+      I can see that both of the cases above are a result of using tuple unpacking to set multiple new context vars in a single `set` call
+      e.g.
+      ```jinja
+      { % set triage_reports, open_group_index = get_nav_list_items(TRIAGE_REPORTS_NAV, url_name, url_func=url) %}
+      ```
+      ```jinja
+      { % set row, row_spans = row %}
+      ```
+
+      <!--
+      Describe the expected behavior that should have happened but didn't.
+      -->
+      The output from compiling the templates should be stable if the underlying template hasn't changed, rather than varying randomly each time you run it.
+
+      Environment:
+
+      - Python version: 3.11.5
+      - Jinja version: 3.1.4
+    verdict: 'bug'
+    rootCause: |2
+      The reporter, in the issue: "I can see that both of the cases above are a result of using tuple unpacking to set multiple new context vars in a single set call", e.g. `{ % set triage_reports, open_group_index = get_nav_list_items(...) %}`. Derived from the accepted diff: pop_assign_tracking iterated `vars`, a Python set whose iteration order is not guaranteed stable across runs, when emitting the generated `context.vars.update({...})` and `context.exported_vars.update((...))` calls - so the same unchanged template could compile to different (functionally equivalent) Python source from one process to the next.
+    fixScope: |2
+      1 source file changed (src/jinja2/compiler.py): `vars` and `public_names` sorted before iteration in pop_assign_tracking, 2 lines, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'jinja#2032 - ImmutableSandboxedEnvironment does not block clear()/pop() on mutable sequences (lists)'
+  vars:
+    fixture: jinja-2033
+    title: 'ImmutableSandboxedEnvironment does not block clear()/pop() on mutable sequences (lists)'
+    issueBody: |2
+      I happened to notice in using `ImmutableSandboxedEnvironment` that the default `modifies_known_mutable` check seems to be missing coverage for a couple of methods. In particular the `clear` and `pop` methods are checked for both `MutableMapping` and `MutableSet` but not `MutableSequence`.
+
+      Example:
+      ```python
+      from jinja2.sandbox import ImmutableSandboxedEnvironment
+
+      env = ImmutableSandboxedEnvironment()
+      print(env.from_string("{ { [1].pop() }}").render())
+      ```
+
+      Expected: `SecurityError` should be raised
+      Actual: `1` is printed
+
+      Environment:
+
+      - Python version: 3.10
+      - Jinja version: 3.1.4
+    verdict: 'bug'
+    rootCause: |2
+      The reporter, in the issue: "the default modifies_known_mutable check seems to be missing coverage for a couple of methods. In particular the clear and pop methods are checked for both MutableMapping and MutableSet but not MutableSequence." The sandbox's per-type table of disallowed mutating method names included "clear" and "pop" for MutableMapping and MutableSet, but the MutableSequence (list-like) entry omitted both, so a sandboxed template could call `[1].pop()` or `some_list.clear()` and silently mutate state the sandbox exists to protect.
+    fixScope: |2
+      1 source file changed (src/jinja2/sandbox.py): "clear" and "pop" added to the existing frozenset of disallowed method names for abc.MutableSequence, 1 line, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'click#3039 - Pager swallows its own arguments because Popen() still uses shell=True with a list command'
+  vars:
+    fixture: click-3055
+    title: 'Pager swallows its own arguments because Popen() still uses shell=True with a list command'
+    issueBody: |2
+      In https://github.com/pallets/click/commit/299efb82e1a3d34d870129dc0c677c6efb42d811 a `Popen()` for the pager changed the command argument (the first argument) from a string to a list.
+
+      If changing the command to a sequence, we should also change `shell=True` to `shell=False` (or remove it).
+
+      Per the `subprocess` docs at
+
+       * https://docs.python.org/3/library/subprocess.html#popen-constructor
+
+      > On POSIX with `shell=True` … If _args_ is a sequence, the first item specifies the command string, and any additional items will be treated as additional arguments to the shell itself. That is to say, Popen does the equivalent of:
+      > `Popen(['/bin/sh', '-c', args[0], args[1], ...])`
+
+      Whereas if `shell=False` the effect is simply "`os.execvpe()`-like behavior" to execute `args[0]` directly with `args[1:]` as its arguments.
+
+      This bug is causing failures in the test suite for https://github.com/dbcli/mycli, and we are stuck on click < 8.1.8 as a result.
+
+      I don't have a prepared failure case using click other than the mycli test suite, but one example of strange behavior you can replicate easily is that `sh` will swallow arguments that you might think go to the command.  For example:
+
+      ```bash
+      sh -c ls --nonsense
+      ```
+
+      will work, because `ls` never sees `--nonsense`.
+
+      Environment:
+
+      - Python version: tested on Python versions 3.9-3.13
+      - Click version: 8.1.8+
+    verdict: 'bug'
+    rootCause: |2
+      The reporter, in the issue: "a Popen() for the pager changed the command argument (the first argument) from a string to a list. If changing the command to a sequence, we should also change shell=True to shell=False (or remove it)." Quoting the Python docs the reporter cites: with shell=True and a sequence, "the first item specifies the command string, and any additional items will be treated as additional arguments to the shell itself" - not to the pager - so every argument meant for the pager past the command name was silently handed to /bin/sh instead and discarded or misinterpreted.
+    fixScope: |2
+      NEGATIVE CONTROL - keep this small. 1 source file changed (src/click/_termui_impl.py), 1 line: shell=True switched to shell=False in _pipepager's subprocess.Popen call. No new file, no new abstraction, no rewrite of the surrounding pager logic - a fix that rewrites more than this line is over-engineered for what the defect actually is.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix
+
+- description: 'core#15113 - Watchers created during an async setup() are never stopped on the server, leaking the whole app'
+  vars:
+    fixture: vue-15114
+    title: 'Watchers created during an async setup() are never stopped on the server, leaking the whole app'
+    issueBody: |2
+      ### Vue version
+
+      3.5.40
+
+      ### Steps to reproduce
+
+      originally reported in https://github.com/nuxt/nuxt/issues/30782
+
+      1. create an options API component with an `async setup()`, a `computed` property that reads shared module-level state, and a `watch` on that
+      2. render it on the server and then mutate the shared state after the render is done
+      3. see that the watcher is still active on the server
+
+      **Reproduction**
+      ```ts
+      test('options-api watchers should not be created for async setup components', async () => {
+        const open = ref(true)
+        const spy = vi.fn()
+
+        const App = defineComponent({
+          setup: () => Promise.resolve({}),
+          computed: {
+            isOpen() {
+              return open.value
+            },
+          },
+          watch: {
+            isOpen: spy,
+          },
+          render() {
+            return h('div', String(this.isOpen))
+          },
+        })
+
+        const html = await renderToString(createSSRApp(App))
+        expect(html).toBe('<div>true</div>')
+
+        // mutating the state after the request is done should not trigger the watcher
+        open.value = false
+        await nextTick()
+        expect(spy).not.toHaveBeenCalled()
+      })
+      ```
+
+      ### What is expected?
+
+      the same behavior as with a synchronous setup: regular watchers declared via the `watch` option don't run during SSR and don't survive the render
+
+      mutating the shared state after `renderToString` resolves should not trigger anything
+
+      ### What is actually happening?
+
+      when `setup()` returns a `Promise`, the `watch` option creates a live watcher on the server that is never stopped
+
+      if this subscribes to state that **outlives the request**, it keeps the **entire component instance (and app) reachable forever**
+
+      ### System Info
+
+      ```shell
+
+      ```
+
+      ### Any additional comments?
+
+      _No response_
+    verdict: 'bug'
+    rootCause: |2
+      From the fix's own PR description: "When setup() returns a Promise, the watch option creates a live watcher on the server that is never stopped... if this subscribes to state that outlives the request, it keeps the entire component instance (and app) reachable forever." The flag that suppresses watcher creation during SSR setup was only held active around the synchronous branch of setupStatefulComponent; the async .then(handleSetupResult(...)) callback that handles a Promise-returning setup() ran later, outside that flag's scope, so Options API `watch` entries on such a component were registered as live watchers on the server instead of being skipped.
+    fixScope: |2
+      1 source file changed (packages/runtime-core/src/component.ts): the SSR-setup-state flag now set/reset around the async .then() callback's call to handleSetupResult too, matching the synchronous path, ~5 lines, no new abstractions.
+  assert:
+    - type: javascript
+      value: file://assertions/fixbug.cjs:noInventedFileRefs
+      metric: no_invented_file_refs
+    - type: javascript
+      value: file://assertions/fixbug.cjs:touchesRealFix
+      metric: touches_real_fix
+    - *root_cause_depth
+    - *regression_proof
+    - *proportionate_fix

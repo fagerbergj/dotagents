@@ -1,0 +1,308 @@
+[
+  {
+    "name": "flask-6096",
+    "repo": "pallets/flask",
+    "issue": 6093,
+    "parent": "514fc6b3e8402e4c646d5284e97a4f0ab50a7c4b",
+    "fix": "05e9c6bd630ecf4ec0ec884b1fc7901663737bc7",
+    "issueAuthor": "lkk7",
+    "prAuthor": "lkk7",
+    "fixAuthor": "davidism",
+    "verdict": "bug",
+    "sourceFiles": [
+      "src/flask/app.py",
+      "src/flask/testing.py"
+    ],
+    "functions": [
+      "session_transaction"
+    ]
+  },
+  {
+    "name": "vue-15328",
+    "repo": "vuejs/core",
+    "issue": 15320,
+    "parent": "6eaecc14d8151a7d258b80ce0519e5ecc17a2bef",
+    "fix": "ef82a26775952a665545d3771788bd23b2efec91",
+    "issueAuthor": "haoku123",
+    "fixAuthor": "edison1105",
+    "verdict": "bug",
+    "sourceFiles": [
+      "packages/shared/src/looseEqual.ts"
+    ],
+    "functions": [
+      "looseEqual"
+    ]
+  },
+  {
+    "name": "cobra-2356",
+    "repo": "spf13/cobra",
+    "issue": 2257,
+    "parent": "f2878bab8c96afd6e36968af96343b35dbb82a82",
+    "fix": "746ef07158728502482cea9f880a6f4b21ef29a9",
+    "issueAuthor": "jonathan-conder",
+    "fixAuthor": "veeceey",
+    "verdict": "bug",
+    "sourceFiles": [
+      "completions.go"
+    ],
+    "functions": [
+      "getCompletions"
+    ]
+  },
+  {
+    "name": "chi-1029",
+    "repo": "go-chi/chi",
+    "issue": 996,
+    "parent": "29164f023bf9319e74d5961a21a712653bb98c83",
+    "fix": "9b6ddcddb96aa14648702e7eaabef38e14e65157",
+    "issueAuthor": "alexedwards",
+    "fixAuthor": "flimzy",
+    "verdict": "bug",
+    "sourceFiles": [
+      "tree.go"
+    ],
+    "functions": [
+      "findRoute"
+    ]
+  },
+  {
+    "name": "cobra-2285",
+    "repo": "spf13/cobra",
+    "issue": 1933,
+    "parent": "10d4b48a79be3d4e89e6c45cb59f4d32a3d2ae19",
+    "fix": "61968e893eee2f27696c2fbc8e34fa5c4afaf7c4",
+    "issueAuthor": "ryenus",
+    "fixAuthor": "n9v9",
+    "verdict": "bug",
+    "note": "negative control: the real fix is a 2-line change to one file - the answer should not grow beyond that.",
+    "sourceFiles": [
+      "fish_completions.go"
+    ],
+    "functions": []
+  },
+  {
+    "name": "requests-7006",
+    "repo": "psf/requests",
+    "issue": 7006,
+    "parent": "4b9c546aa3f35fca6ca24945376fe7462bb007c4",
+    "fix": null,
+    "issueAuthor": "idislikebluecheese",
+    "fixAuthor": null,
+    "verdict": "not-a-bug",
+    "note": "negative control: maintainer closed this not_planned - the traceback fingerprints a local module named http.py shadowing the stdlib http package. Nothing in requests is at fault.",
+    "sourceFiles": [],
+    "functions": []
+  },
+  {
+    "name": "chi-1159",
+    "repo": "go-chi/chi",
+    "issue": 843,
+    "parent": "735ae2b87f8c733d616e809ae86e0985c1bc3350",
+    "fix": "aba86186a27484f3cadc55b8d6448d2049af71bf",
+    "issueAuthor": "soheilrt",
+    "fixAuthor": "sk-sanjay01",
+    "verdict": "bug",
+    "sourceFiles": [
+      "mux.go"
+    ],
+    "functions": [
+      "Mount"
+    ]
+  },
+  {
+    "name": "chi-1158",
+    "repo": "go-chi/chi",
+    "issue": 746,
+    "parent": "15767233591fd4267ae99d05299fa3807c375cdd",
+    "fix": "87c34a24a64984d80c6f1d11eb19dc8584930433",
+    "issueAuthor": "lukasmalkmus",
+    "fixAuthor": "VojtechVitek",
+    "verdict": "bug",
+    "sourceFiles": [
+      "middleware/content_charset.go"
+    ],
+    "functions": [
+      "ContentCharset"
+    ]
+  },
+  {
+    "name": "chi-1085",
+    "repo": "go-chi/chi",
+    "issue": 1067,
+    "parent": "a54874f0e2f12647a19e82ee70dfa8185014100c",
+    "fix": "4ef87eaf2cfb27d3126d48194e1a84806acc1aed",
+    "issueAuthor": "queelius",
+    "fixAuthor": "alliasgher",
+    "verdict": "bug",
+    "sourceFiles": [
+      "middleware/wrap_writer.go"
+    ],
+    "functions": [
+      "ReadFrom"
+    ]
+  },
+  {
+    "name": "mux-535",
+    "repo": "gorilla/mux",
+    "issue": 534,
+    "parent": "f395758b854c4efa789b8c1e9b73479704c548cb",
+    "fix": "2854a05fd3e2a9ecec0802bcb6eda09bbc0eea9f",
+    "issueAuthor": "stephenpaulger",
+    "fixAuthor": "fharding1",
+    "verdict": "bug",
+    "sourceFiles": [
+      "middleware.go"
+    ],
+    "functions": [
+      "getAllMethodsForRoute"
+    ]
+  },
+  {
+    "name": "mux-712",
+    "repo": "gorilla/mux",
+    "issue": 704,
+    "parent": "24c3e7f499efd8b1429cfe789c7e6a3631357045",
+    "fix": "395ad81d0ebffa0c5a36f3e5a2e720a7d5870d92",
+    "issueAuthor": "Ivasan7",
+    "fixAuthor": "soheilrt",
+    "verdict": "bug",
+    "sourceFiles": [
+      "route.go"
+    ],
+    "functions": [
+      "Match"
+    ]
+  },
+  {
+    "name": "echo-3052",
+    "repo": "labstack/echo",
+    "issue": 2485,
+    "parent": "ed8bbe4b6cbf519766c99e492b9cc427404b3719",
+    "fix": "2e1ed480a17f5839468dddc4bdf26373a67ce60a",
+    "issueAuthor": "endorama",
+    "fixAuthor": "Solaris-star",
+    "verdict": "not-a-bug",
+    "sourceFiles": [],
+    "functions": []
+  },
+  {
+    "name": "echo-3043",
+    "repo": "labstack/echo",
+    "issue": 2775,
+    "parent": "70b31c2ca5131f4eda9c56d78294e8a0573f8645",
+    "fix": "2caa1a52ff35d921251bd4e72dcd8fcef094ea88",
+    "issueAuthor": "marcantoinegodde",
+    "fixAuthor": "JSap0914",
+    "verdict": "bug",
+    "sourceFiles": [
+      "middleware/static.go"
+    ],
+    "functions": []
+  },
+  {
+    "name": "cli-2374",
+    "repo": "urfave/cli",
+    "issue": 2373,
+    "parent": "f980ca84bf6559aa0571b213534b4d3b8d37f5d2",
+    "fix": "02bdfb095e7c87878040716efe62e50efafbf158",
+    "issueAuthor": "suzuki-shunsuke",
+    "fixAuthor": "suzuki-shunsuke",
+    "verdict": "bug",
+    "sourceFiles": [
+      "completion.go"
+    ],
+    "functions": [
+      "buildCompletionCommand"
+    ]
+  },
+  {
+    "name": "cli-2359",
+    "repo": "urfave/cli",
+    "issue": 2076,
+    "parent": "700c663540569deea3a7760411f7ed136360b5bf",
+    "fix": "21e3adbd942e81fe0eee723ae4436bc91a12d3d1",
+    "issueAuthor": "seanamos",
+    "fixAuthor": "dearchap",
+    "verdict": "bug",
+    "sourceFiles": [
+      "template.go"
+    ],
+    "functions": []
+  },
+  {
+    "name": "cli-2280",
+    "repo": "urfave/cli",
+    "issue": 2257,
+    "parent": "b5aa7101bd66f4340bfd737fe4bf12496d625632",
+    "fix": "9229c617cb4ed5983b42fd8cd689895c332a3e3e",
+    "issueAuthor": "bbadour",
+    "fixAuthor": "MohitPanchariya",
+    "verdict": "bug",
+    "sourceFiles": [
+      "command_run.go"
+    ],
+    "functions": []
+  },
+  {
+    "name": "jinja-2022",
+    "repo": "pallets/jinja",
+    "issue": 2021,
+    "parent": "3ef3ba885bc7a465b022abfd525d6bb4a1c8dd3c",
+    "fix": "39d9ffff1f33a5e5141af655857f9dbe6b6df03d",
+    "issueAuthor": "anentropic",
+    "fixAuthor": "anentropic",
+    "verdict": "bug",
+    "sourceFiles": [
+      "src/jinja2/compiler.py"
+    ],
+    "functions": [
+      "pop_assign_tracking"
+    ]
+  },
+  {
+    "name": "jinja-2033",
+    "repo": "pallets/jinja",
+    "issue": 2032,
+    "parent": "1dc04bccf9384cced4262d7ca7157638b0ebd970",
+    "fix": "91e3521173251e3f56706423067d722e5e3e52ad",
+    "issueAuthor": "dylanscott",
+    "fixAuthor": "dylanscott",
+    "verdict": "bug",
+    "sourceFiles": [
+      "src/jinja2/sandbox.py"
+    ],
+    "functions": []
+  },
+  {
+    "name": "click-3055",
+    "repo": "pallets/click",
+    "issue": 3039,
+    "parent": "35e6a78646c58a8cc1ba3cda603a6bd4fb87f9d5",
+    "fix": "7d7183604158f064390539d83d4a19a978c6b08a",
+    "issueAuthor": "rolandwalker",
+    "fixAuthor": "rolandwalker",
+    "verdict": "bug",
+    "sourceFiles": [
+      "src/click/_termui_impl.py"
+    ],
+    "functions": [
+      "_pipepager"
+    ]
+  },
+  {
+    "name": "vue-15114",
+    "repo": "vuejs/core",
+    "issue": 15113,
+    "parent": "fa2885d8c48768d26f1666a01bd540ffe3b20f9b",
+    "fix": "b6191cbf95c680e076164a319dd987a14de658c1",
+    "issueAuthor": "cernymatej",
+    "fixAuthor": "cernymatej",
+    "verdict": "bug",
+    "sourceFiles": [
+      "packages/runtime-core/src/component.ts"
+    ],
+    "functions": [
+      "setupStatefulComponent"
+    ]
+  }
+]

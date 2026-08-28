@@ -1,0 +1,90 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: fix-bug skill effectiveness
+
+# Case vars carry real GitHub issue text and PR bodies verbatim (Go struct
+# literals, Python tracebacks, TS code). None of today's fixtures contain
+# `{{`/`{%`, but the risk review-code hit with a real diff applies here too -
+# promptfoo renders every var through nunjucks regardless of the prompt being
+# a file:// JS function, so a future fixture with that syntax would silently
+# empty both arms. Opting out preemptively, same as review-code.
+env:
+  PROMPTFOO_DISABLE_TEMPLATING: "1"
+
+# Arms over real bug-fix commits. Labels come from the skill's frontmatter
+# version, so bumping metadata.version in SKILL.md relabels the comparison.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # Same custom provider as review-code: an OpenAI-compatible call plus tools
+  # over two roots. `read_source` here serves the tree at the fix commit's
+  # PARENT (see lib/bugfix-fixtures.js) and goes to BOTH arms - the codebase
+  # is the subject matter, not a skill affordance. `load_resource`, over the
+  # skill's own directory, is skill-only.
+  - id: file://../../lib/skill-tools.js
+    label: deepseek-v4-flash+resources
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      # Higher than review-code's 40: a reviewer starts with a diff that
+      # already names the changed files, but fix-bug starts from an issue
+      # report alone and has to locate the relevant code from scratch, which
+      # costs extra rounds of listing directories and following call sites
+      # before it even gets to the file the bug lives in.
+      maxToolCalls: 55
+      # review-code's 64 KB ceiling is impossible here: this suite's own
+      # ground-truth files run bigger than a PR diff ever does. Measured
+      # against the materialised fixtures (evals/skills/fix-bug/.cache):
+      #   flask-6096: app.py (65371B) + testing.py (10114B) = 75485B alone -
+      #     app.py by itself is already 99.7% of the old 65536B budget.
+      #   cobra-2356: a natural wrong-first-read of command.go (61142B) then
+      #     the real target completions.go (38882B) = 100024B.
+      #   chi-1029: mux_test.go (58795B) then tree.go (21935B) = 80730B.
+      #   cobra-2285: command.go (61142B) then fish_completions.go (11481B)
+      #     = 72623B.
+      # 256 KB clears the worst of these (cobra-2356's 100024B) with 62%
+      # headroom to spare, and still clears it with one full duplicate re-read
+      # of command.go on top (161166B, since loadResource has no dedup and a
+      # confused retry re-decrements the same budget - see AGENTS.md/report).
+      maxResourceBytes: 262144
+
+defaultTest:
+  options:
+    # llm-rubric everywhere, never g-eval - see evals/AGENTS.md: g-eval
+    # extracts with /{.+}/, which cannot cross newlines, so a pretty-printed
+    # verdict is discarded and the row records 0.00 where the judge wrote
+    # full marks.
+    transform: file://../../lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # Reading the surrounding code costs round-trips, and locating the bug
+    # from scratch costs more of them than reviewing a diff does. No `cost`
+    # assertion: this gateway declares no per-token price, so it would read
+    # zero and pass trivially.
+    - type: latency
+      threshold: 300000
+      metric: latency
+
+tests:
+  - file://tests/*.yaml
