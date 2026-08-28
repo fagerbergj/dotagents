@@ -3,17 +3,108 @@
 # so the model is authoring rather than copying. The developer's line of context
 # never names a message format, a mood, or a rule.
 #
-# The four MIXED cases carry two unrelated changes in one tree - two features, a
-# refactor hiding a behaviour change, a fix beside a dependency bump, and a
-# formatter run beside a real fix. The claimed right answer there is to say so,
-# not to write one message that covers both, so each carries its own `ask` that
-# leaves the number of commits undecided; the default ask says "the commit
-# message", singular, which would foreclose the very choice being graded.
+# The ten MIXED cases carry two unrelated changes in one tree. The claimed right
+# answer there is to say so, not to write one message that covers both, so each
+# carries its own `ask` that leaves the number of commits undecided; the default
+# ask says "the commit message", singular, which would foreclose the very choice
+# being graded.
 #
-# The four breaking cases are diffs whose breaking nature is a fact about the
+# The ten breaking cases are diffs whose breaking nature is a fact about the
 # code, not a judgement: a removed config field, a renamed CLI flag, a renamed
 # argument in a published tool schema, and a config loader that now rejects what
 # it used to accept.
+#
+# PROVENANCE. Two working repositories, both checked out locally:
+# `quack` (Go, github.com/fagerbergj/quack) and `turnstone` (Python,
+# github.com/turnstonelabs/turnstone). Every
+# commit below was checked for an AI-authorship disclosure in its message -
+# `Co-Authored-By: Claude ... <noreply@anthropic.com>`, a "Generated with
+# Claude Code" trailer - and any that carried one was dropped, because a body
+# the model itself wrote makes the ground truth circular. That screen is not
+# theoretical: it cost this suite the whole `home-server` repository, where 8
+# commits carry a `Co-Authored-By: Claude <noreply@anthropic.com>` trailer -
+# among them c3b7e3d "Remove WIREGUARD_ADDRESSES" and 21fa72f's env-var
+# consolidation, which were the two removed-config-key candidates that repo
+# offered. `turnstone` and `quack` carry zero such trailers. Subject-matter
+# mentions of Anthropic or Copilot inside a body (an API document-block format,
+# a review finding) are not authorship claims and were kept.
+#
+# The four original cases (config KnownFields #560, the removed
+# gates.judge.skeptics field, the renamed CLI flag, the renamed web_search
+# `topic` argument) predate this block. The twelve added below:
+#
+# BREAKING
+#   - turnstone 8b4b8b3f "refactor(rerank): reranker is a per-model definition
+#     only (drop global endpoint settings)". Qualifies: `tools.rerank_url`,
+#     `tools.rerank_model` and `tools.rerank_api_key` are deleted SettingDefs
+#     and deleted config.py getters, and $TURNSTONE_RERANK_URL /
+#     $TURNSTONE_RERANK_MODEL stop being read. A config.toml that sets
+#     rerank_url has no reranker afterwards - a fact readable off the diff, not
+#     a judgement. Trimmed to config.py, settings_registry.py and the example
+#     toml; the resolver and its tests are in the commit but not shown.
+#   - turnstone 1728a4c0 "feat(web-search): replace Tavily/DuckDuckGo backends
+#     with self-hosted SearxNG". Qualifies: `tools.web_search_backend`'s
+#     accepted values change - the help text still names the valid set, and
+#     "tavily"/"ddg" are no longer in it - and `tools.tavily_api_key` plus
+#     TAVILY_API_KEY are removed outright. A loader that now rejects what it
+#     used to accept. Trimmed to config.py, env.py and settings_registry.py;
+#     the web_search.json hunk is deliberately left out because the suite
+#     already grades a `topic`-argument rename from a later commit on that
+#     same file.
+#   - turnstone 110d44b0 "refactor(tools): remove man, math, and plan_agent
+#     built-in tools". Qualifies: three tool JSON schemas are deleted from the
+#     published tool set, the `agent` tool-metadata key is removed from
+#     _META_KEYS, and `model.plan_alias` / `model.plan_effort` are deleted
+#     SettingDefs. Trimmed to the tool schemas, tools.py and
+#     settings_registry.py out of a 106-file commit.
+#   - turnstone eb2a119d "refactor(mcp): remove periodic refresh, add manual
+#     refresh/reconnect controls". Qualifies: `--mcp-refresh-interval` is a
+#     deleted parser.add_argument and `mcp.refresh_interval` a deleted
+#     SettingDef and a deleted _CONFIG_MAP entry - an invocation that passed
+#     the flag now fails to parse. This is the "renamed CLI flag" shape in its
+#     starkest form: removed, with nothing to rename to. Trimmed to cli.py,
+#     config.py, settings_registry.py and the example toml.
+#   - turnstone 2c050b25 "refactor: remove duplicate judge provider/base_url/
+#     api_key fields". Qualifies: three fields disappear from the JudgeConfig
+#     dataclass, the explicit-provider branch in IntentJudge.__init__ goes with
+#     them, and `judge.provider` / `judge.base_url` / `judge.api_key` are
+#     deleted SettingDefs. Shown whole - it is a three-file commit.
+#   - quack 5bf5cbaa "config: restructure model/provider schema for
+#     capacity-based admission (#1009)". Qualifies: `ProviderConfig.Models
+#     map[string]ModelPricing` (yaml `models`) is deleted and per-model price
+#     moves to a top-level `models.<m>.cost`. Because Load runs the decoder
+#     with KnownFields(true) (the loader the suite's first breaking case is
+#     about), a config still carrying providers.<p>.models.<m>.input_per_mtok
+#     does not start. Trimmed to the quack.yaml registry hunk and the config.go
+#     struct/validation hunks.
+#
+# MIXED - each is two unrelated commits' diffs laid into one tree, the same
+# construction the original four use. No pair shares a file.
+#   - turnstone a3cb5460 "docs(attachments): pin xAI Grok to the rasterize-PDF
+#     fallback" (a capability comment plus a test that pins it) + a628e9f3
+#     "fix(ui): interactive pane keeps its scroll pin across tool calls".
+#   - turnstone c988c9ed "test(console): pin system-turn dedupe wiring on both
+#     read paths" + b8a8b040 "fix(attachments): drain create-time staged
+#     uploads synchronously".
+#   - turnstone 25101e7f "fix(attachments): close thumbnail
+#     decompression-bomb gap (40M, not 80M)" + d8619ce3 "docs(ui): the
+#     pane-hosted coordinator scope is every coordinator in practice" (a CSS
+#     comment correction).
+#   - turnstone 695a3357 Revert "fix(server): accept --skip-permissions CLI
+#     flag (#450)" + 07e7e6db "perf(attachments): stop downloading the whole
+#     text blob for a 240-char preview". A revert beside a perf fix.
+#   - turnstone 793c5518 "fix(attachments): surface the perception role in
+#     admin (roles tab + settings filter)" + 9fefe830 "fix(tls): validate
+#     init() retry params".
+#   - turnstone 8ba669cf "fix(deadline): prefer a ready result over a
+#     same-window deadline/cancel" + ce105c4e "fix(ui): split separator ARIA
+#     range reflects the real clamp, not 10-90". Two fixes, unrelated
+#     subsystems - the hardest of the six to see as two pieces of work.
+#
+# Sub-population counts after this: marks_breaking 10, splits_mixed_change 10.
+# NOT YET RE-MEASURED - the deltas recorded for these two metrics (+0.42 and
+# +0.58 at n=4) are from the smaller populations and say nothing about these
+# cases.
 
 - description: 'one-line fix - the disclosure advised a command the agent is not allowed to run'
   vars:
@@ -1124,5 +1215,1628 @@
        
        
        def wrap(content: str, nonce: str, tag: str) -> str:
+  assert:
+    - *splits_mixed_change
+
+- description: 'breaking change - the global rerank endpoint settings are removed, configs setting them get no reranker'
+  vars:
+    context: 'reranking is a model role now - you add the reranker in the models tab with supports_rerank and pick it under roles. the old global tools.rerank_url / rerank_model / rerank_api_key path was a second way to say the same thing so it''s gone, and the two env vars with it. anyone whose config.toml sets rerank_url has no reranker at all after this. commit message?'
+    diff: |
+      diff --git a/turnstone.example.toml b/turnstone.example.toml
+      index 432b85bf..549dcd7a 100644
+      --- a/turnstone.example.toml
+      +++ b/turnstone.example.toml
+      @@ -112,18 +112,11 @@
+       #
+       # Reranking (optional, disabled by default). Turnstone runs no reranker itself —
+       # it POSTs to an external Cohere/Jina-compatible /rerank endpoint (self-hosted
+      -# vLLM/TEI/llama.cpp, or hosted Cohere/Jina/Voyage) to reorder web_search results
+      -# by query relevance. Set rerank_url to enable; leave empty to disable. (Alternatively,
+      -# add a reranker model in the admin Models tab and pick it under Models -> Roles
+      -# -> Reranker; that selection takes precedence over rerank_url.)
+      -# rerank_url = ""              # full endpoint URL incl. path, e.g.
+      -                               # "http://vllm:8000/rerank" or
+      -                               # "https://api.cohere.com/v2/rerank";
+      -                               # env: TURNSTONE_RERANK_URL
+      -# rerank_model = ""            # model name sent in the request; empty = the
+      -                               # endpoint's default; env: TURNSTONE_RERANK_MODEL
+      -# rerank_api_key = ""          # bearer token for hosted providers; usually empty
+      -                               # for self-hosted. config.toml only (never env)
+      +# vLLM/TEI/llama.cpp, or hosted Cohere/Jina/Voyage) to reorder results by query
+      +# relevance. The endpoint is a per-model definition: add a model in the admin
+      +# Models tab with capability {"supports_rerank": true} and base_url set to the
+      +# full /rerank endpoint, then pick it under Models -> Roles -> Reranker. The
+      +# settings below are global knobs — there is no rerank_url-style endpoint setting.
+       # rerank_web_search = true     # rerank web_search results (when an endpoint is set)
+       # rerank_bm25 = true           # rerank BM25 retrieval: tool search, skill search, memory
+       # rerank_bm25_threshold = 0.0  # 0-1 relevance floor for proactive memory; 0 = off (reorder
+      diff --git a/turnstone/core/config.py b/turnstone/core/config.py
+      index 10370d48..c104da57 100644
+      --- a/turnstone/core/config.py
+      +++ b/turnstone/core/config.py
+      @@ -229,59 +229,14 @@ def get_searxng_engines() -> str:
+           return _searxng_engines
+       
+       
+      -# -- Rerank endpoint (cached) -------------------------------------------------
+      -
+      -_rerank_url: str | None = None
+      -_rerank_url_loaded: bool = False
+      -_rerank_model: str | None = None
+      -_rerank_model_loaded: bool = False
+      -_rerank_api_key: str | None = None
+      -_rerank_api_key_loaded: bool = False
+      +# -- Rerank query instruction (cached) ----------------------------------------
+      +# The reranker endpoint itself is a per-model definition (admin Models tab ->
+      +# Reranker role); only the query instruction is a global knob.
+      +
+       _rerank_instruction: str | None = None
+       _rerank_instruction_loaded: bool = False
+       
+       
+      -def get_rerank_url() -> str:
+      -    """Load the rerank endpoint URL (cached after first call).
+      -
+      -    Precedence: config.toml [tools] rerank_url -> $TURNSTONE_RERANK_URL -> ""
+      -    ("" disables reranking — there is no bundled rerank endpoint).
+      -    """
+      -    global _rerank_url, _rerank_url_loaded
+      -    if not _rerank_url_loaded:
+      -        _rerank_url_loaded = True
+      -        cfg = load_config("tools").get("rerank_url", "").strip()
+      -        _rerank_url = cfg or os.environ.get("TURNSTONE_RERANK_URL", "").strip()
+      -    return _rerank_url or ""
+      -
+      -
+      -def get_rerank_model() -> str:
+      -    """Load the rerank model name (cached after first call).
+      -
+      -    Precedence: config.toml [tools] rerank_model -> $TURNSTONE_RERANK_MODEL -> ""
+      -    (use the endpoint's default model).
+      -    """
+      -    global _rerank_model, _rerank_model_loaded
+      -    if not _rerank_model_loaded:
+      -        _rerank_model_loaded = True
+      -        cfg = load_config("tools").get("rerank_model", "").strip()
+      -        _rerank_model = cfg or os.environ.get("TURNSTONE_RERANK_MODEL", "").strip()
+      -    return _rerank_model or ""
+      -
+      -
+      -def get_rerank_api_key() -> str:
+      -    """Load the rerank endpoint bearer token (cached after first call).
+      -
+      -    Read from config.toml [tools] rerank_api_key only — secrets are never read
+      -    from the environment.
+      -    """
+      -    global _rerank_api_key, _rerank_api_key_loaded
+      -    if not _rerank_api_key_loaded:
+      -        _rerank_api_key_loaded = True
+      -        _rerank_api_key = load_config("tools").get("rerank_api_key", "").strip()
+      -    return _rerank_api_key or ""
+      -
+      -
+       def get_rerank_instruction() -> str:
+           """Load the rerank query instruction (cached after first call).
+       
+      diff --git a/turnstone/core/settings_registry.py b/turnstone/core/settings_registry.py
+      index 3653d00d..c438e1d3 100644
+      --- a/turnstone/core/settings_registry.py
+      +++ b/turnstone/core/settings_registry.py
+      @@ -250,41 +250,6 @@ def _build_registry() -> dict[str, SettingDef]:
+                   "'searxng' forces the SearxNG backend. 'mcp:server:tool' routes to an MCP server "
+                   "(e.g. 'mcp:search:web_search').",
+               ),
+      -        SettingDef(
+      -            "tools.rerank_url",
+      -            "str",
+      -            "",
+      -            "Full rerank endpoint URL (empty = reranking disabled)",
+      -            "tools",
+      -            help="Full URL of a Cohere/Jina-compatible rerank endpoint, including the path "
+      -            "(e.g. 'http://vllm:8000/rerank', 'http://tei:8080/rerank', or "
+      -            "'https://api.cohere.com/v2/rerank'). Turnstone runs no rerank model itself: "
+      -            "web_search results are reranked by POSTing to this endpoint. Empty disables "
+      -            "reranking entirely. Overrides config.toml [tools] rerank_url and "
+      -            "$TURNSTONE_RERANK_URL.",
+      -        ),
+      -        SettingDef(
+      -            "tools.rerank_model",
+      -            "str",
+      -            "",
+      -            "Reranker model name sent to the endpoint (empty = endpoint default)",
+      -            "tools",
+      -            help="Model identifier passed in the rerank request body (e.g. "
+      -            "'BAAI/bge-reranker-v2-m3', 'rerank-v3.5'). Empty uses the endpoint's default "
+      -            "model. Overrides config.toml [tools] rerank_model.",
+      -        ),
+      -        SettingDef(
+      -            "tools.rerank_api_key",
+      -            "str",
+      -            "",
+      -            "Bearer token for the rerank endpoint (write-only)",
+      -            "tools",
+      -            is_secret=True,
+      -            help="Sent as 'Authorization: Bearer <key>' to the rerank endpoint. Required for "
+      -            "hosted providers (Cohere/Jina/Voyage); usually empty for a self-hosted vLLM/TEI "
+      -            "instance. Write-only: never returned by the API. For non-console deployments set "
+      -            "it in config.toml [tools] rerank_api_key (secrets belong in config.toml, not env).",
+      -        ),
+               SettingDef(
+                   "tools.rerank_instruction",
+                   "str",
+      @@ -303,10 +268,9 @@ def _build_registry() -> dict[str, SettingDef]:
+                   True,
+                   "Rerank web_search results when a rerank endpoint is configured",
+                   "tools",
+      -            help="When a rerank endpoint is configured (via tools.reranker_alias or "
+      -            "tools.rerank_url), re-order web_search results by query relevance before "
+      -            "returning the top hits. No effect when no endpoint is configured. Disable to "
+      -            "keep the search backend's native ranking.",
+      +            help="When a reranker model is selected (Models -> Roles -> Reranker), re-order "
+      +            "web_search results by query relevance before returning the top hits. No effect "
+      +            "when no reranker is selected. Disable to keep the search backend's native ranking.",
+               ),
+               SettingDef(
+                   "tools.reranker_alias",
+      @@ -316,8 +280,8 @@ def _build_registry() -> dict[str, SettingDef]:
+                   "tools",
+                   help="Selects a reranker added in the admin Models tab: create a model definition "
+                   'with capability {"supports_rerank": true} and its base_url set to a Cohere/Jina-'
+      -            "compatible /rerank endpoint, then pick it under Models -> Roles -> Reranker. Takes "
+      -            "precedence over tools.rerank_url; empty falls back to tools.rerank_url (if set).",
+      +            "compatible /rerank endpoint, then pick it under Models -> Roles -> Reranker. "
+      +            "Empty disables reranking (there is no global endpoint fallback).",
+               ),
+               SettingDef(
+                   "tools.rerank_bm25",
+  assert:
+    - *marks_breaking
+
+- description: 'breaking change - a config value the loader used to accept is no longer a valid backend'
+  vars:
+    context: 'moved web search over to a self-hosted searxng instance. the compose service, the client and the docs are in the same tree, this is just the config side. tools.web_search_backend used to take "tavily" or "ddg" and neither is a backend any more, and tools.tavily_api_key is gone from the registry along with TAVILY_API_KEY from the scrub set. what should the commit say?'
+    diff: |
+      diff --git a/turnstone/core/config.py b/turnstone/core/config.py
+      index c23f2323..5e14538c 100644
+      --- a/turnstone/core/config.py
+      +++ b/turnstone/core/config.py
+      @@ -184,29 +184,49 @@ _CONFIG_MAP: dict[str, dict[str, str]] = {
+           },
+       }
+       
+      -# -- Tavily API key (cached) --------------------------------------------------
+      +# -- SearxNG web search (cached) ----------------------------------------------
+       
+      -_tavily_key: str | None = None
+      -_tavily_key_loaded: bool = False
+      +_searxng_url: str | None = None
+      +_searxng_url_loaded: bool = False
+      +_searxng_engines: str | None = None
+      +_searxng_engines_loaded: bool = False
+       
+       
+      -def get_tavily_key() -> str | None:
+      -    """Load Tavily API key (cached after first call).
+      +def get_searxng_url() -> str | None:
+      +    """Load the SearxNG base URL (cached after first call).
+       
+      -    Precedence: config.toml [api] tavily_key -> $TAVILY_API_KEY
+      +    Precedence: config.toml [tools] searxng_url -> $TURNSTONE_SEARXNG_URL.
+      +    Returns None when neither is set (web_search then has no backend unless
+      +    the model supports native search). The docker-compose stack sets the env
+      +    var to the bundled ``searxng`` service.
+           """
+      -    global _tavily_key, _tavily_key_loaded
+      -    if _tavily_key_loaded:
+      -        return _tavily_key
+      -    _tavily_key_loaded = True
+      -    cfg_key = load_config("api").get("tavily_key", "").strip()
+      -    if cfg_key:
+      -        _tavily_key = cfg_key
+      -        return _tavily_key
+      -    env_key = os.environ.get("TAVILY_API_KEY", "").strip()
+      -    if env_key:
+      -        _tavily_key = env_key
+      -    return _tavily_key
+      +    global _searxng_url, _searxng_url_loaded
+      +    if _searxng_url_loaded:
+      +        return _searxng_url
+      +    _searxng_url_loaded = True
+      +    cfg_url = load_config("tools").get("searxng_url", "").strip()
+      +    if cfg_url:
+      +        _searxng_url = cfg_url
+      +        return _searxng_url
+      +    env_url = os.environ.get("TURNSTONE_SEARXNG_URL", "").strip()
+      +    if env_url:
+      +        _searxng_url = env_url
+      +    return _searxng_url
+      +
+      +
+      +def get_searxng_engines() -> str:
+      +    """Load the SearxNG engine list (cached after first call).
+      +
+      +    Precedence: config.toml [tools] searxng_engines -> $TURNSTONE_SEARXNG_ENGINES
+      +    -> "" (use the instance's default engine mix). Comma-separated engine names.
+      +    """
+      +    global _searxng_engines, _searxng_engines_loaded
+      +    if _searxng_engines_loaded:
+      +        return _searxng_engines or ""
+      +    _searxng_engines_loaded = True
+      +    cfg = load_config("tools").get("searxng_engines", "").strip()
+      +    _searxng_engines = cfg or os.environ.get("TURNSTONE_SEARXNG_ENGINES", "").strip()
+      +    return _searxng_engines
+       
+       
+       def nonneg_float(val: str) -> float:
+      diff --git a/turnstone/core/env.py b/turnstone/core/env.py
+      index f112576c..2422df1f 100644
+      --- a/turnstone/core/env.py
+      +++ b/turnstone/core/env.py
+      @@ -64,7 +64,6 @@ _EXPLICIT_SCRUB: frozenset[str] = frozenset(
+           {
+               "OPENAI_API_KEY",
+               "ANTHROPIC_API_KEY",
+      -        "TAVILY_API_KEY",
+               "TURNSTONE_JWT_SECRET",
+               "TURNSTONE_DISCORD_TOKEN",
+               "TURNSTONE_GITHUB_TOKEN",
+      diff --git a/turnstone/core/settings_registry.py b/turnstone/core/settings_registry.py
+      index 4dc92d23..dddd5711 100644
+      --- a/turnstone/core/settings_registry.py
+      +++ b/turnstone/core/settings_registry.py
+      @@ -241,27 +241,38 @@ def _build_registry() -> dict[str, SettingDef]:
+                   max_value=50,
+               ),
+               SettingDef(
+      -            "tools.tavily_api_key",
+      +            "tools.searxng_url",
+      +            "str",
+      +            "http://searxng:8080",
+      +            "SearxNG base URL for web search",
+      +            "tools",
+      +            help="Base URL of a SearxNG instance for web_search tool calls. The default "
+      +            "points at the 'searxng' service bundled in the docker-compose stack. The "
+      +            "instance must have JSON output enabled (search.formats includes 'json'). "
+      +            "Overrides $TURNSTONE_SEARXNG_URL and config.toml [tools] searxng_url. Empty "
+      +            "disables the SearxNG backend.",
+      +            reference_url="https://docs.searxng.org/dev/search_api.html",
+      +        ),
+      +        SettingDef(
+      +            "tools.searxng_engines",
+                   "str",
+                   "",
+      -            "Tavily API key for web search (write-only)",
+      +            "Comma-separated SearxNG engines (empty = instance default mix)",
+                   "tools",
+      -            is_secret=True,
+      -            help="API key for the Tavily web search service. When set, enables the Tavily "
+      -            "backend for web_search tool calls (higher quality than DuckDuckGo). "
+      -            "Overrides $TAVILY_API_KEY and config.toml [api] tavily_key.",
+      -            reference_url="https://tavily.com",
+      +            help="Restrict SearxNG web_search to specific engines (e.g. "
+      +            "'duckduckgo,wikipedia,github'). Empty uses the instance's default engine mix. "
+      +            "Overrides $TURNSTONE_SEARXNG_ENGINES and config.toml [tools] searxng_engines.",
+               ),
+               SettingDef(
+                   "tools.web_search_backend",
+                   "str",
+                   "",
+      -            "Web search backend: '' (auto), 'tavily', 'ddg', or 'mcp:server:tool'",
+      +            "Web search backend: '' (auto), 'searxng', or 'mcp:server:tool'",
+                   "tools",
+                   help="Controls which service handles web_search calls when the model lacks native "
+      -            "search support. Empty string auto-detects (Tavily if key present, else DuckDuckGo "
+      -            "if installed). 'ddg' uses DuckDuckGo (free, no API key). 'tavily' forces Tavily. "
+      -            "'mcp:server:tool' routes to an MCP server (e.g. 'mcp:ddg:search').",
+      +            "search support. Empty string auto-detects (SearxNG when searxng_url is set). "
+      +            "'searxng' forces the SearxNG backend. 'mcp:server:tool' routes to an MCP server "
+      +            "(e.g. 'mcp:search:web_search').",
+               ),
+               # -- server ---------------------------------------------------------
+               SettingDef(
+  assert:
+    - *marks_breaking
+
+- description: 'breaking change - three built-in tools and their routing settings are removed from the published tool set'
+  vars:
+    context: 'ripping out man, math and plan_agent. man and math were both bash with extra steps, and plan_agent is better said as a task_agent running a planning skill. the sandbox executor and the whole plan-review http/sse/sdk surface go with them, not shown here. model.plan_alias and model.plan_effort go too, and the agent tool-metadata key. tool count 31 -> 28. give me a commit message.'
+    diff: |
+      diff --git a/turnstone/core/settings_registry.py b/turnstone/core/settings_registry.py
+      index dddd5711..ecb703bd 100644
+      --- a/turnstone/core/settings_registry.py
+      +++ b/turnstone/core/settings_registry.py
+      @@ -83,17 +83,6 @@ def _build_registry() -> dict[str, SettingDef]:
+                   "Higher effort improves quality on complex tasks but is slower and uses more "
+                   "tokens. Per-model overrides can be set in the Models tab.",
+               ),
+      -        SettingDef(
+      -            "model.plan_alias",
+      -            "str",
+      -            "",
+      -            "Model alias for plan_agent (empty = inherit from config / session)",
+      -            "model",
+      -            help="Which model the plan_agent sub-agent uses. When empty, falls back to "
+      -            "[model].plan_model in config.toml, then [model].agent_model, then the session "
+      -            "model. Plan_agent runs rarely but benefits from a stronger model for "
+      -            "high-quality plans \u2014 point this at your strongest reasoner.",
+      -        ),
+               SettingDef(
+                   "model.task_alias",
+                   "str",
+      @@ -103,20 +92,7 @@ def _build_registry() -> dict[str, SettingDef]:
+                   help="Which model the task_agent sub-agent uses. When empty, falls back to "
+                   "[model].task_model in config.toml, then [model].agent_model, then the session "
+                   "model. Task_agent fires frequently for autonomous subtasks \u2014 point this "
+      -            "at a cheaper/faster model than your plan_agent.",
+      -        ),
+      -        SettingDef(
+      -            "model.plan_effort",
+      -            "str",
+      -            "",
+      -            "Reasoning effort for plan_agent (empty = inherit from config; default \u2018high\u2019)",
+      -            "model",
+      -            choices=["", "none", "minimal", "low", "medium", "high", "xhigh", "max"],
+      -            help="Reasoning effort for plan_agent specifically. When empty, falls back to "
+      -            "[model].plan_effort in config.toml, then to the built-in default \u2018high\u2019. "
+      -            "Use \u2018xhigh\u2019 or \u2018max\u2019 with models that support deeper reasoning "
+      -            "for higher-quality plans. (Empty here means \u201cinherit\u201d \u2014 use "
+      -            "\u2018none\u2019 to actually disable reasoning.)",
+      +            "at a cheaper/faster model than your conversation model.",
+               ),
+               SettingDef(
+                   "model.task_effort",
+      @@ -195,12 +171,12 @@ def _build_registry() -> dict[str, SettingDef]:
+                   "tools.agent_max_turns",
+                   "int",
+                   -1,
+      -            "Max turns for plan/task agents (-1 = unlimited)",
+      +            "Max turns for the task agent (-1 = unlimited)",
+                   "tools",
+                   min_value=-1,
+                   max_value=200,
+      -            help="Limits how many back-and-forth steps a sub-agent can take when executing a plan "
+      -            "or task. Prevents runaway agents from consuming excessive tokens.",
+      +            help="Limits how many back-and-forth steps the task sub-agent can take when executing "
+      +            "a task. Prevents runaway agents from consuming excessive tokens.",
+               ),
+               SettingDef(
+                   "tools.skip_permissions",
+      diff --git a/turnstone/core/tools.py b/turnstone/core/tools.py
+      index 89364501..7c6d12b8 100644
+      --- a/turnstone/core/tools.py
+      +++ b/turnstone/core/tools.py
+      @@ -9,7 +9,6 @@ from typing import Any
+       
+       _TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
+       _META_KEYS = {
+      -    "agent",
+           "task_agent",
+           "coordinator",
+           "interactive",
+      @@ -38,7 +37,7 @@ def _load_tools() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+       
+           Returns (tool_defs, metadata) where:
+             - tool_defs: list of OpenAI function-calling dicts
+      -      - metadata: dict mapping tool_name -> {agent, task_agent, coordinator,
+      +      - metadata: dict mapping tool_name -> {task_agent, coordinator,
+                         interactive, auto_approve, primary_key, kind_variants}
+           """
+           tools = []
+      @@ -89,7 +88,6 @@ def _apply_kind_variant(tool: dict[str, Any], kind: str, meta: dict[str, Any]) -
+       
+       TOOLS, _META = _load_tools()
+       
+      -AGENT_TOOLS = [t for t in TOOLS if _META[t["function"]["name"]].get("agent")]
+       TASK_AGENT_TOOLS = [t for t in TOOLS if _META[t["function"]["name"]].get("task_agent")]
+       # COORDINATOR_TOOLS apply the ``coordinator`` kind variant (if any) so a
+       # coord session sees the coord-tailored description + parameter schema.
+      @@ -121,7 +119,6 @@ INTERACTIVE_TOOLS = [
+           )
+       ]
+       INTERACTIVE_TOOL_NAMES = frozenset(t["function"]["name"] for t in INTERACTIVE_TOOLS)
+      -AGENT_AUTO_TOOLS = {n for n, m in _META.items() if m.get("auto_approve")}
+       TASK_AUTO_TOOLS = {n for n, m in _META.items() if m.get("auto_approve")}
+       PRIMARY_KEY_MAP = {n: m["primary_key"] for n, m in _META.items() if "primary_key" in m}
+       BUILTIN_TOOL_NAMES = frozenset(_META)
+      diff --git a/turnstone/tools/man.json b/turnstone/tools/man.json
+      deleted file mode 100644
+      index c1f873d8..00000000
+      --- a/turnstone/tools/man.json
+      +++ /dev/null
+      @@ -1,22 +0,0 @@
+      -{
+      -  "name": "man",
+      -  "description": "Read a man page. Questions about command flags, options, or usage are tool-use tasks — use man, not memory. Use this to look up, check, or explain a command's flags, options, or usage — e.g. 'What does --xattrs do in tar?' → man(page='tar'). Use this instead of bash('man ...') or web_search for command documentation.",
+      -  "parameters": {
+      -    "type": "object",
+      -    "properties": {
+      -      "page": {
+      -        "type": "string",
+      -        "description": "The man page name (e.g. 'grep', 'socket', 'printf')."
+      -      },
+      -      "section": {
+      -        "type": "string",
+      -        "description": "Manual section (e.g. '1' commands, '2' syscalls, '3' library). Optional."
+      -      }
+      -    },
+      -    "required": ["page"]
+      -  },
+      -  "agent": true,
+      -  "task_agent": true,
+      -  "auto_approve": true,
+      -  "primary_key": "page"
+      -}
+      diff --git a/turnstone/tools/math.json b/turnstone/tools/math.json
+      deleted file mode 100644
+      index 933ee672..00000000
+      --- a/turnstone/tools/math.json
+      +++ /dev/null
+      @@ -1,18 +0,0 @@
+      -{
+      -  "name": "math",
+      -  "description": "Execute Python code for math/computation. Use this for any arithmetic, algebra, or numerical task — e.g. math(code='print(2**64 - 1)'). Code must use print() to produce output. Available: sympy, numpy, scipy (with scipy.special, scipy.optimize, scipy.integrate, scipy.linalg), math, fractions, itertools, functools, collections, decimal, operator, random, re, string. Common sympy names (symbols, solve, simplify, expand, factor, sqrt, Rational, Matrix, integrate, diff, etc.) are pre-imported. Example: x = symbols('x'); print(solve(x**2 - 4, x))",
+      -  "parameters": {
+      -    "type": "object",
+      -    "properties": {
+      -      "code": {
+      -        "type": "string",
+      -        "description": "Python code to execute. Must use print() for output."
+      -      }
+      -    },
+      -    "required": ["code"]
+      -  },
+      -  "agent": true,
+      -  "task_agent": true,
+      -  "auto_approve": true,
+      -  "primary_key": "code"
+      -}
+      diff --git a/turnstone/tools/plan_agent.json b/turnstone/tools/plan_agent.json
+      deleted file mode 100644
+      index a144b02b..00000000
+      --- a/turnstone/tools/plan_agent.json
+      +++ /dev/null
+      @@ -1,19 +0,0 @@
+      -{
+      -  "name": "plan_agent",
+      -  "description": "Delegate planning to a sub-agent. The agent autonomously explores the codebase, gathers context, and writes a step-by-step plan — just pass the goal directly. Use when asked to plan, design, think through, or strategize. Not for direct code changes like 'add a docstring' or 'fix a bug' — use read_file+edit_file for those. The plan agent has read-only tools (read_file, search, web_fetch, web_search, man) but cannot run bash, save memories, set watches, or delegate further.",
+      -  "parameters": {
+      -    "type": "object",
+      -    "properties": {
+      -      "goal": {
+      -        "type": "string",
+      -        "description": "The goal and scope of the plan, including any constraints."
+      -      },
+      -      "model": {
+      -        "type": "string",
+      -        "description": "Optional model alias to run this plan agent on. Omit to use the current session model. (No alternative aliases configured in this session.)"
+      -      }
+      -    },
+      -    "required": ["goal"]
+      -  },
+      -  "primary_key": "goal"
+      -}
+  assert:
+    - *marks_breaking
+
+- description: 'breaking change - a CLI flag and its matching setting are gone, not renamed'
+  vars:
+    context: 'the 4 hour periodic mcp refresh is gone - push notifications plus an operator refresh button cover it. the new admin endpoints and the reconnect path are in the same branch but not in this diff. --mcp-refresh-interval isn''t a flag any more and [mcp] refresh_interval isn''t a setting. commit line?'
+    diff: |
+      diff --git a/turnstone.example.toml b/turnstone.example.toml
+      index 7efd52e1..d3072914 100644
+      --- a/turnstone.example.toml
+      +++ b/turnstone.example.toml
+      @@ -117,7 +117,6 @@
+       
+       [mcp]
+       # config_path = ""             # Path to MCP servers config file (JSON)
+      -# refresh_interval = 14400     # Refresh interval in seconds (default: 4h)
+       
+       # --- Server (node, console) ---
+       
+      diff --git a/turnstone/cli.py b/turnstone/cli.py
+      index a8107ca8..79df67f0 100644
+      --- a/turnstone/cli.py
+      +++ b/turnstone/cli.py
+      @@ -1015,15 +1015,6 @@ def main() -> None:
+               help="Path to MCP server config file (standard mcpServers JSON format)",
+           )
+       
+      -    from turnstone.core.config import nonneg_float
+      -
+      -    parser.add_argument(
+      -        "--mcp-refresh-interval",
+      -        type=nonneg_float,
+      -        default=14400,
+      -        metavar="SECONDS",
+      -        help="Periodic MCP tool refresh interval for servers without push notifications (default: 14400 = 4h, 0 to disable)",
+      -    )
+           judge_group = parser.add_argument_group("Judge options")
+           judge_group.add_argument(
+               "--judge",
+      @@ -1136,7 +1127,6 @@ def main() -> None:
+       
+           mcp_client = create_mcp_client(
+               getattr(args, "mcp_config", None),
+      -        refresh_interval=getattr(args, "mcp_refresh_interval", 14400),
+               storage=_get_storage(),
+           )
+       
+      diff --git a/turnstone/core/config.py b/turnstone/core/config.py
+      index cd33688e..8eb6d4f0 100644
+      --- a/turnstone/core/config.py
+      +++ b/turnstone/core/config.py
+      @@ -124,7 +124,6 @@ _CONFIG_MAP: dict[str, dict[str, str]] = {
+           },
+           "mcp": {
+               "config_path": "mcp_config",
+      -        "refresh_interval": "mcp_refresh_interval",
+           },
+           "ratelimit": {
+               "enabled": "ratelimit_enabled",
+      diff --git a/turnstone/core/settings_registry.py b/turnstone/core/settings_registry.py
+      index 73a56d30..826220a7 100644
+      --- a/turnstone/core/settings_registry.py
+      +++ b/turnstone/core/settings_registry.py
+      @@ -340,14 +340,6 @@ def _build_registry() -> dict[str, SettingDef]:
+                   "Tip: use the MCP Servers tab to manage servers via the database instead.",
+                   reference_url="https://modelcontextprotocol.io",
+               ),
+      -        SettingDef(
+      -            "mcp.refresh_interval",
+      -            "int",
+      -            14400,
+      -            "MCP resource/prompt refresh interval in seconds (0 = disabled, default 4h)",
+      -            "mcp",
+      -            min_value=0,
+      -        ),
+               SettingDef(
+                   "mcp.registry_url",
+                   "str",
+  assert:
+    - *marks_breaking
+
+- description: 'breaking change - three judge config fields are removed, aliases are the only path left'
+  vars:
+    context: 'judge model config resolves through ModelRegistry aliases only now, so the separate provider / base_url / api_key fields on JudgeConfig were saying the same thing twice. dropped the fields, the explicit-provider branch in IntentJudge.__init__, and the three settings. what goes on the commit?'
+    diff: |
+      diff --git a/turnstone/core/judge.py b/turnstone/core/judge.py
+      index 76d99cee..ee9a6acb 100644
+      --- a/turnstone/core/judge.py
+      +++ b/turnstone/core/judge.py
+      @@ -76,9 +76,6 @@ class JudgeConfig:
+       
+           enabled: bool = True
+           model: str = ""  # empty = use session model
+      -    provider: str = ""  # empty = use session provider
+      -    base_url: str = ""
+      -    api_key: str = ""
+           confidence_threshold: float = 0.7
+           max_context_ratio: float = 0.5
+           timeout: float = 60.0
+      @@ -921,28 +918,6 @@ class IntentJudge:
+                   except Exception:
+                       log.debug("Model alias resolution failed for %r, falling back", config.model)
+       
+      -        if not resolved and config.model and config.provider:
+      -            from turnstone.core.providers import create_client, create_provider
+      -
+      -            self._provider = create_provider(config.provider)
+      -            self._client = create_client(
+      -                config.provider,
+      -                base_url=config.base_url
+      -                or (
+      -                    "https://api.openai.com/v1"
+      -                    if config.provider == "openai"
+      -                    else "https://api.anthropic.com"
+      -                ),
+      -                api_key=config.api_key
+      -                or os.environ.get(
+      -                    "OPENAI_API_KEY" if config.provider == "openai" else "ANTHROPIC_API_KEY",
+      -                    "",
+      -                ),
+      -            )
+      -            self._model = config.model
+      -            caps = self._provider.get_capabilities(self._model)
+      -            self._judge_context_window = caps.context_window
+      -        elif not resolved and config.model:
+                   # Model override but same provider
+                   self._provider = session_provider
+                   self._client = session_client
+      diff --git a/turnstone/core/session.py b/turnstone/core/session.py
+      index c1bc87c9..a892f365 100644
+      --- a/turnstone/core/session.py
+      +++ b/turnstone/core/session.py
+      @@ -465,7 +465,7 @@ class ChatSession:
+           def _judge_cfg(self) -> JudgeConfig | None:
+               """Live judge behavioral config — reads from ConfigStore when available.
+       
+      -        LLM client fields (model, provider, base_url, api_key) stay frozen
+      +        The model alias stays frozen
+               from session creation time since changing them would require tearing
+               down and rebuilding the IntentJudge instance.
+               """
+      @@ -480,9 +480,6 @@ class ChatSession:
+               return JudgeConfig(
+                   enabled=cs.get("judge.enabled"),
+                   model=jc.model,
+      -            provider=jc.provider,
+      -            base_url=jc.base_url,
+      -            api_key=jc.api_key,
+                   confidence_threshold=cs.get("judge.confidence_threshold"),
+                   max_context_ratio=cs.get("judge.max_context_ratio"),
+                   timeout=cs.get("judge.timeout"),
+      diff --git a/turnstone/core/settings_registry.py b/turnstone/core/settings_registry.py
+      index 96678198..bb022425 100644
+      --- a/turnstone/core/settings_registry.py
+      +++ b/turnstone/core/settings_registry.py
+      @@ -377,16 +377,6 @@ def _build_registry() -> dict[str, SettingDef]:
+                   "to use the same model (self-consistency), or specify a different model for "
+                   "cross-model evaluation.",
+               ),
+      -        SettingDef("judge.provider", "str", "", "Provider for judge model", "judge"),
+      -        SettingDef("judge.base_url", "str", "", "Base URL for judge model API", "judge"),
+      -        SettingDef(
+      -            "judge.api_key",
+      -            "str",
+      -            "",
+      -            "API key for judge model",
+      -            "judge",
+      -            is_secret=True,
+      -        ),
+               SettingDef(
+                   "judge.confidence_threshold",
+                   "float",
+  assert:
+    - *marks_breaking
+
+- description: 'breaking change - per-model pricing moves out from under providers, and the strict loader rejects the old spot'
+  vars:
+    context: 'this is the config layer for the capacity-based admission work (#1007). there''s a top-level models: registry now carrying provider, role, context_window, limits and cost per model. the per-model price table that used to sit at providers.<p>.models.<m>.input_per_mtok moves to models.<m>.cost, and the loader has KnownFields on, so a config still holding the old block doesn''t start. limits parses and validates, nothing enforces it yet. commit message please.'
+    diff: |
+      diff --git a/config/quack.yaml b/config/quack.yaml
+      index 1692315..c1cbbd4 100644
+      --- a/config/quack.yaml
+      +++ b/config/quack.yaml
+      @@ -5,16 +5,54 @@ providers:
+           kind: openai            # API protocol; the endpoint picks the actual server
+           endpoint: ${QUACK_LLM_ENDPOINT}
+           api_key: ${QUACK_LLM_API_KEY}
+      -    # Optional per-model USD price table for gen_ai.client.cost - keyed by the
+      -    # RESOLVED model name (e.g. QUACK_CODER_MODEL's actual value, not the env
+      -    # var), since that's the name inference.NewModel is called with. A model
+      -    # absent here gets token usage but no cost metric - never a guessed price.
+      -    # models:
+      -    #   qwen3-coder-30b:
+      -    #     input_per_mtok: 0.20
+      -    #     output_per_mtok: 0.80
+      -    #   qwen3-embed:               # an embed model only ever bills input_per_mtok
+      -    #     input_per_mtok: 0.02
+      +    limits:
+      +      active:                # how many DISTINCT models per role may be resident at once (#1007, not yet enforced)
+      +        worker: 1
+      +        judge: 1
+      +        embed: 1
+      +
+      +# The canonical model registry, keyed by the RESOLVED model name (e.g.
+      +# QUACK_CODER_MODEL's actual value, not the env var) - that's the name
+      +# inference.NewModel is called with. context_window is the DEFAULT window
+      +# handed to an agent that doesn't declare its own; limits (sessions,
+      +# kv_tokens) are the #1007 admission pool, parsed and validated here but not
+      +# yet enforced by a scheduler. cost is the optional USD price table for
+      +# gen_ai.client.cost - a model without cost: gets token usage but no cost
+      +# metric, never a guessed price.
+      +models:
+      +  qwen3.8-27b:                # workhorse: web-researcher/synthesizer, and the coder/reviewer/explorer's model
+      +    provider: default
+      +    role: worker
+      +    context_window: 262144
+      +    limits:
+      +      sessions: 4
+      +      kv_tokens: 262144
+      +    cost:
+      +      input_per_mtok: 0.60
+      +      output_per_mtok: 3.60
+      +  qwen3-vl-32b:                # image-reader's specialist vision model
+      +    provider: default
+      +    role: worker
+      +    context_window: 32768
+      diff --git a/internal/config/config.go b/internal/config/config.go
+      index 7b2f4b7..9c2b9b1 100644
+      --- a/internal/config/config.go
+      +++ b/internal/config/config.go
+      @@ -486,19 +492,66 @@ type ProviderConfig struct {
+       	ForkMode string          `yaml:"fork_mode"`
+       	ForkFrom string          `yaml:"fork_from"`
+       	Live     *ProviderConfig `yaml:"live"`
+      -	// Models: optional per-model USD price table, keyed by model name as
+      -	// passed to inference.NewModel. A model absent here gets no cost metric -
+      -	// quack never guesses a price.
+      -	Models map[string]ModelPricing `yaml:"models"`
+      +	// Limits caps how many DISTINCT models per role may be resident at once
+      +	// (#1007, inert until the scheduler lands). Absent = any number of
+      +	// models resident.
+      +	Limits *ProviderLimits `yaml:"limits"`
+       }
+       
+      -// ModelPricing: USD per million tokens. Zero value (a model absent from
+      -// ProviderConfig.Models) means "no pricing configured", not "free".
+      +// ProviderLimits.Active is keyed by role (matched against models.<m>.role);
+      +// a role absent here is unbounded, not zero.
+      +type ProviderLimits struct {
+      +	Active map[string]int `yaml:"active"`
+      +}
+      +
+      +// ModelConfig is a models: registry entry - the canonical binding of a model
+      +// name to its provider, scheduling role, default context window, admission
+      +// limits (#1007, inert until the scheduler enforces them), and cost.
+      +type ModelConfig struct {
+      +	Provider      string        `yaml:"provider"`
+      +	Role          string        `yaml:"role"`
+      +	ContextWindow int           `yaml:"context_window"`
+      +	Limits        *ModelLimits  `yaml:"limits"`
+      +	Cost          *ModelPricing `yaml:"cost"`
+      +}
+      +
+      +// ModelLimits gates admission (#1007, not yet enforced). Absent = unlimited:
+      +// no Sessions cap, and a nil/zero KVTokens means context never blocks scheduling.
+      +type ModelLimits struct {
+      +	Sessions int `yaml:"sessions"`
+      +	KVTokens int `yaml:"kv_tokens"`
+      +}
+      +
+      +// ModelPricing: USD per million tokens, used for gen_ai.client.cost /
+      +// Langfuse. Absent means "no pricing configured", not "free".
+       type ModelPricing struct {
+       	InputPerMTok  float64 `yaml:"input_per_mtok"`
+       	OutputPerMTok float64 `yaml:"output_per_mtok"`
+       }
+       
+      +// checkModelRegistered errors if a non-empty model reference (from any of
+      +// the several Provider+Model fields outside agents:) isn't in the registry -
+      +// ModelCost is a silent map lookup, so an unregistered judge/embed/etc model
+      +// would otherwise load clean and quietly drop its cost metric forever.
+      +func (c *Config) checkModelRegistered(field, model string) error {
+      +	if model == "" {
+      +		return nil
+      +	}
+      +	if _, ok := c.Models[model]; !ok {
+      +		return fmt.Errorf("config: %s %q is not defined under models", field, model)
+      +	}
+      +	return nil
+      +}
+      +
+      +// ModelCost resolves a model's price table by its registry name. nil means
+      +// no pricing configured, not free.
+      +func (c *Config) ModelCost(name string) *ModelPricing {
+      +	if m, ok := c.Models[name]; ok {
+      +		return m.Cost
+      +	}
+      +	return nil
+      +}
+      +
+       type StoreConfig struct {
+       	Kind          string               `yaml:"kind"`
+       	URL           string               `yaml:"url"`
+      @@ -778,12 +858,26 @@ func (c *Config) validate() error {
+       			return fmt.Errorf("config: provider %q has unsupported kind %q (only %q and %q are implemented)", name, p.Kind, "openai", "replay")
+       		}
+       	}
+      +	for name, m := range c.Models {
+      +		p, ok := c.Providers[m.Provider]
+      +		if !ok {
+      +			return fmt.Errorf("config: model %q provider %q is not defined under providers", name, m.Provider)
+      +		}
+      +		if p.Limits != nil {
+      +			if _, ok := p.Limits.Active[m.Role]; !ok {
+      +				return fmt.Errorf("config: model %q role %q is not a key of provider %q limits.active", name, m.Role, m.Provider)
+      +			}
+      +		}
+      +	}
+       	if _, ok := c.Providers[c.Orchestrator.Provider]; !ok {
+       		return fmt.Errorf("config: orchestrator.provider %q is not defined under providers", c.Orchestrator.Provider)
+       	}
+       	if c.Orchestrator.Model == "" && !c.skipRuntimeValidation {
+       		return fmt.Errorf("config: orchestrator.model is empty")
+       	}
+      +	if err := c.checkModelRegistered("orchestrator.model", c.Orchestrator.Model); err != nil {
+      +		return err
+      +	}
+       	if c.Orchestrator.UserMemoryHook.Enabled {
+       		h := c.Orchestrator.UserMemoryHook
+       		if _, ok := c.Providers[h.Provider]; !ok {
+  assert:
+    - *marks_breaking
+
+- description: 'MIXED - a provider capability note pinned by a test, beside an unrelated pane scroll fix'
+  vars:
+    context: 'two things in the tree. i wrote up why grok pdfs take the rasterize path after losing an afternoon to it, and separately the interactive pane keeps jumping to the bottom every time a tool call comes back.'
+    ask: 'What should I do about committing this?'
+    diff: |
+      diff --git a/tests/test_provider_xai.py b/tests/test_provider_xai.py
+      index 749db416..8a7f7d0d 100644
+      --- a/tests/test_provider_xai.py
+      +++ b/tests/test_provider_xai.py
+      @@ -94,6 +94,18 @@ class TestCapabilityTable:
+               assert lookup_grok_capabilities("grok-x-unreleased") is _GROK_DEFAULT
+               assert lookup_grok_capabilities("") is _GROK_DEFAULT
+       
+      +    def test_pdf_stays_a_rasterize_fallback(self) -> None:
+      +        # supports_pdf is intentionally False on every Grok row: xAI's document
+      +        # support is an agentic attachment_search workflow over Files-API uploads
+      +        # (file_id / file_url), not the inline base64 document ingestion our
+      +        # native path emits — so Grok PDFs take the rasterize-to-vision fallback.
+      +        # Flipping this without wiring the Files-API upload flow would send xAI a
+      +        # wire shape it can't read; see the note above GROK_CAPABILITIES in
+      +        # _xai.py and docs.x.ai/developers/model-capabilities/files/chat-with-files.
+      +        for caps in GROK_CAPABILITIES.values():
+      +            assert caps.supports_pdf is False
+      +        assert _GROK_DEFAULT.supports_pdf is False
+      +
+       
+       # ---------------------------------------------------------------------------
+       # resolve_server_side_tools — legacy supports_web_search fold
+      diff --git a/turnstone/core/providers/_xai.py b/turnstone/core/providers/_xai.py
+      index f71c320f..3f00aa98 100644
+      --- a/turnstone/core/providers/_xai.py
+      +++ b/turnstone/core/providers/_xai.py
+      @@ -53,6 +53,17 @@ XAI_DEFAULT_BASE_URL = "https://api.x.ai/v1"
+       
+       # ---------------------------------------------------------------------------
+       # Capability table — chat models from docs.x.ai/developers/models (May 2026).
+      +#
+      +# supports_pdf stays unset (False) on every Grok row on purpose, even though
+      +# Grok "supports files": xAI's document support is an agentic attachment_search
+      +# server-side tool over files uploaded to the Files API (referenced by file_id /
+      +# file_url) — NOT the inline base64 document ingestion that OpenAI input_file /
+      +# Anthropic document blocks use to read a PDF's content directly.  Our native
+      +# path emits inline base64 (attachment_to_content_part -> document /
+      +# application/pdf), which xAI's Responses surface does not accept, so Grok PDFs
+      +# correctly fall back to rasterize-to-vision (Grok is vision-capable).  Wiring
+      +# native Grok PDF would mean a separate Files-API upload + attachment_search
+      +# feature.  See docs.x.ai/developers/model-capabilities/files/chat-with-files.
+       # ---------------------------------------------------------------------------
+       
+       GROK_CAPABILITIES: dict[str, ModelCapabilities] = {
+      diff --git a/turnstone/shared_static/interactive.js b/turnstone/shared_static/interactive.js
+      index e6896f6d..d0c0da56 100644
+      --- a/turnstone/shared_static/interactive.js
+      +++ b/turnstone/shared_static/interactive.js
+      @@ -399,6 +399,9 @@ class Pane {
+           if (!chunk) return;
+           const stripped = stripAnsi(chunk);
+           if (!stripped) return;
+      +    // Capture pin before the chunk grows the stream block — see
+      +    // announceToolBlock.
+      +    const stick = this.isNearBottom();
+       
+           const escapedId = callId ? CSS.escape(callId) : "";
+           let el = escapedId
+      @@ -438,7 +441,7 @@ class Pane {
+       
+           el.appendChild(document.createTextNode(stripped));
+           el.scrollTop = el.scrollHeight;
+      -    this.scrollToBottom();
+      +    this.scrollToBottom(stick);
+         }
+       
+         showOutputWarning(evt) {
+      @@ -2190,6 +2193,13 @@ class Pane {
+         announceToolBlock(items) {
+           const list = (items || []).filter(Boolean);
+           if (!list.length) return;
+      +    // Re-pin to the bottom only if we were already there — captured BEFORE the
+      +    // block grows scrollHeight.  A tool batch is a tall one-shot append; if
+      +    // isNearBottom() were measured after appendChild (as scrollToBottom does on
+      +    // its own) the freshly-added height would read >80px from the new bottom,
+      +    // so auto-follow would silently disengage at exactly tool-call time.  Token
+      +    // streaming stays pinned without this because each append is sub-threshold.
+      +    const stick = this.isNearBottom();
+           // Drop a previous un-consumed announce so shells don't pile up.
+           if (this.announcedBlockEl) {
+             this.announcedBlockEl.remove();
+      @@ -2218,7 +2228,7 @@ class Pane {
+           });
+           this.announcedBlockEl = block;
+           this.messagesEl.appendChild(block);
+      -    this.scrollToBottom();
+      +    this.scrollToBottom(stick);
+           toolAnnounce(_toolAnnounceText(list));
+         }
+       
+      @@ -2253,6 +2263,9 @@ class Pane {
+         }
+       
+         showInlineToolBlock(items, autoApproved, judgePending) {
+      +    // Capture pin before _takeAnnouncedBlock/append change scrollHeight — see
+      +    // announceToolBlock for why post-append measurement breaks here.
+      +    const stick = this.isNearBottom();
+           // Reuse the early-paint announce shell if it's for this batch (upgrade in
+           // place); else build fresh.
+           const announced = this._takeAnnouncedBlock(items);
+      @@ -2330,11 +2343,14 @@ class Pane {
+           }
+       
+           if (!announced) this.messagesEl.appendChild(block);
+      -    this.scrollToBottom();
+      +    this.scrollToBottom(stick);
+         }
+       
+         resolveApproval(approved, always, feedback, skipPost) {
+           if (!this.approvalBlockEl) return;
+      +    // Capture pin before the status badge reflows the block — see
+      +    // announceToolBlock.
+      +    const stick = this.isNearBottom();
+           this.pendingApproval = false;
+       
+           const actions = this.approvalBlockEl.querySelector(".conv-actions");
+      @@ -2373,10 +2389,14 @@ class Pane {
+             });
+           }
+       
+      -    this.scrollToBottom();
+      +    this.scrollToBottom(stick);
+         }
+       
+         appendToolOutput(callId, name, output, isError) {
+      +    // Capture pin before the streamEl removal + result insertion change
+      +    // scrollHeight — see announceToolBlock.  The result block is the other
+      +    // tall one-shot append in the tool flow (up to 10 lines before collapse).
+      +    const stick = this.isNearBottom();
+           const escapedId = callId ? CSS.escape(callId) : "";
+           let target = escapedId
+             ? this.messagesEl.querySelector(
+      @@ -2434,7 +2454,7 @@ class Pane {
+             if (media) {
+               const embed = buildMediaEmbed(media, stripped);
+               target.after(embed);
+      -        this.scrollToBottom();
+      +        this.scrollToBottom(stick);
+               return;
+             }
+           }
+      @@ -2457,7 +2477,7 @@ class Pane {
+                   this._host.onConsentDetected(s),
+                 ),
+               );
+      -        this.scrollToBottom();
+      +        this.scrollToBottom(stick);
+               return;
+             }
+           }
+      @@ -2479,7 +2499,7 @@ class Pane {
+           }
+       
+           target.after(out);
+      -    this.scrollToBottom();
+      +    this.scrollToBottom(stick);
+         }
+       
+         sendMessage() {
+  assert:
+    - *splits_mixed_change
+
+- description: 'MIXED - test pins for the dedupe wiring beside an unrelated attachment drain fix'
+  vars:
+    context: 'end of the day, this is everything i have uncommitted.'
+    ask: 'How should this go into git?'
+    diff: |
+      diff --git a/tests/test_app_js.py b/tests/test_app_js.py
+      index 3de90b82..8eeb54fc 100644
+      --- a/tests/test_app_js.py
+      +++ b/tests/test_app_js.py
+      @@ -285,6 +285,33 @@ def test_system_turn_dedups_against_history_by_event_id() -> None:
+               "replayHistory (and the live handler) must record system-turn ids for the dedup set."
+           )
+       
+      +    # Pin the wiring on BOTH read paths, scoped to its method — a refactor that
+      +    # keeps the Set but drops the live-handler consultation (or the
+      +    # replayHistory-side record) silently re-opens the double-render while the
+      +    # file-global checks above still pass.
+      +    live_start = body.index('case "system_turn":')
+      +    # End at the NEXT switch case, not the first ``break;`` — the dedup-skip
+      +    # path breaks before the ``.add(``, so a ``break;``-bounded slice would
+      +    # drop the record half and false-fail the ``.add(`` assertion below.
+      +    live_end = body.index('\n      case "', live_start + 1)
+      +    live_block = body[live_start:live_end]
+      +    assert re.search(r"_renderedSystemEventIds[\s\S]*?\.\s*has\(", live_block), (
+      +        "the live system_turn handler must CONSULT the dedup set (skip an id "
+      +        "already painted from /history), not merely reference the Set elsewhere."
+      +    )
+      +    assert re.search(r"_renderedSystemEventIds[\s\S]*?\.\s*add\(", live_block), (
+      +        "the live system_turn handler must RECORD the id it renders so a later "
+      +        "/history re-render (clear_ui) doesn't repaint it."
+      +    )
+      +
+      +    replay_start = _pane_method_offset(body, "replayHistory")
+      +    replay_end = _pane_method_offset(body, "_attachRetryToLastAssistant")
+      +    replay_block = body[replay_start:replay_end]
+      +    assert re.search(r"_renderedSystemEventIds[\s\S]*?\.\s*add\(", replay_block), (
+      +        "replayHistory must record each replayed system row's event_id so the "
+      +        "live system_turn handler can dedup against it."
+      +    )
+      +
+       
+       def test_retry_walk_skips_operator_context_cards() -> None:
+           """Interactive twin of the coord retry-skip guard.
+      diff --git a/tests/test_coordinator_page.py b/tests/test_coordinator_page.py
+      index 74511b20..9a8729bd 100644
+      --- a/tests/test_coordinator_page.py
+      +++ b/tests/test_coordinator_page.py
+      @@ -401,6 +401,38 @@ def test_coord_dedups_system_turn_against_history_by_event_id():
+               "false-skip after clear_ui / replay_truncated."
+           )
+       
+      +    # The seam must be wired on BOTH read paths, not merely present somewhere
+      +    # in the file — a refactor that keeps the Set but drops the live-handler
+      +    # consultation (or the history-side record) silently re-opens the
+      +    # double-render. Scope each assertion to its block so the wiring, not the
+      +    # bare symbol, is pinned. (A dedupe-neutered factory — guard short-circuited
+      +    # to ``false`` — still contains ``renderedSystemEventIds.has(`` and so
+      +    # passes the file-global checks above; these slice checks catch it.)
+      +    sys_case = body.index('case "system_turn":')
+      +    # End at the NEXT switch case, not the first ``break;`` — the dedup-skip
+      +    # ``...has(sysEid)) break;`` is itself a break that precedes the ``.add(``,
+      +    # so a ``break;``-bounded slice would drop the record half.
+      +    sys_case_end = body.index('\n      case "', sys_case + 1)
+      +    live_block = body[sys_case:sys_case_end]
+      +    assert "renderedSystemEventIds.has(" in live_block, (
+      +        "the live system_turn handler must CONSULT the dedup set (skip an id "
+      +        "already painted from /history) — not just reference the Set elsewhere."
+      +    )
+      +    assert "renderedSystemEventIds.add(" in live_block, (
+      +        "the live system_turn handler must RECORD the id it renders so a later "
+      +        "/history re-render (clear_ui) doesn't repaint it."
+      +    )
+      +
+      +    # The history render path must seed the set from each replayed system row's
+      +    # event_id, so a subsequent live replay of the same id is skipped.
+      +    assert 'role === "system"' in body
+      +    sys_replay = body.index('role === "system"', body.index("refetchHistory"))
+      +    replay_window = body[sys_replay : sys_replay + 600]
+      +    assert "renderedSystemEventIds.add(" in replay_window, (
+      +        "the history render's system-role branch must record each replayed "
+      +        "turn's event_id so the live system_turn handler can dedup against it."
+      +    )
+      +
+       
+       def test_coord_retry_walk_skips_operator_context_cards():
+           """Retry must NOT regenerate a stale assistant turn when the last DOM row is
+      diff --git a/tests/test_server_attachments_on_create.py b/tests/test_server_attachments_on_create.py
+      index 2864813e..c6d24599 100644
+      --- a/tests/test_server_attachments_on_create.py
+      +++ b/tests/test_server_attachments_on_create.py
+      @@ -407,6 +407,33 @@ class TestCreateMultipart:
+               # Drained from the buffer post-commit.
+               assert get_attachment_buffer().get(aid, ws_id=ws_id, user_id="userA") is None
+       
+      +    def test_create_drains_staged_synchronously(self, app_client, monkeypatch):
+      +        """A create-time attachment dispatched on the first turn must be drained
+      +        by the create handler itself, not only by the async dispatch worker —
+      +        else the freshly-opened pane's rehydrate races the worker's write-time
+      +        drain and paints the image as a still-pending composer chip.
+      +
+      +        Neuter the worker's drain (stub ``send``) so only the synchronous
+      +        post-install drain can clear the buffer, then assert it's empty right
+      +        after the response with NO polling."""
+      +        from turnstone.core.attachment_buffer import get_attachment_buffer
+      +
+      +        client, _sessions, _gq = app_client
+      +        monkeypatch.setattr(_FakeSession, "send", lambda self, *a, **k: None)
+      +        meta = {"name": "demo", "initial_message": "describe this image"}
+      +        resp = client.post(
+      +            "/v1/api/workstreams/new",
+      +            data={"meta": json.dumps(meta)},
+      +            files=[("file", ("tiny.png", PNG_1x1, "image/png"))],
+      +            headers=_auth("userA"),
+      +        )
+      +        assert resp.status_code == 200, resp.text
+      +        ws_id = resp.json()["ws_id"]
+      +        aid = resp.json()["attachment_ids"][0]
+      +        # No poll: the create handler drained it before returning, so the new
+      +        # pane's rehydrate can't observe it as still-staged.
+      +        assert get_attachment_buffer().get(aid, ws_id=ws_id, user_id="userA") is None
+      +
+           def test_create_with_attachments_no_initial_message_keeps_staged(self, app_client):
+               import hashlib
+       
+      diff --git a/turnstone/console/server.py b/turnstone/console/server.py
+      index df5054b7..3eafb953 100644
+      --- a/turnstone/console/server.py
+      +++ b/turnstone/console/server.py
+      @@ -3434,6 +3434,16 @@ async def _coord_create_post_install(
+           resolved_atts: list[Any] = []
+           if attachment_ids:
+               resolved_atts, _ord, _drop = resolve_staged_attachments(attachment_ids, ws.id, uid)
+      +        # Drain the staged uploads now: the create-time dispatch is their only
+      +        # consumer, so leaving them staged would let the new coord pane's
+      +        # rehydrate race the worker's write-time drain and show them as still-
+      +        # pending composer chips (the committing send's discard then no-ops).
+      +        if _ord:
+      +            from turnstone.core.attachment_buffer import get_attachment_buffer
+      +
+      +            _buf = get_attachment_buffer()
+      +            for _aid in _ord:
+      +                _buf.discard(_aid, ws_id=ws.id, user_id=uid)
+           coord_adapter.send(
+               ws.id,
+               initial_message,
+      diff --git a/turnstone/server.py b/turnstone/server.py
+      index c5c642f8..cbdc7c37 100644
+      --- a/turnstone/server.py
+      +++ b/turnstone/server.py
+      @@ -2058,9 +2058,19 @@ async def _interactive_create_post_install(
+               send_id = uuid.uuid4().hex
+               resolved_atts: list[Any] = []
+               if attachment_ids:
+      -            # Resolve (peek) the staged uploads; the committing send drains
+      -            # them from the buffer.  No reservation to release on failure.
+      +            # Resolve (peek) the staged uploads, then drain them from the buffer
+      +            # now.  The inlined first turn is their only consumer and it always
+      +            # commits at create (no queue rejection by construction), so leaving
+      +            # them staged would let the freshly-opened pane's rehydrate race the
+      +            # worker's write-time drain and paint them as still-pending composer
+      +            # chips.  ``_append_user_turn``'s own per-id discard then no-ops.
+                   resolved_atts, _ord, _drop = _resolve_staged(attachment_ids, ws.id, uid)
+      +            if _ord:
+      +                from turnstone.core.attachment_buffer import get_attachment_buffer
+      +
+      +                _buf = get_attachment_buffer()
+      +                for _aid in _ord:
+      +                    _buf.discard(_aid, ws_id=ws.id, user_id=uid)
+       
+               def _run_initial() -> None:
+                   try:
+  assert:
+    - *splits_mixed_change
+
+- description: 'MIXED - a decompression-bomb limit beside an unrelated comment correction'
+  vars:
+    context: 'whole working tree, i haven''t looked at it as a whole yet.'
+    ask: 'What do I do with this?'
+    diff: |
+      diff --git a/tests/test_thumbnails.py b/tests/test_thumbnails.py
+      index 12f46ab5..da9aff4d 100644
+      --- a/tests/test_thumbnails.py
+      +++ b/tests/test_thumbnails.py
+      @@ -2,6 +2,8 @@
+       
+       from __future__ import annotations
+       
+      +import pytest
+      +
+       from turnstone.core.thumbnails import make_thumbnail
+       
+       PNG_1x1 = (
+      @@ -49,3 +51,30 @@ class TestMakeThumbnail:
+       
+           def test_garbage_image_returns_none(self) -> None:
+               assert make_thumbnail(b"not an image", "image") is None
+      +
+      +    @pytest.mark.filterwarnings("ignore::PIL.Image.DecompressionBombWarning")
+      +    def test_oversized_image_rejected(self, monkeypatch) -> None:
+      +        # An image past the pixel cap must be rejected WITHOUT decoding it.  Use a
+      +        # size in the (cap, 2*cap] window — Pillow only *warns* there and would
+      +        # decode fully, so this guards the explicit size check, not Pillow's >2x
+      +        # raise.
+      +        from io import BytesIO
+      +
+      +        from PIL import Image
+      +
+      +        monkeypatch.setattr("turnstone.core.thumbnails._MAX_IMAGE_PIXELS", 50)
+      +        buf = BytesIO()
+      +        Image.new("RGB", (6, 10)).save(buf, format="PNG")  # 60 px, in (50, 100]
+      +        assert make_thumbnail(buf.getvalue(), "image") is None
+      +
+      +    def test_at_cap_image_still_renders(self, monkeypatch) -> None:
+      +        # Exactly at the cap is allowed (boundary is strictly greater-than).
+      +        from io import BytesIO
+      +
+      +        from PIL import Image
+      +
+      +        monkeypatch.setattr("turnstone.core.thumbnails._MAX_IMAGE_PIXELS", 64)
+      +        buf = BytesIO()
+      +        Image.new("RGB", (8, 8)).save(buf, format="PNG")  # 64 px == cap
+      +        out = make_thumbnail(buf.getvalue(), "image")
+      +        assert out is not None and out[:8] == _PNG_MAGIC
+      diff --git a/turnstone/core/thumbnails.py b/turnstone/core/thumbnails.py
+      index 04f8c779..7d1f20e3 100644
+      --- a/turnstone/core/thumbnails.py
+      +++ b/turnstone/core/thumbnails.py
+      @@ -44,6 +44,23 @@ def make_thumbnail(data: bytes, kind: str, *, max_px: int = _THUMB_MAX_PX) -> by
+                   img = Image.open(BytesIO(data))
+               else:
+                   return None
+      +        # Reject oversized images explicitly before decoding.  Pillow's
+      +        # MAX_IMAGE_PIXELS only *raises* above 2x the cap; between the cap and 2x
+      +        # it merely warns and decodes fully (a 40-80M px image → ~480MB RGB),
+      +        # defeating the bound.  The header-declared size is known after open(),
+      +        # so gate on it before convert() — nothing past the cap is ever decoded.
+      +        # (Explicit check, not a warnings filter: make_thumbnail runs in a thread
+      +        # and the global warnings state is not thread-safe.)
+      +        px = img.size[0] * img.size[1]
+      +        if px > _MAX_IMAGE_PIXELS:
+      +            log.warning(
+      +                "thumbnail rejected: %d×%d (%d px) exceeds %d-pixel cap",
+      +                img.size[0],
+      +                img.size[1],
+      +                px,
+      +                _MAX_IMAGE_PIXELS,
+      +            )
+      +            return None
+               rgb = img.convert("RGB")
+               rgb.thumbnail((max_px, max_px))
+               buf = BytesIO()
+      diff --git a/turnstone/console/static/coordinator/coord-chrome.css b/turnstone/console/static/coordinator/coord-chrome.css
+      index 6c99a453..f96334fd 100644
+      --- a/turnstone/console/static/coordinator/coord-chrome.css
+      +++ b/turnstone/console/static/coordinator/coord-chrome.css
+      @@ -62,12 +62,13 @@
+         flex-direction: column;
+         min-height: 0;
+       }
+      -/* Pane-hosted only: the shell's per-pane ✕/− chip floats in the pane's
+      -   top-right corner (top 5px + 28px tall) — exactly where this sidebar's
+      -   toggle row and the Children refresh sit.  Drop the sidebar content below
+      -   the chip's lane; padding (not margin) keeps the column's left border
+      -   running the full pane height.  The standalone coordinator page has no
+      -   chip, so the 14px default stands there. */
+      +/* Pane-hosted: the shell's per-pane ✕/− chip floats in the pane's top-right
+      +   corner (top 5px + 28px tall) — exactly where this sidebar's toggle row and
+      +   the Children refresh sit.  Drop the sidebar content below the chip's lane;
+      +   padding (not margin) keeps the column's left border running the full pane
+      +   height.  (In practice this is EVERY coordinator — the /coordinator/{ws_id}
+      +   standalone page is a chip-less direct-URL fallback no UI path navigates to;
+      +   the .pane-body scope just keeps that lane honest.) */
+       .pane-body.coord-chrome-root #coord-sidebar.sidebar {
+         padding-top: 44px;
+       }
+  assert:
+    - *splits_mixed_change
+
+- description: 'MIXED - a revert of a CLI flag beside an unrelated preview-download fix'
+  vars:
+    context: 'backing out the --skip-permissions thing, it was wired wrong and i''d rather redo it. also stopped pulling the whole blob down just to render a 240 character preview. both sitting in the same tree.'
+    ask: 'What should I do about committing this?'
+    diff: |
+      diff --git a/turnstone/server.py b/turnstone/server.py
+      index bedc3dd2..3d8f3806 100644
+      --- a/turnstone/server.py
+      +++ b/turnstone/server.py
+      @@ -4088,11 +4088,6 @@ def main() -> None:
+               default=8080,
+               help="Port to listen on (default: 8080)",
+           )
+      -    parser.add_argument(
+      -        "--skip-permissions",
+      -        action="store_true",
+      -        help="Auto-approve all tool calls (no confirmation prompts)",
+      -    )
+           # MCP config path is bootstrap-critical (needed before ConfigStore for tool loading)
+           parser.add_argument(
+               "--mcp-config",
+      @@ -4538,7 +4533,7 @@ def main() -> None:
+               ws = manager.create(user_id="", name="resumed")
+               if not isinstance(ws.ui, WebUI):
+                   raise TypeError(f"Expected WebUI, got {type(ws.ui).__name__}")
+      -        if args.skip_permissions or config_store.get("tools.skip_permissions"):
+      +        if config_store.get("tools.skip_permissions"):
+                   ws.ui.auto_approve = True
+               assert ws.session is not None
+               ws.session.set_watch_runner(_watch_runner)
+      @@ -4574,7 +4569,7 @@ def main() -> None:
+               _advertise_host = args.host if args.host not in ("0.0.0.0", "::") else socket.gethostname()
+               _advertise_url = f"http://{_advertise_host}:{args.port}"
+       
+      -    _skip_perms = args.skip_permissions or config_store.get("tools.skip_permissions")
+      +    _skip_perms = config_store.get("tools.skip_permissions")
+           app = create_app(
+               workstreams=manager,
+               global_queue=global_queue,
+      diff --git a/turnstone/shared_static/composer_attachments.js b/turnstone/shared_static/composer_attachments.js
+      index 7b954c00..1d28ffc1 100644
+      --- a/turnstone/shared_static/composer_attachments.js
+      +++ b/turnstone/shared_static/composer_attachments.js
+      @@ -124,7 +124,21 @@ export function buildAttachmentPreview(opts) {
+             credentials: "include",
+           })
+             .then(function (r) {
+      -        return r && r.ok ? r.text() : "";
+      +        if (!r || !r.ok) return "";
+      +        // We only render ~240 chars: read just the first body chunk and cancel
+      +        // the rest of the transfer instead of downloading the whole blob (text
+      +        // attachments are capped at 512 KiB, ~2000x the rendered size).  The
+      +        // first network chunk is always many KB, so 240 chars are available.
+      +        if (!r.body || typeof r.body.getReader !== "function") return r.text();
+      +        var reader = r.body.getReader();
+      +        return reader.read().then(function (res) {
+      +          try {
+      +            reader.cancel();
+      +          } catch (e) {
+      +            /* already closed */
+      +          }
+      +          return res && res.value ? new TextDecoder().decode(res.value) : "";
+      +        });
+             })
+             .then(function (t) {
+               if (!t) {
+  assert:
+    - *splits_mixed_change
+
+- description: 'MIXED - an admin roles surface beside an unrelated TLS argument guard'
+  vars:
+    context: 'been jumping between two things all day, this is where the branch ended up.'
+    ask: 'How should I get this into git?'
+    diff: |
+      diff --git a/tests/test_app_js.py b/tests/test_app_js.py
+      index 14feac09..0f944fa7 100644
+      --- a/tests/test_app_js.py
+      +++ b/tests/test_app_js.py
+      @@ -631,6 +631,25 @@ def test_no_unsafe_code_sinks_in_static_assets(label: str, path: Path) -> None:
+           )
+       
+       
+      +def test_perception_role_surfaced_in_admin_and_filtered_from_settings() -> None:
+      +    """The perception fallback (``perception.model_alias``) landed backend-only —
+      +    its admin UI was missing.  It must (1) appear as a Models → Roles row so an
+      +    operator can point it at a vision / omni model, and (2) be filtered OUT of the
+      +    raw Settings tab.  The Settings filter derives its skip-set from MODEL_ROLES,
+      +    so no role can quietly drift back into the Settings list again (the original
+      +    miss — stt/tts/reranker had leaked the same way)."""
+      +    admin = _CONSOLE_ADMIN_JS.read_text(encoding="utf-8")
+      +    # (1) Roles sub-tab row.
+      +    assert 'label: "Perception"' in admin, "the perception role must carry a UX label"
+      +    assert '"perception.model_alias"' in admin, "perception must have a MODEL_ROLES entry"
+      +    # (2) Settings filter derives the skip-set from MODEL_ROLES — drift-proof, so
+      +    # perception (and every other role alias) is excluded, not hand-listed.
+      +    assert "for (let ri = 0; ri < MODEL_ROLES.length; ri++)" in admin, (
+      +        "the Settings role-key filter must derive from MODEL_ROLES"
+      +    )
+      +    assert "roleKeys[MODEL_ROLES[ri].aliasKey] = 1" in admin
+      +
+      +
+       def test_shared_utils_defines_set_markdown_helper() -> None:
+           """The ``setMarkdown`` helper in ``shared/utils.js`` is the single
+           audited entry point for rendering markdown content into a DOM
+      diff --git a/turnstone/console/static/admin.js b/turnstone/console/static/admin.js
+      index f3a4e4aa..18839644 100644
+      --- a/turnstone/console/static/admin.js
+      +++ b/turnstone/console/static/admin.js
+      @@ -2889,17 +2889,19 @@ function loadSettings() {
+               schemaMap[schemaArr[i].key] = schemaArr[i];
+             }
+       
+      -      // Merge values + schema.  Skip role-assignment settings owned by
+      -      // the Models → Roles sub-tab (judge.* settings still live on the
+      -      // Judge tab; the model-tab roles render only there).
+      +      // Merge values + schema.  Skip role-assignment settings owned by the
+      +      // Models → Roles sub-tab.  Derive the skip-set straight from MODEL_ROLES
+      +      // (alias + optional effort key) so a newly-added role can't drift back
+      +      // into this list — perception was exactly that miss, and stt/tts/reranker
+      +      // had quietly leaked the same way.  judge.* keeps its own prefix skip
+      +      // below: it covers more than the two judge role aliases (the output-guard
+      +      // toggle, thresholds, ...), all of which live on the Judge tab.
+             const merged = {};
+      -      const roleKeys = {
+      -        "coordinator.model_alias": 1,
+      -        "coordinator.reasoning_effort": 1,
+      -        "model.task_alias": 1,
+      -        "model.task_effort": 1,
+      -        "channels.default_model_alias": 1,
+      -      };
+      +      const roleKeys = {};
+      +      for (let ri = 0; ri < MODEL_ROLES.length; ri++) {
+      +        roleKeys[MODEL_ROLES[ri].aliasKey] = 1;
+      +        if (MODEL_ROLES[ri].effortKey) roleKeys[MODEL_ROLES[ri].effortKey] = 1;
+      +      }
+             for (let j = 0; j < valuesArr.length; j++) {
+               const v = valuesArr[j];
+               if (v.key.startsWith("judge.")) continue;
+      @@ -5194,7 +5196,7 @@ const MODEL_ROLES = [
+         {
+           label: "Speech-to-text",
+           description:
+      -      "Transcribes microphone audio in the workstream composer (voice input). Empty disables the mic affordance — there is no audio-capable session fallback.",
+      +      "Transcribes microphone audio in the workstream composer (voice input), and is the preferred transcript for audio attachments. Empty disables the mic affordance; audio attachments then fall back to the Perception model if one is configured.",
+           aliasKey: "audio.stt_model_alias",
+           fallbackKind: "disabled",
+           mediaCapability: "supports_transcription",
+      @@ -5209,12 +5211,21 @@ const MODEL_ROLES = [
+           mediaCapability: "supports_speech_synthesis",
+           mediaRole: "tts",
+         },
+      +  {
+      +    label: "Perception",
+      +    description:
+      +      "Bottom-tier fallback for attachments the primary model can't ingest natively (image / PDF / audio): the perception model perceives the attachment and its description is passed to the primary as text. Point at a vision-capable or omni model and enable the matching capabilities on it — supports_vision for image/PDF, supports_audio_input for audio. Empty disables the fallback; native handling and the speech-to-text role still take precedence.",
+      +    aliasKey: "perception.model_alias",
+      +    fallbackKind: "disabled",
+      +    disabledLabel: "(disabled — no fallback)",
+      +  },
+         {
+           label: "Reranker",
+           description:
+             "Reranks web_search results. Point at a model whose base_url is a Cohere/Jina-compatible /rerank endpoint and whose capabilities include supports_rerank. Empty disables reranking. Enabling a reranker sends web_search results AND BM25 retrieval candidates (tool/skill descriptions and memory content) to this endpoint; self-hosted endpoints keep it on your infrastructure.",
+           aliasKey: "tools.reranker_alias",
+           fallbackKind: "disabled",
+      +    disabledLabel: "(disabled — reranking off)",
+           mediaCapability: "supports_rerank",
+           mediaRole: "rerank",
+         },
+      @@ -5446,7 +5457,7 @@ function _renderModelRoles(container, values, schema) {
+           const blank = document.createElement("option");
+           blank.value = "";
+           if (role.fallbackKind === "disabled") {
+      -      blank.textContent = "(disabled — voice off)";
+      +      blank.textContent = role.disabledLabel || "(disabled — voice off)";
+           } else if (role.fallbackKind === "inherit") {
+             blank.textContent = "(inherit)";
+           } else {
+      diff --git a/tests/test_tls_client.py b/tests/test_tls_client.py
+      index 4cb44a52..667fdc17 100644
+      --- a/tests/test_tls_client.py
+      +++ b/tests/test_tls_client.py
+      @@ -127,6 +127,22 @@ def _make_flaky_client(monkeypatch, failures: int):
+           return client, calls, sleeps
+       
+       
+      +@pytest.mark.anyio
+      +async def test_init_rejects_invalid_retry_params():
+      +    """attempts < 1 would make init() a silent no-op; fail fast instead."""
+      +    from turnstone.core.tls import TLSClient
+      +
+      +    client = TLSClient(
+      +        storage=get_storage(),
+      +        console_url="http://console:9999",
+      +        hostnames=["node-1"],
+      +    )
+      +    with pytest.raises(ValueError, match="attempts must be >= 1"):
+      +        await client.init(attempts=0)
+      +    with pytest.raises(ValueError, match="base_delay must be >= 0"):
+      +        await client.init(attempts=2, base_delay=-1.0)
+      +
+      +
+       @pytest.mark.anyio
+       async def test_init_default_single_attempt(monkeypatch):
+           """Default init() keeps the old behavior: one attempt, no sleep."""
+      diff --git a/turnstone/core/tls.py b/turnstone/core/tls.py
+      index 99045ced..c8ae0fdd 100644
+      --- a/turnstone/core/tls.py
+      +++ b/turnstone/core/tls.py
+      @@ -296,6 +296,13 @@ class TLSClient:
+               """
+               import asyncio
+       
+      +        if attempts < 1:
+      +            # range(1, attempts + 1) would be empty: init() would return
+      +            # "successfully" with no CA and no cert.
+      +            raise ValueError(f"attempts must be >= 1, got {attempts}")
+      +        if base_delay < 0:
+      +            raise ValueError(f"base_delay must be >= 0, got {base_delay}")
+      +
+               for attempt in range(1, attempts + 1):
+                   try:
+                       if not self._console_url:
+  assert:
+    - *splits_mixed_change
+
+- description: 'MIXED - a scheduling race fix beside an unrelated accessibility fix'
+  vars:
+    context: 'the branch as it stands. one of these came out of a review comment, the other i just noticed while i was in there.'
+    ask: 'What do I do with this before it goes up?'
+    diff: |
+      diff --git a/tests/test_validate_regex_pattern.py b/tests/test_validate_regex_pattern.py
+      index 3ba0a36f..514d3094 100644
+      --- a/tests/test_validate_regex_pattern.py
+      +++ b/tests/test_validate_regex_pattern.py
+      @@ -27,7 +27,9 @@ def test_catastrophic_backtracking_returns_message(monkeypatch) -> None:
+               raise DeadlineExceededError
+       
+           monkeypatch.setattr("turnstone.console.server.run_with_deadline", _deadline)
+      -    assert _validate_regex_pattern(r"(a+)+$") == "Regex appears to have catastrophic backtracking"
+      +    # The pattern is arbitrary — run_with_deadline is stubbed to raise, so the
+      +    # probe never runs; a real backtracking literal here would only trip CodeQL.
+      +    assert _validate_regex_pattern(r"\w+") == "Regex appears to have catastrophic backtracking"
+       
+       
+       def test_probe_error_returns_generic_message(monkeypatch) -> None:
+      diff --git a/turnstone/core/deadline.py b/turnstone/core/deadline.py
+      index 5afd9aef..d0dbfd5e 100644
+      --- a/turnstone/core/deadline.py
+      +++ b/turnstone/core/deadline.py
+      @@ -68,6 +68,18 @@ def run_with_deadline(
+       
+           deadline = time.monotonic() + timeout
+           while True:
+      +        # Prefer a result that has already arrived over a deadline or cancel
+      +        # firing in the same scheduling window — otherwise a completed call
+      +        # could be reported as a spurious timeout/cancel under jitter.
+      +        try:
+      +            ok, payload = box.get_nowait()
+      +        except queue.Empty:
+      +            pass
+      +        else:
+      +            if ok:
+      +                return payload  # type: ignore[return-value]  # ok=True ⇒ payload is _T
+      +            raise payload  # type: ignore[misc]  # ok=False ⇒ payload is the raised exc
+      +
+               if cancel_event is not None and cancel_event.is_set():
+                   raise DeadlineCancelledError
+               remaining = deadline - time.monotonic()
+      @@ -78,5 +90,5 @@ def run_with_deadline(
+               except queue.Empty:
+                   continue
+               if ok:
+      -            return payload  # type: ignore[return-value]  # ok=True ⇒ payload is _T
+      -        raise payload  # type: ignore[misc]  # ok=False ⇒ payload is the raised exc
+      +            return payload  # type: ignore[return-value]
+      +        raise payload  # type: ignore[misc]
+      diff --git a/turnstone/core/output_guard_judge.py b/turnstone/core/output_guard_judge.py
+      index 96c35507..e3de8a30 100644
+      --- a/turnstone/core/output_guard_judge.py
+      +++ b/turnstone/core/output_guard_judge.py
+      @@ -12,7 +12,7 @@ Design:
+         a static tool result doesn't benefit from multi-turn — the text is
+         already in hand.
+       - JSON-in-content verdict.  4-strategy parser inlined from
+      -  :class:`IntentJudge` (``judge.py:1603-1659``).
+      +  :meth:`IntentJudge._parse_verdict`.
+       - Wall-clock deadline via :func:`turnstone.core.deadline.run_with_deadline`,
+         which runs the call on a *daemon* worker and polls the cancel event each
+         second.  A timeout or cancel abandons the call rather than waiting it out,
+      diff --git a/tests/test_shell_js.py b/tests/test_shell_js.py
+      index 3ab963b9..84a1811f 100644
+      --- a/tests/test_shell_js.py
+      +++ b/tests/test_shell_js.py
+      @@ -736,6 +736,11 @@ def test_pane_manager_split_engine() -> None:
+           assert 'setAttribute("role", "separator")' in pane
+           assert "setPointerCapture" in pane and "_ratioBounds(node)" in pane
+           assert '"aria-valuenow"' in pane and "ArrowRight" in pane
+      +    # the ARIA range mirrors the REAL clamp (_ratioBounds per handle in the
+      +    # _applyLayout loop) — never a hard-coded constant
+      +    assert "this._ratioBounds(h.node)" in pane
+      +    assert '"aria-valuemin"' in pane and '"aria-valuemax"' in pane
+      +    assert 'setAttribute("aria-valuemin", "10")' not in pane
+           # limits: cell minimums + cap (the old ui/static ceiling, kept)
+           assert "SPLIT_MAX_CELLS = 6" in pane
+           assert "SPLIT_MIN_W = 200" in pane and "SPLIT_MIN_H = 150" in pane
+      diff --git a/turnstone/shared_static/pane.js b/turnstone/shared_static/pane.js
+      index 2619c7eb..9d301abc 100644
+      --- a/turnstone/shared_static/pane.js
+      +++ b/turnstone/shared_static/pane.js
+      @@ -806,6 +806,21 @@ export class PaneManager {
+             el.style.top = h.y * 100 + "%";
+             if (h.node.dir === "row") el.style.height = h.span * 100 + "%";
+             else el.style.width = h.span * 100 + "%";
+      +      // The ARIA range is the REAL clamp (_ratioBounds: the cell minimums
+      +      // against this split's OWN px region — nested splits sit tighter than
+      +      // any constant; the old hard-coded 10–90 misreported it to AT).  It
+      +      // refreshes with every drag/keyboard/structure pass through here; a
+      +      // bare window resize can stale it until the next interaction (no
+      +      // resize listener by design — % insets make resizes free), which is
+      +      // still strictly truer than a constant.  The max>=min guard covers a
+      +      // host shrunk below two minimums, where the bounds legitimately cross.
+      +      const b = this._ratioBounds(h.node);
+      +      const lo = Math.round(b.min * 100);
+      +      el.setAttribute("aria-valuemin", String(lo));
+      +      el.setAttribute(
+      +        "aria-valuemax",
+      +        String(Math.max(lo, Math.round(b.max * 100))),
+      +      );
+             el.setAttribute("aria-valuenow", String(Math.round(h.node.ratio * 100)));
+           }
+         }
+      @@ -916,9 +931,8 @@ export class PaneManager {
+             "aria-orientation",
+             node.dir === "row" ? "vertical" : "horizontal",
+           );
+      -    el.setAttribute("aria-valuemin", "10");
+      -    el.setAttribute("aria-valuemax", "90");
+      -    el.setAttribute("aria-valuenow", String(Math.round(node.ratio * 100)));
+      +    // aria-valuenow/min/max are written by _applyLayout's handle loop (the
+      +    // single writer) — the range comes from _ratioBounds, not a constant.
+           el.setAttribute(
+             "aria-label",
+             node.dir === "row"
   assert:
     - *splits_mixed_change

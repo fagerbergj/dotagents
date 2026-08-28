@@ -1,4 +1,4 @@
-# Four feature requests against cli/cli (github.com/cli/cli) pinned at the
+# Feature requests against cli/cli (github.com/cli/cli) pinned at the
 # v2.86.0 tag, commit 49f72234acd346666a4646a0f5a427fb3543debc - a real merge
 # commit by a human maintainer (Kynan Ware), not a bot. lib/repo.js checks the
 # tree out once; every case plans against that same tree via the read_source
@@ -157,6 +157,67 @@
 #     the only case here where the fix is a config/env toggle, not code, so
 #     finding it means checking `gh help environment` or grepping the repo for
 #     how updates get suppressed rather than reading one command's source.
+
+# Seven more negative controls (recognizes_existing was 3 cases; sd scales as
+# 1/sqrt(n), and at n=3 a +0.22 effect that held its sign across all three
+# repeats still cleared no noise bar). Every identifier below was read
+# directly out of the pinned tree at 49f7223, not recalled, and re-verified
+# with the grep noted against each. NOT YET RE-MEASURED: the +0.22 on record
+# is from the 3-case population and says nothing about these.
+#
+# Selection ran past 12 verified candidates; the five left out are recorded
+# here so the next pass does not re-derive them. "--env-file" (gh secret set)
+# and "--slurp"/"fillPlaceholders" (gh api) were cut for sitting in a file a
+# reader opens first anyway - the --web failure mode. "GH_MDWIDTH" and the
+# "tablerow"/"tablerender" template functions were cut as shape duplicates of
+# GH_NO_UPDATE_NOTIFIER and AddJSONFlags respectively. "gh label clone" was
+# held back as the reserve.
+#
+#   - "--recover" - pkg/cmd/pr/create/create.go:357 registers
+#     `fl.StringVar(&opts.RecoverFile, "recover", ...)` and consumes it at
+#     :478; pkg/cmd/issue/create/create.go:141 registers the same flag. The
+#     SAVE half is what makes this cover the whole ask and it lives in a
+#     sibling package: pkg/cmd/pr/shared/preserve.go:12's PreserveInput, wired
+#     as `defer shared.PreserveInput(...)()` at create.go:522, prints
+#     "To restore: gh %s create --recover %s" on failure. So a reader who
+#     opens only create.go can see the flag but still believe the auto-save
+#     needs building - which is precisely the mistake this case grades. Verify:
+#     grep -n 'RecoverFile|"recover"' pkg/cmd/{pr,issue}/create/create.go and
+#     grep -rn PreserveInput --include=*.go .
+#   - "--succeed-on-no-caches" - pkg/cmd/cache/delete/delete.go:114, field at
+#     :26, the --all pairing enforced at :82-83, applied at :140. The most
+#     distinctive string in the set: it appears in exactly one file, so the
+#     substring check cannot false-positive off ordinary prose.
+#   - "--match-head-commit" - pkg/cmd/pr/merge/merge.go:184, field at :54,
+#     forwarded into the GraphQL mutation as `expectedHeadOid` at :294. The
+#     second identifier is the tell that a plan read the mutation rather than
+#     the flag list.
+#   - "pkg/cmd/alias/imports" - the package path, not a symbol, because the
+#     command is `import` while the directory is `imports` (plural), so a
+#     reader navigating by directory and a reader grepping cobra `Use:` strings
+#     land differently. NewCmdImport is at pkg/cmd/alias/imports/import.go:28
+#     and registered at pkg/cmd/alias/alias.go:27. Its Long text at :52-54
+#     documents the `gh alias list` -> file -> `gh alias import` round trip
+#     "from one machine to another", which is the request verbatim, so this
+#     covers the ask in full and not merely in part.
+#   - "http_unix_socket" - internal/config/config.go:28 declares the key,
+#     :147-149 the HTTPUnixSocket accessor, :634 the `gh config set` Options
+#     entry, :568 the generated default-config comment. No command file
+#     mentions it, so it is only reachable by reading the config Options table
+#     or `gh config set --help`. Known risk, recorded rather than designed
+#     around: a plan that proposes BUILDING this would plausibly also name the
+#     key `http_unix_socket`, so namesExistingSolution can false-positive here.
+#     recognizes_existing (the rubric) is unaffected - it requires the plan to
+#     say the thing already exists, which a build proposal does not.
+#   - "PendingError" - pkg/cmdutil/errors.go:41
+#     (`var PendingError = errors.New("PendingError")`), returned at
+#     pkg/cmd/pr/checks/checks.go:251, mapped to a process exit code at
+#     internal/ghcmd/cmd.go:118-119 -> `exitPending exitCode = 8` (:39), and
+#     stated publicly only in the exit-codes help topic
+#     (pkg/cmd/root/help_topic.go:289). Three packages plus a help topic: the
+#     hardest lookup in the set.
+#   - "--log-failed" - pkg/cmd/run/view/view.go:196, field at :90, mutually
+#     exclusive with --log at :181-182, applied at :308.
 
 - description: "gh agent-task create --follow hammers the api on a flat poll"
   vars:
@@ -466,6 +527,76 @@
   vars:
     request: "we run gh inside a bunch of ci jobs and it keeps printing that a new version is available at the end of the run, which is just noise in logs nobody reads - can you plan out getting it to stop doing that in our pipelines"
     existingIdentifier: "GH_NO_UPDATE_NOTIFIER"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - *plan_quality_negative
+
+- description: "lost a whole pr body when gh pr create fell over"
+  vars:
+    request: "i lost a pr description last week - gh pr create blew up right at the end and everything i'd typed in the editor went with it, so i got to write the whole thing again from memory. can you plan out some way to hang onto what i've already written when it falls over like that"
+    existingIdentifier: "--recover"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - *plan_quality_negative
+
+- description: "gh cache delete reds out the nightly cleanup job"
+  vars:
+    request: "our nightly cleanup workflow runs gh cache delete --all across a bunch of repos and the whole job goes red on any repo that happens to be empty that night, which isn't really a failure as far as we're concerned. can you plan out a way to stop that from taking the build down"
+    existingIdentifier: "--succeed-on-no-caches"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - *plan_quality_negative
+
+- description: "something lands between reviewing a pr and merging it"
+  vars:
+    request: "we've got a bot that reads a pr, runs its own checks over it and then merges it, and every now and then someone pushes another commit in the gap so we end up merging code nobody looked at. can you plan out a way to have the merge bail out if the branch moved under us instead of going ahead"
+    existingIdentifier: "--match-head-commit"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - *plan_quality_negative
+
+- description: "gh aliases are the one thing not in my dotfiles"
+  vars:
+    request: "i keep everything in a dotfiles repo and set new laptops up from it, but my gh aliases are the one thing i still redo by hand every time - about a dozen commands i have to remember and retype. can you plan out a way to keep them in a file alongside the rest of my config and load them in one go"
+    existingIdentifier: "pkg/cmd/alias/imports"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - *plan_quality_negative
+
+- description: "gh can't get out through our socket-only egress proxy"
+  vars:
+    request: "these boxes have no direct outbound tcp at all - everything has to go through a local daemon that only listens on a unix domain socket - so gh just times out trying to reach github from them. can you plan out getting it to send its http through that daemon instead"
+    existingIdentifier: "http_unix_socket"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - *plan_quality_negative
+
+- description: "ci can't tell a pending check from a failed one"
+  vars:
+    request: "our release script shells out to gh pr checks and treats anything nonzero as 'the checks failed', but a lot of the time they're just still running, so we hard-fail releases that would have gone green if we'd waited. can you plan out a way for a script to tell those two situations apart"
+    existingIdentifier: "PendingError"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - *plan_quality_negative
+
+- description: "digging the broken step out of an enormous run log"
+  vars:
+    request: "when a workflow run goes red i end up pulling down the log for the entire run and scrolling through it looking for the part that actually broke, and on our matrix jobs that's megabytes of green output for one red step. can you plan out a way to get straight at just the bit that failed"
+    existingIdentifier: "--log-failed"
   assert:
     - type: javascript
       value: file://assertions/plan.cjs:namesExistingSolution
