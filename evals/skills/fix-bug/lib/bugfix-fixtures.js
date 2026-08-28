@@ -4,8 +4,11 @@
 // PROPOSED (at `reviewed`), because a reviewer is judging a diff that is
 // already there. fix-bug is the opposite claim - the model has to PRODUCE the
 // fix, so it must never see it. This loader serves the tree at the fix
-// commit's PARENT and keeps the parent..fix diff only as the grader's answer
-// key, never in anything a prompt function returns.
+// commit's PARENT and nothing else. The grader's answer key is the
+// `sourceFiles`/`functions` arrays in tests/bugfix-fixtures.json, not a diff:
+// computing `git diff parent..fix` here would lazily fetch the fix-side blobs
+// from github.com inside the --filter=blob:none clone, i.e. network from a
+// per-row read path.
 //
 // It also fetches by plain commit SHA rather than a PR ref. fixtures.js needs
 // `refs/pull/${pr}/head` because a *reviewed* commit is often force-pushed
@@ -20,8 +23,8 @@
 // evals/lib/fixtures.js's PR-shaped materialise() on whatever it finds there.
 // This suite's fixtures have no `pr` field, so that call would fail loudly on
 // every run. Naming this file differently makes the shared fetch step a
-// no-op here instead - see the suite README/report for the manual step this
-// requires before `promptfoo eval`.
+// no-op here instead, so `node lib/fetch-bugfix-fixtures.js .` has to be run
+// by hand before `promptfoo eval`.
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -48,7 +51,9 @@ function materialise(f, log = () => {}) {
     git(p.git, ['remote', 'add', 'origin', `https://github.com/${f.repo}.git`]);
   }
   git(p.git, ['fetch', '-q', '--filter=blob:none', 'origin', f.parent]);
-  // Absent for the "not a bug" control: there is no accepted fix to withhold.
+  // Absent for the "not a bug" controls: there is no accepted fix to withhold.
+  // Nothing reads the fix commit; fetching it is the check that the pinned SHA
+  // is still obtainable, which is what keeps sourceFiles re-derivable.
   if (f.fix) git(p.git, ['fetch', '-q', '--filter=blob:none', 'origin', f.fix]);
   fs.rmSync(p.tree, { recursive: true, force: true });
   fs.mkdirSync(p.tree, { recursive: true });
@@ -63,10 +68,7 @@ function load(f) {
   if (!fs.existsSync(p.tree)) {
     throw new Error(`fixture ${f.name} not materialised - run lib/fetch-bugfix-fixtures.js first`);
   }
-  // Computed on demand rather than cached to a .patch file: cheap (local
-  // objects, no network) and always in sync with the pinned SHAs above.
-  const diff = f.fix ? git(p.git, ['diff', `${f.parent}..${f.fix}`]) : null;
-  return { ...f, dir: p.tree, diff };
+  return { ...f, dir: p.tree };
 }
 
 function specs(suiteDir) {
