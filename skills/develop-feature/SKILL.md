@@ -11,6 +11,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
+  version: "1.0.1"
 ---
 
 # Develop a feature: understand → reuse → tests-as-gate → green
@@ -25,7 +26,7 @@ The order matters: do not design before step 1, and do not write feature code be
 
 Do not start from the literal request - start from the problem behind it. Ask until you can state the goal, the constraints, and what "done" looks like in your own words.
 
-- Use `ask_user` to clarify - but **batch your questions and ask early**. Ask once with the handful of things you genuinely can't resolve, not one at a time across many pauses. (Asking pauses the whole node; thrashing is expensive.)
+- Ask to clarify - but **batch your questions and ask early**. Ask once with the handful of things you genuinely can't resolve, not one at a time across many pauses. (Asking pauses the whole node; thrashing is expensive.)
 - Only ask what you can't answer yourself. Where the answer is conventional, pick the sensible default, state it, and move on - reserve questions for decisions that are genuinely the user's to make.
 - Restate the problem back before designing. If you can't, you don't understand it yet.
 

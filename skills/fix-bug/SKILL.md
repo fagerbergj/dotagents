@@ -10,6 +10,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
+  version: "1.0.1"
 ---
 
 # Fix a bug: theory → failing test → green
@@ -22,7 +23,7 @@ Do not edit production code until step 2 gives you a test that fails.
 
 ### 1. Build a root-cause theory by exploring the code
 
-Read the actual code paths involved - `read_file`, `grep`, `git_log`/`git_diff` to see what recently changed. Trace how the input reaches the wrong output. State the theory in one sentence: *"X happens because Y, so Z is wrong."*
+Read the actual code paths involved - open the files, search for the symbols, and look at what changed recently in the history. Trace how the input reaches the wrong output. State the theory in one sentence: *"X happens because Y, so Z is wrong."*
 
 - A theory names a **specific mechanism**, not a vague area. "The confirm scan never runs on revise rounds" is a theory; "something in the gate is off" is not.
 - If you cannot yet see the mechanism, **instrument to confirm it** - add temporary logging / a debug print / a probe, reproduce, and read what actually happens. Real bugs are often not where they look. Confirm the mechanism *before* committing to a fix. (Remove the instrumentation before you finish, or fold it into the test.)
