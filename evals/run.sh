@@ -65,6 +65,9 @@ node "$here/lib/skill-tools.test.cjs"
 # Fixture materialisation has its own offline check - a local repo stands in for
 # GitHub, so the diff range and the archived tree are exercised without network.
 node "$here/lib/fixtures.test.cjs"
+# Unwrapping a fenced answer is shared harness code too: it decides what every
+# format-markdown grader actually sees.
+node "$here/lib/strip-reasoning.test.cjs"
 # A case var containing {{ or {% renders through nunjucks and can throw, which
 # empties the output in every arm while the run still reports success.
 python3 "$here/lib/check-case-vars.py" tests/*.yaml

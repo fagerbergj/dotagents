@@ -83,4 +83,34 @@ assert.ok(pyScan.code.includes('"queued"'));
 // Consecutive line comments are one comment, not one per line.
 assert.equal(checks.scan(goCommented, 'go').comments.length, 1);
 
+// --- fence extraction ------------------------------------------------------
+// The answer's own fenced block used to end the extraction: a non-greedy regex
+// stops at the first closing fence, so anything after a nested one was dropped
+// and codePreserved compared the input against a fragment.
+
+const tsDoc = `/**
+ * Retries only idempotent verbs:
+ * \`\`\`ts
+ * retry(() => fetch(url, { method: 'GET' }))
+ * \`\`\`
+ */
+export function retry(fn: () => Promise<Response>) {
+  return fn()
+}`;
+const tsPlain = `export function retry(fn: () => Promise<Response>) {
+  return fn()
+}`;
+assert.equal(
+  checks.codePreserved(fence('ts', tsDoc), ctx(tsPlain, 'ts')).pass,
+  true,
+  'a fence inside a doc comment truncated the extracted block',
+);
+// The truncated fragment ends before the function, so the bug read as a rewrite.
+assert.equal(checks.scan(checks.firstFence(fence('ts', tsDoc)), 'ts').code.includes('return fn()'), true);
+
+// A four-backtick wrapper around a fenced answer, and an unterminated one.
+assert.equal(checks.firstFence('````\n```go\nx := 1\n```\n````').trim(), '```go\nx := 1\n```');
+assert.equal(checks.firstFence('```go\nx := 1').trim(), 'x := 1', 'an unterminated fence returned nothing');
+assert.equal(checks.firstFence('no fence at all'), '');
+
 console.log('comment assertions: ok');
