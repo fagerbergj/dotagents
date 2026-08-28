@@ -66,12 +66,13 @@ jobs:
           echo "suites=$suites" >> "$GITHUB_OUTPUT"
           echo "Affected suites: $suites"
 
-      # Reuse over re-run: a PR that already paid for these numbers should not pay
-      # again on merge. The artifact is found by walking commit -> merged PR -> that
-      # PR's Evals run -> its artifacts. Any link can be missing (evals were never
-      # approved, the artifact aged out of its retention window, the commit was
-      # pushed straight to main) and every one of those falls through to a re-run
-      # rather than failing - a missing artifact is normal, not an error.
+      # The numbers come from the PR that earned them. The artifact is found by
+      # walking commit -> merged PR -> that PR's Evals run -> its artifacts. Any
+      # link can be missing (the PR's eval run was never approved, the artifact
+      # aged out of its retention window, the commit was pushed straight to main).
+      # A missing artifact skips the suite with a warning rather than re-measuring
+      # it: this workflow is unattended, so re-running here would spend money
+      # behind the back of the eval-approval gate that protects the PR run.
       #
       # Artifacts are matched by the filename run.sh writes, `<suite>@<version>.json`,
       # not by artifact name, so renaming the upload in evals.yml does not break this.
@@ -88,7 +89,7 @@ jobs:
           pr="$(gh api "repos/$GITHUB_REPOSITORY/commits/${{ github.sha }}/pulls" \
                   --jq 'map(select(.merged_at != null)) | .[0].number' 2>/dev/null || echo '')"
           if [ -z "$pr" ] || [ "$pr" = "null" ]; then
-            echo "no merged PR found for ${{ github.sha }}; will re-run"
+            echo "no merged PR found for ${{ github.sha }}; nothing to reuse"
             echo "head_sha=" >> "$GITHUB_OUTPUT"; exit 0
           fi
           head_sha="$(gh pr view "$pr" --json headRefOid --jq .headRefOid)"
@@ -97,7 +98,7 @@ jobs:
             --jq '[.workflow_runs[] | select(.path == ".github/workflows/evals.yml")]
                   | sort_by(.run_started_at) | last | .id' 2>/dev/null || echo '')"
           if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
-            echo "no Evals run for $head_sha; will re-run"
+            echo "no Evals run for $head_sha; nothing to reuse"
             echo "head_sha=" >> "$GITHUB_OUTPUT"; exit 0
           fi
           # Downloads every artifact that run uploaded; empty or expired is fine.
@@ -105,26 +106,42 @@ jobs:
           echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
           find /tmp/reused -name '*.json' -print
 
-      - name: Decide reuse vs re-run per suite
+      - name: Decide reuse vs skip per suite
         id: plan
         env:
           SUITES: ${{ steps.detect.outputs.suites }}
           HEAD_SHA: ${{ steps.reuse.outputs.head_sha }}
+          FORCE_RERUN: ${{ inputs.force_rerun }}
         run: |
           set -euo pipefail
           : > /tmp/manifest.tsv          # suite \t json \t source-sha \t reused|rerun
-          rerun=()
+          missing=()
           for suite in $(echo "$SUITES" | jq -r '.[]'); do
             found="$(find /tmp/reused -type f \( -name "$suite@*.json" -o -name "$suite.json" \) 2>/dev/null | head -1)"
             if [ -n "$found" ] && jq -e '.results.results | length > 0' "$found" >/dev/null 2>&1; then
               printf '%s\t%s\t%s\treused\n' "$suite" "$found" "$HEAD_SHA" >> /tmp/manifest.tsv
             else
-              rerun+=("$suite")
+              missing+=("$suite")
             fi
           done
-          printf 'rerun=%s\n' "$(printf '%s\n' "${rerun[@]+"${rerun[@]}"}" | jq -R . | jq -sc 'map(select(. != ""))')" >> "$GITHUB_OUTPUT"
+          missing_json="$(printf '%s\n' "${missing[@]+"${missing[@]}"}" | jq -R . | jq -sc 'map(select(. != ""))')"
           echo "Reusing:"; cut -f1 /tmp/manifest.tsv || true
-          echo "Re-running: ${rerun[*]-none}"
+          # force_rerun downloaded no artifacts, so every suite lands in `missing`
+          # and every suite gets re-measured - that is what the button is for. On a
+          # push, a missing artifact is a skip instead: re-measuring unattended is
+          # the spend this workflow must not decide to make on its own.
+          if [ "$FORCE_RERUN" = "true" ]; then
+            echo "rerun=$missing_json" >> "$GITHUB_OUTPUT"
+            echo "skipped=[]" >> "$GITHUB_OUTPUT"
+            echo "Re-running: ${missing[*]-none}"
+          else
+            echo "rerun=[]" >> "$GITHUB_OUTPUT"
+            echo "skipped=$missing_json" >> "$GITHUB_OUTPUT"
+            for suite in ${missing[@]+"${missing[@]}"}; do
+              echo "::warning::$suite: no eval artifact from the merged PR - nothing published for it. Approve the PR's eval run (the eval-approval environment) before merging, or re-run this workflow with force_rerun to measure main."
+            done
+            echo "Skipped: ${missing[*]-none}"
+          fi
 
       - uses: actions/setup-node@v6
         with:
@@ -135,14 +152,14 @@ jobs:
         working-directory: evals
         run: npm ci
 
-      # Only reached when no usable artifact exists, and the only step that spends
-      # money. run.sh is the same entry point the PR workflow uses, so the free
-      # checks it fronts (assertion self-tests, check-case-vars.py, check-suite.py)
-      # and the per-suite PROMPTFOO_CONFIG_DIR come along with it - concurrent
-      # suites sharing one config dir deadlock promptfoo's SQLite with
-      # "database is locked". Suites run one at a time here: this is a rare
-      # fallback, and serialising keeps the publish step a single push.
-      - name: Re-run suites with no reusable artifact
+      # Only reached via force_rerun, and the only step that spends money. run.sh
+      # is the same entry point the PR workflow uses, so the free checks it fronts
+      # (assertion self-tests, check-case-vars.py, check-suite.py) and the
+      # per-suite PROMPTFOO_CONFIG_DIR come along with it - concurrent suites
+      # sharing one config dir deadlock promptfoo's SQLite with "database is
+      # locked". Suites run one at a time here: serialising keeps the publish step
+      # a single push.
+      - name: Re-run suites (force_rerun only)
         if: steps.plan.outputs.rerun != '[]'
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -209,6 +226,7 @@ jobs:
         if: always()
         env:
           SKIPPED_NOTE: ${{ steps.gate.outputs.note }}
+          NO_ARTIFACT: ${{ steps.plan.outputs.skipped }}
         run: |
           {
             echo "## Eval publish for \`${GITHUB_SHA:0:7}\`"
@@ -223,4 +241,14 @@ jobs:
               echo "Nothing published."
             fi
             [ -n "${SKIPPED_NOTE:-}" ] && { echo; echo "$SKIPPED_NOTE"; }
+            if [ -n "${NO_ARTIFACT:-}" ] && [ "$NO_ARTIFACT" != "[]" ]; then
+              echo
+              echo "### Skipped - no eval artifact to publish"
+              echo
+              printf '%s' "$NO_ARTIFACT" | jq -r '.[] | "- `\(.)`"'
+              echo
+              echo "These suites were never measured for this commit, so nothing was published for them."
+              echo "**Fix:** approve the PR's eval run (the \`eval-approval\` environment) *before* the PR merges - the run has to produce its artifacts while the PR is open for this workflow to find them."
+              echo "To measure \`main\` instead, re-run this workflow from the Actions tab with \`force_rerun\` checked."
+            fi
           } >> "$GITHUB_STEP_SUMMARY" || true
