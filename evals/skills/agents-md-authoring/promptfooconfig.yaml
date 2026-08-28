@@ -27,13 +27,17 @@ providers:
         reasoning:
           enabled: false
       apiKeyEnvar: OPENROUTER_API_KEY
-      # These repos are small: the largest single file an author needs
-      # (requests' root Makefile, pyproject.toml, tox.ini, AI_POLICY.md, plus
-      # docs/Makefile and docs/requirements.txt for the nested case) totals
-      # well under 20 KB. 12 rounds and 32 KB leave room to read all of that
-      # plus a wrong guess or two, without funding a runaway loop.
-      maxToolCalls: 12
-      maxResourceBytes: 32768
+      # These repos are small, but semver/jq/zerolog have more subdirectories
+      # than requests/is-plain-obj (fuzz/, tests/, benches/ for semver; docs/
+      # for jq; journald/, cmd/lint/ for zerolog) - a careful read of root plus
+      # one subtree costs more round-trips. Proven live: a 12-round budget hit
+      # "tool loop exceeded 12 rounds" on semver's root case and produced an
+      # empty, unscored row for the skill arm only (the no-skill arm sends no
+      # tools at all), an asymmetric sample-count bug, not a fair comparison.
+      # 20 rounds and 48 KB leave headroom for a full subtree read plus a
+      # wrong guess or two, without funding a runaway loop.
+      maxToolCalls: 20
+      maxResourceBytes: 49152
 
 defaultTest:
   options:

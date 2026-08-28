@@ -132,9 +132,18 @@ function examplesPreserveStatedPrompts(output, context) {
 // `{"type": "apiKey", ...}` shape. contract_shape already grades exact wire
 // conformance; this only checks the brief's stated mechanism wasn't dropped
 // or swapped for something else.
+//
+// httpAuth/openIdConnect added alongside the original oauth2/apiKey pair:
+// both are real discriminated-union keys in the vendored schema
+// (assertions/agent-card.schema.json properties.securitySchemes ->
+// `^(http_auth_security_scheme)$` and `^(open_id_connect_security_scheme)$`),
+// so a brief naming bearer/basic HTTP auth or an OIDC provider has a family
+// to match against instead of only ever matching apiKey/oauth2.
 const SCHEME_FAMILY_PATTERN = {
   oauth2: /oauth2/i,
   apiKey: /api.?key/i,
+  httpAuth: /http.?auth/i,
+  openIdConnect: /open.?id.?connect/i,
 };
 
 function securitySchemeDeclares(output, context) {

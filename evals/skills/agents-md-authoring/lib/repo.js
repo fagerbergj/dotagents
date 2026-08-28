@@ -31,6 +31,33 @@ const REPOS = {
   // knowing is one glance at package.json, so it is the negative control for
   // inventing content to fill a file that does not need one.
   'is-plain-obj': { repo: 'sindresorhus/is-plain-obj', sha: '97f38e8836f86a642cce98fc6ab3058bc36df181' },
+  // dtolnay/semver, pinned 2026-08-28 (HEAD of master). A tight single-purpose
+  // Rust crate with three genuinely different subtree hazards: fuzz/ is its own
+  // isolated cargo workspace needing a nightly toolchain and cargo-fuzz, not
+  // cargo test at all; tests/ silently skips its Node.js differential test
+  // against the real npm `semver` package unless RUSTFLAGS=--cfg
+  // test_node_semver is set; and the MSRV pinned in Cargo.toml (1.68) is
+  // check-only in CI - cargo test itself is never run at that toolchain
+  // version.
+  semver: { repo: 'dtolnay/semver', sha: '280ebcb6edac3aa4cdc545dbff8a26c5ac4861fe' },
+  // jqlang/jq, pinned 2026-08-28 (HEAD of master). C/autotools ecosystem: a
+  // fresh clone has an uninitialized `vendor/oniguruma` git submodule (this
+  // checkout does not run submodule update - that is the authentic, real
+  // condition an agent actually lands in), and `./configure` alone silently
+  // link against a possibly-mismatched system oniguruma instead of failing;
+  // docs/ is a wholly separate Python/pipenv toolchain whose absence
+  // degrades the build with a warning instead of an error, silently
+  // skipping the manpage tests.
+  jq: { repo: 'jqlang/jq', sha: '41b8edfe5437fcd25a072081c05f9f770f9e9b85' },
+  // rs/zerolog, pinned 2026-08-28 (HEAD of master). Go/go-test ecosystem: CI
+  // requires two disjoint `go test` invocations (plain, and `-tags
+  // binary_log`) because encoder_json.go/encoder_cbor.go are mutually
+  // exclusive build-tagged files with no shared test coverage; go.mod pins
+  // `go 1.23`, which actually rejects older local toolchains; journald/'s own
+  // test file is Linux-only (`//go:build linux`) so `go test ./...` silently
+  // runs zero tests for it elsewhere; and cmd/lint/ is a separate nested Go
+  // module invisible to root `go build ./...`/`go vet ./...`.
+  zerolog: { repo: 'rs/zerolog', sha: 'dfd11cca1143ba03ba0fc0ff14e5dbb4d61f6f0a' },
 };
 
 function git(dir, args) {

@@ -7,6 +7,41 @@
 # citedFactsExistInRepo (assertions/agentsmd.cjs) is the suite's central
 # claim: every command or path the produced file cites has to actually exist
 # in the repo it was written against. It is reused across all three cases.
+# GUARD, not a pure discriminator: --repeat 3 read +0.22 (sd 0.13, borderline
+# noise at n=3) - but on independent live runs it is what caught genuine
+# hallucinations (`pip install -e ".[test]"` naming an extra pyproject.toml
+# does not declare; `requests/__init__.py` when the real path is
+# `src/requests/__init__.py`). Stays wired to catch those regressions again
+# regardless of whether n=3 lets it clear a noise floor as a discriminator.
+#
+# discoverability_filter (defined on the first case below, reused via *alias
+# on the other two) was originally two separate, differently-worded rubrics:
+# one on this file's case (n=1, sign-unstable across --repeat 3:
+# -0.30/-0.15/+0.35) and a second, "resists_invention", living only on the
+# third case (n=1, -0.10 sd 0.17). Per evals/AGENTS.md's steer to merge thin
+# per-case metrics into one metric at higher n rather than reword each in
+# isolation (precedent: review-code's verifies_rather_than_trusts +
+# severity_restraint -> review_quality), they are now ONE uniformly-worded
+# rubric spanning all three cases (n=3), with each case supplying its own
+# <Evidence> (what's actually true, gathered independently) and <Obvious>
+# (what one glance at the repo already gives an agent for free) - the
+# wording never changes, only the ground truth it is judged against.
+#
+# Grounded in two independent sources, neither cited by the skill itself:
+# - agents.md, the community convention this file format is named for
+#   (fetched 2026-08-27): the file's whole reason to exist is holding "the
+#   extra, sometimes detailed context coding agents need: build steps,
+#   tests, and conventions that might clutter a README or aren't relevant to
+#   human contributors" - stated precisely opposite "Keep READMEs concise
+#   and focused on human contributors." A file that restates what one glance
+#   already gives an agent fails that standard as surely as one that omits a
+#   real hazard.
+# - Diátaxis (diataxis.fr/reference, fetched 2026-08-27): reference-style
+#   technical material should be "austere and uncompromising", limited to
+#   "the machinery and how to operate it", avoiding content that would
+#   "explain, instruct, discuss, opine" because that "run[s] counter to the
+#   needs of technical reference." A repo with little worth documenting
+#   should get a correspondingly thin file, not padding.
 
 - description: fresh AGENTS.md for requests - nobody has one yet
   vars:
@@ -19,7 +54,8 @@
     evidence: |
       - `pip install -e .` alone does not install pytest or its plugins;
         the dev setup needs `pip install -r requirements-dev.txt` (or
-        `make init`, which runs the same command).
+        `make init`, which runs the same command). This is the fact serious
+        enough that missing it causes the mistake the task describes.
       - `make test` runs the suite; `make coverage` adds coverage
         reporting; `tox` (envs `default` and `use_chardet_on_py3`) runs it
         across every supported interpreter.
@@ -27,7 +63,13 @@
         source docstrings are collected and must pass, not only tests/.
       - `.github/AI_POLICY.md` forbids unsupervised agentic tools and LLM
         co-authorship on commits, and requires a human who can defend every
-        line of a contribution.
+        line of a contribution - a second fact serious enough on its own
+        (a policy violation, not just a broken build) that omitting it
+        would be a real miss.
+    obvious: |
+      a restated dependency list from pyproject.toml, a directory/file
+      tour, the MIT/Apache license text, or the CONTRIBUTING.md bug report
+      template - all one read away and not agent-specific.
   assert:
     - type: javascript
       value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
@@ -35,16 +77,12 @@
         repo: requests
       metric: cited_facts_exist
 
-    # Claim: "discoverability-first rubric". Source: agents.md, the
-    # community convention this file format is named for (fetched
-    # 2026-08-27; the skill itself cites no external convention by name).
-    # It defines the file's whole reason to exist as holding what a README
-    # would only clutter: "the extra, sometimes detailed context coding
-    # agents need: build steps, tests, and conventions that might clutter a
-    # README or aren't relevant to human contributors" - stated precisely to
-    # "Keep READMEs concise and focused on human contributors." A file that
-    # restates what one glance at the repo already gives an agent fails that
-    # standard as surely as one that omits a real hazard.
+    # Claim: "discoverability-first rubric" (see the file-level comment
+    # above for full grounding and the merge that produced this shared
+    # rubric). Judges whether <Output> holds only what an agent could not
+    # quickly get by reading the repo's own files, and omits what it could -
+    # against this case's own <Evidence>/<Obvious>, reused unchanged by the
+    # other two cases via *discoverability_filter.
     - &discoverability_filter
       type: llm-rubric
       # A custom rubricPrompt replaces promptfoo's default JSON-format system
@@ -62,32 +100,39 @@
           content: |
             <Output>{{output}}</Output>
             <Evidence>{{evidence}}</Evidence>
+            <Obvious>{{obvious}}</Obvious>
             <Rubric>{{rubric}}</Rubric>
       value: |
-        <Output> is a candidate AGENTS.md for the psf/requests repository.
-        <Evidence> lists facts about the repository gathered independently -
-        treat it as ground truth, not as a list <Output> must quote verbatim.
+        <Output> is a candidate AGENTS.md (or a section of one, for a nested
+        file) for a real repository. <Evidence> lists facts about the
+        repository gathered independently - treat it as ground truth, not
+        as a list <Output> must quote verbatim. <Obvious> lists what one
+        glance at the repo's own files already gives an agent for free -
+        restating any of it is clutter, not content.
 
-        Judge <Output> by whether it holds only what an agent could not
-        quickly get by reading the repo's own files, and omits what it could.
         Answer each with a quote from <Output>, or NONE:
 
-        1. It tells the reader that installing with `pip install -e .` alone
-           is not enough for tests to run, and how to actually get a working
-           test setup (whether via requirements-dev.txt, an extra, or the
-           Makefile) - not merely "run pytest".
-        2. It surfaces the AI_POLICY.md constraint (no unsupervised agentic
-           tools, no LLM co-author, a human must own and be able to defend
-           every change) rather than omitting it or replacing it with generic
-           AI-ethics language of its own invention.
-        3. Score this item 1 if NONE of the following appear, 0 if any does:
-           a restated dependency list from pyproject.toml, a directory/file
-           tour, the MIT/Apache license text, or the CONTRIBUTING.md bug
-           report template - all one read away and not agent-specific.
+        1. If <Evidence> names a fact serious enough that missing it would
+           cause a real mistake (a broken build or test run, a violated
+           policy, a wasted debugging session), does <Output> state it and
+           say how to actually avoid the mistake - not just gesture at the
+           topic? If <Evidence> says no such fact exists for this repo,
+           score this item 1 automatically.
+        2. Does <Output> avoid restating anything in <Obvious> (a
+           dependency list, a directory/file tour, license text, a
+           boilerplate contribution template, or generic software-
+           engineering advice not specific to this repo)? Score by
+           absence: 1 if none of it appears, 0 if any does.
+        3. Is <Output>'s overall length and depth proportionate to how much
+           real, non-obvious signal <Evidence> actually contains -
+           substantive where <Evidence> holds real hazards, and near-empty
+           (or an explicit statement that there is nothing more to add)
+           where it does not?
 
-        Score from 0 to 1, never above 1: 0.4 for the first, 0.35 for the
-        second, 0.25 for the third. Award nothing for an item with no
-        quote to support it, except item 3 which is judged by absence.
+        Score from 0 to 1, never above 1: 0.4 for the first, 0.3 for the
+        second, 0.3 for the third. Award nothing for item 1 if there is no
+        quote to support it (unless <Evidence> says it doesn't apply);
+        items 2 and 3 are judged by absence/proportion rather than a quote.
       threshold: 0.5
       metric: discoverability_filter
 
@@ -101,10 +146,42 @@
       reporting; `tox` covers every supported interpreter.
       Every PR needs a human who wrote and can defend the change. No LLM
       co-author, no unsupervised agentic tools - see `.github/AI_POLICY.md`.
+    # No "don't just copy it in, only add what's specific to that folder" -
+    # a prior version of this task spelled out the correct answer in the
+    # ask itself, which is the case doing the skill's job (evals/AGENTS.md:
+    # "never let the case do the skill's job"). The task now only states
+    # that a root file exists, for nestedDoesNotRepeatRoot below to grade
+    # honestly - though see that assertion's own note: fixing the prompt
+    # was not enough on its own.
     task: |
       can you add a small AGENTS.md just for docs/? people keep trying to
-      build the sphinx docs and getting it wrong. we already have a root one
-      (below), don't just copy it in, only add what's specific to that folder
+      build the sphinx docs and getting it wrong. we've already got a root
+      one, it's below for reference
+    # Fetched from the pinned requests checkout (psf/requests @
+    # 5460f467b02e49471c0fd6cfc9ca0adab6351f98), 2026-08-28.
+    evidence: |
+      - docs/requirements.txt pins `Sphinx==7.2.6`, with the file's own
+        comment "Pinning to avoid unexpected breakages" - installing a
+        different or newer Sphinx is not the sanctioned way to build these
+        docs.
+      - The repo root's Makefile has no `html` target. Running `make html`
+        from the repo root fails; the Sphinx build lives in docs/Makefile
+        and has to be run either as `cd docs && make html`, or as `make
+        docs` from the repo root (the root Makefile's `docs` target does
+        exactly `cd docs && make html`).
+      - The real production build (.readthedocs.yaml) uses the `dirhtml`
+        builder, not `html`, and installs from docs/requirements.txt - a
+        local `make html` preview and the actual Read the Docs build are
+        not quite the same command.
+      This is the fact serious enough that missing it causes the mistake
+      the task describes ("people keep trying to build the sphinx docs and
+      getting it wrong"): running a Sphinx command from the repo root
+      instead of docs/, or installing an unpinned Sphinx.
+    obvious: |
+      a directory/file tour of docs/ (it is visibly Sphinx from one `ls` -
+      conf.py, *.rst files, a Makefile), Sphinx's own generic usage
+      instructions (documented by Sphinx itself, not specific to this
+      repo), and anything already stated in the root AGENTS.md above.
   assert:
     - type: javascript
       value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
@@ -118,12 +195,20 @@
         cwd: docs
       metric: cited_facts_exist
 
-    # Claim: "adding nested instructions" - a nested file narrows the root,
-    # it does not repeat it. Computed against the case's own vars.existingRoot,
-    # the exact root file the model was given, not a description of one.
-    - type: javascript
-      value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
-      metric: nested_not_redundant
+    - *discoverability_filter
+
+    # CUT: nested_not_redundant (nestedDoesNotRepeatRoot) was here - "a
+    # nested file narrows the root, it does not repeat it," computed
+    # against the case's own vars.existingRoot. First suspected of being
+    # foreclosed by the prompt (a prior task wording said "don't just copy
+    # it in" outright, doing the skill's job) - that wording was removed
+    # above, and a fresh --repeat 3 run afterward still read ceiling in
+    # BOTH arms (no-skill 0.875/1.0/1.0, skill-current 1.0/1.0/1.0): a
+    # model asked for a docs-specific file, given a root file "for
+    # reference," already avoids copy-pasting it almost every time with no
+    # skill guidance at all. The fix was tried first, per evals/AGENTS.md;
+    # it did not create separation, so this is cut rather than kept as a
+    # second unlabelled guess.
 
 - description: AGENTS.md for is-plain-obj - five files, nothing hidden
   vars:
@@ -139,6 +224,11 @@
     # tests `!(Symbol.toStringTag in value) && !(Symbol.iterator in value)`.
     # Verbatim from the pinned checkout, not summarised.
     evidence: |
+      None of this repo's facts rise to a hazard serious enough that
+      missing it would cause a real mistake - nothing here breaks a build,
+      fails a test, or violates a policy. The correct file is near-empty,
+      or explicitly says there is nothing more to add beyond package.json.
+
       Repository file listing (everything at the repo root): .editorconfig,
       benchmark.js, index.d.ts, index.js, index.test-d.ts, license,
       package.json, readme.md, test.js. A citation naming one of these files
@@ -180,6 +270,12 @@
 
       package.json "scripts": { "test": "xo && ava && tsd" }. "type": "module".
       "engines": { "node": ">=18" }. No other scripts, no build step.
+    obvious: |
+      a restated dependency list or test script from package.json (the
+      `xo && ava && tsd` chain), a directory/file tour (five files, one
+      glance), license text, or generic software-engineering advice
+      ("write clean code", "add tests for new features", "follow best
+      practices" and the like).
   assert:
     - type: javascript
       value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
@@ -191,57 +287,459 @@
         requireCitation: false
       metric: cited_facts_exist
 
-    # Negative control: the right answer here is a very short file, or a
-    # refusal to invent conventions the repo does not have. Source: Diátaxis
-    # (diataxis.fr/reference, fetched 2026-08-27; not cited by the skill),
-    # whose standard for reference-style technical material is that it is
-    # "austere and uncompromising", limited to describing "the machinery and
-    # how to operate it", and must avoid content that would "explain,
-    # instruct, discuss, opine" because that "run[s] counter to the needs of
-    # technical reference." A repo this thin gives an author almost nothing
-    # to describe, so padding with invented process or generic advice fails
-    # that standard directly.
-    - type: llm-rubric
-      # See discoverability_filter above: a custom rubricPrompt drops the
-      # default JSON-format instruction, so it is reasserted here explicitly.
-      rubricPrompt:
-        - role: system
-          content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else:
-            {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
-        - role: user
-          content: |
-            <Output>{{output}}</Output>
-            <Evidence>{{evidence}}</Evidence>
-            <Rubric>{{rubric}}</Rubric>
-      value: |
-        <Output> answers a request for an AGENTS.md for a five-file npm
-        package (sindresorhus/is-plain-obj). <Evidence> is the verbatim,
-        complete content of every file in this repo that could possibly
-        justify a claim - treat it as ground truth, and treat anything
-        <Output> asserts that is not verifiable in <Evidence> as invented,
-        even if it happens to be true of the code in general (e.g. a claim
-        that follows from index.js's actual logic still needs to trace back
-        to <Evidence>, since that is what makes it non-invented here).
+    - *discoverability_filter
 
-        Answer each with a quote from <Output>, or NONE:
+# --- New repos below: dtolnay/semver (Rust/cargo) and jqlang/jq (C/autotools),
+# added alongside a third requests case, to grow n on all three retained
+# metrics and to stop the suite measuring only two repos' conventions. Facts
+# verified against the pinned checkouts directly, not summarised from memory.
 
-        1. Score 1 if <Output> does NOT invent a repo-specific convention,
-           workflow, or constraint that <Evidence> does not support - a
-           branching model, a review process, an architecture note, a build
-           step that does not exist. Score 0 if it does. A claim that
-           <Evidence> does support (tab indentation, the realm/prototype/
-           Symbol checks index.js performs, ESM-only, Node >=18) is not
-           invented even if it is detailed.
-        2. Score 1 if <Output> does NOT pad with generic software-engineering
-           advice unconnected to this specific repo ("write clean code",
-           "add tests for new features", "follow best practices" and the
-           like). Score 0 if it does.
-        3. Score 1 if the file is either near-empty (a few lines, stating
-           only what <Evidence> actually supports) OR explicitly says there
-           is nothing here that is not already obvious from package.json.
-           Score 0 for anything longer that is not one of those two things.
+- description: fresh AGENTS.md for semver - CI checks more than plain cargo test
+  vars:
+    repo: semver
+    task: |
+      setting up an AGENTS.md for dtolnay/semver - it's a small crate but
+      we've had a couple of PRs pass locally and then fail in CI for
+      reasons that weren't obvious from just running the tests. can you
+      write us a root one?
+    # Fetched from the pinned checkout (dtolnay/semver @
+    # 280ebcb6edac3aa4cdc545dbff8a26c5ac4861fe), 2026-08-28.
+    evidence: |
+      - CI sets `RUSTFLAGS: -Dwarnings` (.github/workflows/ci.yml) - any
+        warning (dead code, an unregistered #[cfg], a deprecation) is a
+        hard CI failure even though it is silent locally.
+      - Cargo.toml pins `rust-version = "1.68"`, and that toolchain is in
+        the CI matrix, but CI only runs `cargo test` "if: matrix.rust !=
+        '1.68.0'" - at the pinned MSRV, only `cargo check` (in three
+        feature combinations) runs, never the test suite. `cargo test`
+        compiling cleanly at 1.68 has never actually been verified by CI.
+      - The feature matrix is checked explicitly and separately: `cargo
+        check --no-default-features`, `cargo check --features serde`, and
+        `cargo check --no-default-features --features serde` all run in CI
+        in addition to the default `cargo test`. A change gated behind a
+        feature combination the default `cargo test` doesn't exercise can
+        pass locally and still be broken.
+      - `cargo clippy --tests --benches -- -Dclippy::all -Dclippy::pedantic`
+        runs in CI and is not part of `cargo test` at all - lint-clean
+        tests still need a separate clippy pass before pushing.
+    obvious: |
+      a restated Cargo.toml dependency/version list, a directory/file tour
+      of src/ (parsing/eval/display/serde modules, visible from one `ls`),
+      the dual MIT/Apache-2.0 license text, or generic "how cargo test
+      works" advice.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: semver
+      metric: cited_facts_exist
 
-        Score from 0 to 1, never above 1: 0.4 for the first, 0.3 for the
-        second, 0.3 for the third.
-      threshold: 0.6
-      metric: resists_invention
+    - *discoverability_filter
+
+- description: nested AGENTS.md for semver/fuzz - not part of cargo test at all
+  vars:
+    repo: semver
+    existingRoot: |
+      CI runs `cargo test` plus `cargo check --no-default-features`,
+      `cargo check --features serde`, and `cargo check --no-default-features
+      --features serde` - a plain `cargo test` alone does not cover the
+      feature matrix. RUSTFLAGS=-Dwarnings in CI: treat any compiler
+      warning as a failure before pushing. Run `cargo clippy --tests
+      --benches -- -Dclippy::all -Dclippy::pedantic` separately; it is not
+      part of `cargo test`. The pinned MSRV (Rust 1.68, see Cargo.toml) is
+      check-only in CI - don't assume `cargo test` itself passes at that
+      toolchain version, only `cargo check`.
+    task: |
+      can you add a small AGENTS.md just for fuzz/? people keep trying to
+      build or run stuff in there the normal way and it doesn't work. we've
+      already got a root one, it's below for reference
+    evidence: |
+      - fuzz/Cargo.toml declares its own `[workspace]`, cutting it off from
+        the crate root's workspace, and its `[[bin]]` targets point
+        directly at files in fuzz/ (fuzz/parse_version.rs,
+        fuzz/parse_version_req.rs, fuzz/sort_version.rs), not the
+        conventional fuzz/fuzz_targets/ directory cargo-fuzz normally
+        creates.
+      - `cargo build`/`cargo test` from the repo root never touches this
+        directory at all. To even compile a fuzz target you need a nightly
+        toolchain (`rustup default nightly` or `cargo +nightly ...`) and
+        `cargo install cargo-fuzz` first, then run from inside fuzz/ (e.g.
+        `cargo fuzz check` or `cargo fuzz run parse_version`).
+      - CI's fuzz job only runs `cargo fuzz check` (a compile-only check) -
+        it never actually executes a fuzzer for any duration.
+      This is the fact serious enough that missing it causes the mistake
+      the task describes: running `cargo test` or plain `cargo build` from
+      fuzz/ (or the repo root) and concluding the fuzz targets are fine, or
+      not knowing nightly + cargo-fuzz are required at all.
+    obvious: |
+      a directory/file tour of fuzz/ (three .rs files, one glance), a
+      generic "what is fuzzing" explanation, and anything already stated in
+      the root AGENTS.md above (that overlap is graded separately, by
+      nested_not_redundant below, not by this rubric).
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: semver
+        cwd: fuzz
+      metric: cited_facts_exist
+
+    - *discoverability_filter
+
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
+      metric: nested_not_redundant
+
+- description: nested AGENTS.md for semver/tests - the Node.js cross-check is opt-in
+  vars:
+    repo: semver
+    existingRoot: |
+      CI runs `cargo test` plus `cargo check --no-default-features`,
+      `cargo check --features serde`, and `cargo check --no-default-features
+      --features serde` - a plain `cargo test` alone does not cover the
+      feature matrix. RUSTFLAGS=-Dwarnings in CI: treat any compiler
+      warning as a failure before pushing. Run `cargo clippy --tests
+      --benches -- -Dclippy::all -Dclippy::pedantic` separately; it is not
+      part of `cargo test`. The pinned MSRV (Rust 1.68, see Cargo.toml) is
+      check-only in CI - don't assume `cargo test` itself passes at that
+      toolchain version, only `cargo check`.
+    task: |
+      what about a nested AGENTS.md for tests/ too? we want to make sure
+      the node.js cross-check we've got actually gets run when someone
+      touches that stuff. root one's below again for reference
+    evidence: |
+      - tests/node/mod.rs starts with `#![cfg(test_node_semver)]` - this
+        module compiles to nothing unless the custom cfg flag
+        `test_node_semver` is set. A plain `cargo test` at the root
+        silently skips this cross-check entirely and still reports
+        success.
+      - To actually run it, you need Node.js installed, `npm install
+        semver` run first (a JS dependency inside a Rust crate's test
+        suite), and `RUSTFLAGS="--cfg test_node_semver"` set when invoking
+        `cargo test` - exactly what CI's separate "Node" job does
+        (.github/workflows/ci.yml).
+      - Without that cfg flag, tests/test_version_req.rs takes a
+        different, non-comparative code path - so a green `cargo test` run
+        proves nothing about whether the crate's behavior actually matches
+        the real npm `semver` package's `satisfies()`.
+      This is the fact serious enough that missing it causes the mistake
+      the task describes: assuming a green `cargo test` already covers the
+      Node.js differential check, when by default it silently does not.
+    obvious: |
+      a directory/file tour of tests/ (six files, one glance), generic
+      advice about writing Rust tests, and anything already stated in the
+      root AGENTS.md above (graded separately by nested_not_redundant).
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: semver
+        cwd: tests
+      metric: cited_facts_exist
+
+    - *discoverability_filter
+
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
+      metric: nested_not_redundant
+
+- description: fresh AGENTS.md for jq - a clean clone's ./configure trips people up
+  vars:
+    repo: jq
+    task: |
+      can you write a root AGENTS.md for jq? new contributors keep cloning
+      it and then ./configure either fails outright or does something
+      weird depending on their machine, and nobody can figure out why
+    # Fetched from the pinned checkout (jqlang/jq @
+    # 41b8edfe5437fcd25a072081c05f9f770f9e9b85), 2026-08-28.
+    evidence: |
+      - A fresh clone has no `configure` script at all and an
+        uninitialized vendor/oniguruma submodule (`git submodule status`
+        shows a leading "-", meaning not initialized - it's an empty
+        directory). The correct build sequence, per README.md, is: `git
+        submodule update --init`, then `autoreconf -i`, then `./configure
+        --with-oniguruma=builtin`, then `make -j8` and `make check`.
+      - `--with-oniguruma=builtin` is not optional decoration:
+        configure.ac's default (with_oniguruma=yes) probes the *system*
+        for oniguruma.h/libonig first, and only falls back to the vendored
+        copy if that probe fails - and the vendored fallback itself only
+        works if the submodule was actually initialized. Skipping the flag
+        on a machine with a system oniguruma links against a possibly
+        different, unintended version; skipping it with no system
+        oniguruma and no submodule silently compiles jq's regex support
+        (test/match builtins) without oniguruma at all rather than failing
+        loudly.
+      - If building from a released tarball rather than git, README.md
+        says to skip the `autoreconf` step (and flex/bison aren't needed
+        then) - running it anyway against a tarball checkout is itself a
+        footgun the README calls out.
+    obvious: |
+      a directory/file tour (src/ has 45 flat C files, visible from one
+      `ls`), restating the MIT license, a generic autotools/"how
+      ./configure works" explanation, or the Docker one-liners already
+      spelled out plainly in README.md.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: jq
+      metric: cited_facts_exist
+
+    - *discoverability_filter
+
+- description: nested AGENTS.md for jq/docs - the manual build degrades silently, not loudly
+  vars:
+    repo: jq
+    existingRoot: |
+      Build from git: `git submodule update --init`, then `autoreconf -i`,
+      then `./configure --with-oniguruma=builtin`, then `make -j8` and
+      `make check`. Skipping `--with-oniguruma=builtin` risks linking
+      against a mismatched system oniguruma, or silently building without
+      regex support if the submodule isn't initialized. Building from a
+      release tarball instead of git: skip the `autoreconf` step.
+    task: |
+      can you add a small AGENTS.md just for docs/? people keep editing the
+      manual and then wondering why their change didn't show up anywhere
+      when they ran the tests. we've already got a root one, below for
+      reference
+    evidence: |
+      - Docs are enabled by default (configure.ac: enable_docs=yes unless
+        --disable-docs is passed), and `./configure` probes for a working
+        pipenv environment inside docs/. If that probe fails, the build
+        does NOT error - it prints a warning and continues with docs
+        disabled: "Python dependencies for building jq documentation not
+        found. You can still build, install and hack on jq, but the
+        manpage will not be rebuilt and new manpage tests will not be run."
+      - Building the docs toolchain requires python3 + pipenv, run from
+        inside docs/: `pipenv sync` (docs/README.md notes you may first
+        need `virtualenv -p /usr/bin/python3 venv/` and `source
+        venv/bin/activate` depending on the system), then re-running
+        `./configure --enable-docs` from the repo root.
+      - The manpage (jq.1.prebuilt at the repo root) is generated from
+        docs/content/manual/dev/manual.yml via docs/build_manpage.py -
+        editing jq.1.prebuilt directly is pointless, it gets regenerated
+        and overwritten; edit the manual.yml source instead.
+      - docs/'s dependencies (Pipfile: jinja2, pyyaml, markdown, lxml,
+        jsonschema, importlib_resources) are a wholly separate dependency
+        graph from the root C build with no shared source of truth - the
+        root README says nothing about them.
+      This is the fact serious enough that missing it causes the mistake
+      the task describes: editing docs/content/manual/**/*.yml, running
+      `make check` at the root, seeing green, and not realizing the manual
+      tests were silently skipped because docs was never actually enabled.
+    obvious: |
+      a directory/file tour of docs/ (it is visibly a static-site
+      generator setup - templates/, content/, public/ - from one `ls`), the
+      static website assets under docs/public/ (icons, robots.txt, CNAME -
+      zero build-order significance), and anything already stated in the
+      root AGENTS.md above (graded separately by nested_not_redundant).
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: jq
+        cwd: docs
+      metric: cited_facts_exist
+
+    - *discoverability_filter
+
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
+      metric: nested_not_redundant
+
+- description: fresh AGENTS.md for zerolog - go test ./... only covers half the encoder
+  vars:
+    repo: zerolog
+    task: |
+      need a root AGENTS.md for rs/zerolog - a couple contributors have
+      pushed changes that passed their local `go test ./...` and then
+      broken CI anyway, and I want to stop that
+    # Fetched from the pinned checkout (rs/zerolog @
+    # dfd11cca1143ba03ba0fc0ff14e5dbb4d61f6f0a), 2026-08-28. No Makefile in
+    # this repo - CI drives everything via raw go commands
+    # (.github/workflows/test.yml).
+    evidence: |
+      - encoder_json.go and encoder_cbor.go are mutually exclusive via a
+        `binary_log` build tag, and CI runs two separate, required test
+        commands with genuinely disjoint coverage: `go test -race -bench .
+        -benchmem ./...` and `go test -tags binary_log -race ./...`. A
+        plain `go test ./...` alone never exercises the CBOR encoder path
+        at all, and running only the tagged variant skips several
+        `Example` tests (guarded by `!binary_log`) that assert literal JSON
+        text output.
+      - go.mod pins `go 1.23` - this is enforced, not aspirational: an
+        older local toolchain (verified: go1.22.2) fails outright with
+        "go.mod requires go >= 1.23".
+      - CONTRIBUTING.md only says "Ensure `go test ./...` passes" - it does
+        not mention the binary_log tag at all, so following the
+        human-facing contributing doc alone misses half the encoder
+        surface.
+    obvious: |
+      a restated go.mod dependency list (coreos/go-systemd,
+      mattn/go-colorable, pkg/errors, rs/xid), a directory/file tour, the
+      MIT license text, README.md's own API examples/benchmarks, or
+      generic "this is a Go project, run go build" advice.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: zerolog
+      metric: cited_facts_exist
+
+    - *discoverability_filter
+
+- description: nested AGENTS.md for zerolog/journald - the test file only runs on Linux
+  vars:
+    repo: zerolog
+    existingRoot: |
+      CI requires two separate test commands, not one: `go test -race
+      -bench . -benchmem ./...` and `go test -tags binary_log -race
+      ./...` - encoder_json.go and encoder_cbor.go are mutually exclusive
+      build-tagged files with disjoint test coverage, and neither command
+      alone exercises both. go.mod pins `go 1.23`; older toolchains fail to
+      build this module at all.
+    task: |
+      can you add an AGENTS.md just for journald/? I want to make sure
+      whoever touches it knows the tests there actually mean something -
+      we've already got a root one, pasted below
+    evidence: |
+      - journald.go carries `//go:build !windows`, but journald_test.go
+        carries the narrower `//go:build linux` - so on macOS the package
+        still compiles (macOS isn't Windows) but its test file is excluded
+        entirely. `go test ./...` on macOS reports "ok" with zero tests run
+        for this package, not a failure - CI's own matrix includes
+        macos-latest and would never flag this.
+      - Even on Linux, the one example that touches the real
+        `journal.Send` path (ExampleNewJournalDWriter) has an empty
+        `// Output:` comment, so it passes unconditionally regardless of
+        whether journald is actually reachable - the source's own comment
+        admits "There is no automated way to verify the output". Real
+        verification needs `journalctl -o verbose -f` on a Linux box with
+        systemd running, which nothing here automates.
+      This is the fact serious enough that missing it causes the mistake
+      the task describes: trusting a green `go test ./...` on a non-Linux
+      machine as proof this package works, when it silently ran nothing.
+    obvious: |
+      a directory/file tour of journald/ (two files, one glance), the
+      generic fact that journald only exists on Linux, restating that this
+      package "wraps journald" (already the package doc comment), and
+      anything already stated in the root AGENTS.md above (graded
+      separately by nested_not_redundant).
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: zerolog
+        cwd: journald
+      metric: cited_facts_exist
+
+    - *discoverability_filter
+
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
+      metric: nested_not_redundant
+
+- description: nested AGENTS.md for zerolog/cmd/lint - a separate module root tooling never reaches
+  vars:
+    repo: zerolog
+    existingRoot: |
+      CI requires two separate test commands, not one: `go test -race
+      -bench . -benchmem ./...` and `go test -tags binary_log -race
+      ./...` - encoder_json.go and encoder_cbor.go are mutually exclusive
+      build-tagged files with disjoint test coverage, and neither command
+      alone exercises both. go.mod pins `go 1.23`; older toolchains fail to
+      build this module at all.
+    task: |
+      what about cmd/lint/ - can you write it a small AGENTS.md too? people
+      keep assuming it gets covered by the normal build. root file's below
+      again
+    evidence: |
+      - cmd/lint/go.mod declares its own module
+        (`github.com/rs/zerolog/cmd/lint`, `go 1.15`, requiring
+        `golang.org/x/tools v0.1.8`) - a hard module boundary, not just a
+        convention. `go build ./...`/`go vet ./...` from the repo root
+        never reaches it at all (verified: `go vet ./cmd/lint/...` from
+        root fails with "directory prefix cmd/lint does not contain main
+        module"; `go list ./...` from root omits cmd/lint entirely, while
+        the sibling cmd/prettylog/ - which has no go.mod of its own - does
+        appear).
+      - Building or vetting it requires `cd cmd/lint && go build .` (or an
+        explicit `go build github.com/rs/zerolog/cmd/lint`), and it pulls
+        its own separate dependency tree unrelated to the root module's
+        go.sum - `go mod tidy` at root never touches or validates it.
+      - Its own README says it is deprecated: "In favor of
+        https://github.com/ykadowak/zerologlint which is integrated with
+        go vet and golangci-lint."
+      This is the fact serious enough that missing it causes the mistake
+      the task describes: assuming root-level `go build ./...`/`go vet
+      ./...` already covers this directory, when it structurally cannot.
+    obvious: |
+      a directory/file tour, restating that it's "a linter tool" (already
+      stated plainly in its own README), and anything already stated in
+      the root AGENTS.md above (graded separately by nested_not_redundant).
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: zerolog
+        cwd: cmd/lint
+      metric: cited_facts_exist
+
+    - *discoverability_filter
+
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
+      metric: nested_not_redundant
+
+- description: nested AGENTS.md for semver/benches - criterion works on stable but not under Miri
+  vars:
+    repo: semver
+    existingRoot: |
+      CI runs `cargo test` plus `cargo check --no-default-features`,
+      `cargo check --features serde`, and `cargo check --no-default-features
+      --features serde` - a plain `cargo test` alone does not cover the
+      feature matrix. RUSTFLAGS=-Dwarnings in CI: treat any compiler
+      warning as a failure before pushing. Run `cargo clippy --tests
+      --benches -- -Dclippy::all -Dclippy::pedantic` separately; it is not
+      part of `cargo test`. The pinned MSRV (Rust 1.68, see Cargo.toml) is
+      check-only in CI - don't assume `cargo test` itself passes at that
+      toolchain version, only `cargo check`.
+    task: |
+      one more - a small AGENTS.md for benches/? someone tried running the
+      benchmarks under miri and got confused about why it didn't work.
+      pasting the root file below again
+    evidence: |
+      - The `[[bench]]` declaration (name = "parse", harness = false) lives
+        in the root Cargo.toml, not in benches/ itself - benches/parse.rs
+        is the only file, with no build config of its own.
+      - Unlike many Rust crates where `cargo bench` needs a nightly
+        toolchain (the native `#[bench]` harness), this crate uses
+        `criterion` with `harness = false`, so plain `cargo bench` works
+        fine on stable Rust.
+      - `criterion` is scoped as a dev-dependency only outside Miri:
+        `[target.'cfg(not(miri))'.dev-dependencies] criterion = { version =
+        "0.8", default-features = false }`. Running anything Miri-driven
+        against this crate (`cargo miri test`, etc.) will not have
+        `criterion` available at all - benches/ is structurally excluded
+        from any Miri-based flow, not merely slow under it.
+      This is the fact serious enough that missing it causes the mistake
+      the task describes: assuming benches/ needs nightly (the common Rust
+      convention) when it doesn't, and not knowing why it's unreachable
+      under Miri when it is.
+    obvious: |
+      a directory/file tour of benches/ (one file), a generic explanation
+      of what criterion or cargo bench are, and anything already stated in
+      the root AGENTS.md above (graded separately by nested_not_redundant).
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:citedFactsExistInRepo
+      config:
+        repo: semver
+        cwd: benches
+      metric: cited_facts_exist
+
+    - *discoverability_filter
+
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
+      metric: nested_not_redundant

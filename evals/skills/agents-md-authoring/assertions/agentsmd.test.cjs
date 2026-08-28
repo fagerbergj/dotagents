@@ -64,6 +64,26 @@ assert.equal(pass('run `npm run build`'), false, 'an unlisted script fails');
 const noPkg = fs.mkdtempSync(path.join(os.tmpdir(), 'agentsmd-nopkg-'));
 assert.equal(citedFactsExistInRepoDir('run `npm test`', noPkg).pass, false, 'no package.json at all fails an npm citation');
 
+// npm builtin subcommands: `npm install <pkg>` installs from the registry,
+// it is not a package.json script named "install" - reproduces the live bug
+// where semver's real `npm install semver` (a Rust crate with no
+// package.json, installing the differential-test comparison package) was
+// false-flagged as invented. An explicit `npm run install` (unusual, but
+// legal if a script is actually named "install") still checks the script.
+assert.deepEqual(checksForSpan(noPkg, 'npm install semver'), [], 'npm install <pkg> produces no check at all - unverifiable, not fabrication');
+assert.deepEqual(checksForSpan(dir, 'npm ci'), [], 'npm ci is a builtin subcommand, not a script lookup');
+assert.equal(pass('run `npm run build`'), false, 'an explicit `run` still checks real scripts and still fails on an unlisted one');
+assert.equal(pass('run `npm test`'), true, 'bare test/start remain script-name checks, not builtins skipped');
+
+// make against an autotools project: no Makefile exists pre-configure (it is
+// generated from Makefile.in/Makefile.am), so a real, documented post-configure
+// command like the README's own `make check` must not false-flag as invented.
+const autotools = fs.mkdtempSync(path.join(os.tmpdir(), 'agentsmd-autotools-'));
+fs.writeFileSync(path.join(autotools, 'configure.ac'), 'AC_INIT([x], [1.0])\n');
+assert.deepEqual(checksForSpan(autotools, 'make check'), [], 'make targets against an autotools project with no generated Makefile yet are unverifiable, not invented');
+const noAutotools = fs.mkdtempSync(path.join(os.tmpdir(), 'agentsmd-noconfigure-'));
+assert.equal(citedFactsExistInRepoDir('run `make check`', noAutotools).pass, false, 'a repo with no Makefile AND no configure.ac still fails a make citation');
+
 // tox: named env vs invented env, bare tox.
 assert.equal(pass('run `tox -e py310`'), true, 'a real testenv passes');
 assert.equal(pass('run `tox -e py311`'), false, 'an unlisted env fails');

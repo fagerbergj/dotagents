@@ -114,20 +114,50 @@ function checkMake(repoDir, tokens, cwdDir = repoDir) {
   }
   if (!wanted.length) return null; // bare `make`: nothing to verify
   const targets = readMakeTargets(dir);
-  if (!targets) return { ok: false, note: `no Makefile at ${path.relative(repoDir, dir) || '.'}` };
+  if (!targets) {
+    // Autotools (and similar) projects commit no Makefile at all - `configure`
+    // generates one from Makefile.in/Makefile.am at build time. A `make
+    // <target>` citing the project's own real, documented post-configure
+    // workflow (e.g. jq's README: `./configure && make check`) is
+    // unverifiable against a static pre-configure checkout, not fabricated -
+    // proven live: every jq-case citation of `make check`/`make -j8` (copied
+    // verbatim from README.md) false-flagged as invented before this guard.
+    if (fs.existsSync(path.join(dir, 'configure.ac')) || fs.existsSync(path.join(dir, 'configure.in'))) return null;
+    return { ok: false, note: `no Makefile at ${path.relative(repoDir, dir) || '.'}` };
+  }
   const missing = wanted.filter((t) => !targets.has(t));
   return missing.length
     ? { ok: false, note: `Makefile at ${path.relative(repoDir, dir) || '.'} has no target(s) ${missing.join(', ')}` }
     : { ok: true };
 }
 
+// A real npm/yarn/pnpm subcommand (install, ci, audit, ...) needs no
+// package.json script entry - `npm install <pkg>` installs from the
+// registry, unverifiable against a static checkout like a network command.
+// Proven live: semver's case correctly cites `npm install semver` (the real
+// Node.js differential-test setup, .github/workflows/ci.yml's "Node" job)
+// against a Rust crate with no package.json at all, and this false-flagged
+// as invented before excluding builtins - it was reading "install" as a
+// script name to look up rather than the subcommand it is. Deliberately
+// excludes test/start: those really are npm/yarn's implicit-script
+// shorthand, and catching a bad citation of one is this check's entire
+// point (see the comment above checkPackageScript).
+const NPM_BUILTIN_SUBCOMMANDS = new Set([
+  'install', 'i', 'ci', 'add', 'remove', 'rm', 'uninstall', 'un', 'link', 'ln', 'unlink',
+  'outdated', 'audit', 'publish', 'pack', 'list', 'ls', 'view', 'v', 'init', 'dedupe',
+  'prune', 'update', 'up', 'upgrade', 'exec', 'create', 'config', 'cache', 'doctor',
+  'fund', 'login', 'logout', 'owner', 'ping', 'pkg', 'root', 'search', 'set', 'whoami',
+]);
+
 // `npm|yarn|pnpm [run] <script>`, including npm/yarn's bare `test`/`start`.
 function checkPackageScript(repoDir, tokens) {
   const runner = tokens[0];
-  let rest = tokens.slice(1);
-  if (rest[0] === 'run' || rest[0] === 'run-script') rest = rest.slice(1);
+  const afterRunner = tokens.slice(1);
+  const explicitRun = afterRunner[0] === 'run' || afterRunner[0] === 'run-script';
+  const rest = explicitRun ? afterRunner.slice(1) : afterRunner;
   const script = rest[0];
   if (!script || script.startsWith('-')) return null;
+  if (!explicitRun && NPM_BUILTIN_SUBCOMMANDS.has(script)) return null;
   const scripts = readNpmScripts(repoDir);
   if (!scripts) return { ok: false, note: `no package.json in the repo for "${runner} ${rest.join(' ')}"` };
   return scripts.has(script)

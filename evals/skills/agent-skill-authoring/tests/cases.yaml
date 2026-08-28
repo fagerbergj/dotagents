@@ -34,21 +34,22 @@
       type: javascript
       value: file://assertions/skillauth.cjs:validatesWithSkillsRef
       metric: skill_validates
-    # 2. A JSON-Schema floor on the transformed package: is there a non-empty
-    #    SKILL.md at all. Native promptfoo validation, not a hand-rolled check.
-    - &package_shape
-      type: is-json
-      metric: package_shape
-      value:
-        type: object
-        required: [SKILL.md]
-        properties:
-          SKILL.md:
-            type: string
-            minLength: 1
+    # CUT (was here): package_shape, a native is-json floor requiring a
+    # non-empty SKILL.md. --repeat 3 read -0.25 (sd 0.21): the skill arm
+    # scored WORSE, but skill_validates (above) already requires a real,
+    # non-empty SKILL.md to pass skills-ref at all - anything package_shape
+    # could catch, skill_validates catches first and more strictly. It was
+    # measuring the same failure twice, once through a weaker gate, so its
+    # noise added no information skill_validates didn't already carry. Cut
+    # rather than kept as a duplicate.
     # 3. The two spec facts skills-ref does not check (measured: a 600-line
     #    body and a dangling references/ pointer both still validate clean) -
     #    the body budget and reference existence/one-hop rule.
+    #    GUARD, not a pure discriminator: --repeat 3 sd is high (0.27) because
+    #    most rows already pass, but it is what caught the skill bundling a
+    #    references/ file and never linking it from SKILL.md's body - a real,
+    #    repeated defect the reference validator (skill_validates) does not
+    #    check for. Stays wired to catch that regression again.
     - &spec_budget_refs
       type: javascript
       value: file://assertions/skillauth.cjs:specBudgetAndRefs
@@ -79,19 +80,22 @@
            loaded, would they get this skill triggered for a request like the
            one above, and correctly left alone for an unrelated request? Quote
            the words that make the trigger specific, or answer NONE.
-        2. Take the single most detailed or exhaustive piece of domain
-           knowledge this task requires (a full list, a schema, an edge-case
-           table). Anthropic's engineering team writes that content should move
-           out of SKILL.md "when the SKILL.md file becomes unwieldy" (Equipping
-           agents for the real world with Agent Skills, anthropic.com). Is that
-           knowledge in a separate file, loaded only when needed, rather than
-           inlined in the main body? The instruction has to come from SKILL.md
-           ITSELF telling the agent when to open that file - quote that exact
-           sentence from SKILL.md's own body text. A line of prose or an echo
-           printed by a script at runtime, a comment inside the separate file
-           itself, or the file simply existing without SKILL.md pointing to it
-           does not count; answer NONE if SKILL.md's own body contains no such
-           instruction.
+        2. Progressive disclosure. Anthropic's engineering team writes that
+           content should move out of SKILL.md "when the SKILL.md file
+           becomes unwieldy" (Equipping agents for the real world with Agent
+           Skills, anthropic.com). Does the package avoid inlining a long,
+           detailed list/schema/edge-case table in SKILL.md's body - either
+           because this task's domain knowledge is compact enough that
+           nothing needs to move out (quote the passage covering it inline),
+           or because it correctly points to a separate references/, assets/,
+           or scripts/ file via a real instruction in SKILL.md's own body
+           text telling the agent when to open it (quote that instruction)?
+           A line of prose or an echo printed by a script at runtime, a
+           comment inside the separate file itself, or the file simply
+           existing without SKILL.md pointing to it does not count. Answer
+           NONE only if the body pads itself with an exhaustive list/schema/
+           table that should have moved to a separate file, or points to a
+           separate file with nothing in the body saying when to open it.
         3. Take the first concrete action a user of this skill needs the agent
            to perform. Could the agent perform it without guessing a command, a
            file path, or a decision the author left implicit? Quote the
@@ -120,7 +124,6 @@
       An agent reviewing a Terraform change can actually catch a hardcoded region, a missing required tag, and a module pinned to a branch rather than a version tag - not just a reminder that conventions exist.
   assert:
     - *skill_validates
-    - *package_shape
     - *spec_budget_refs
     - *skill_quality
 
@@ -148,7 +151,6 @@
       The name and description satisfy the spec (a lowercase-hyphenated name, and a description that states both what the skill does and when to use it), and every references/ path the body still points to is either included in the package or the pointer is removed.
   assert:
     - *skill_validates
-    - *package_shape
     - *spec_budget_refs
     - *skill_quality
 
@@ -160,7 +162,6 @@
       A postmortem the agent writes states the root cause and the timeline as identifiable pieces of the document, not folded into a single narrative paragraph a reader has to dig through.
   assert:
     - *skill_validates
-    - *package_shape
     - *spec_budget_refs
     - *skill_quality
 
@@ -172,7 +173,6 @@
       The instructions actually push toward a smaller image (a multi-stage build or an equivalent) and toward not leaving a stale or unpinned base image in place, not just a general reminder to "keep images small and secure."
   assert:
     - *skill_validates
-    - *package_shape
     - *spec_budget_refs
     - *skill_quality
 
@@ -184,7 +184,6 @@
       Given a stated incident type or affected system, the skill lets the agent point at which team or person to page next - not just "check the escalation matrix."
   assert:
     - *skill_validates
-    - *package_shape
     - *spec_budget_refs
     - *skill_quality
 
@@ -244,7 +243,6 @@
       small thing - we always want responses to use British spelling (colour, organise, not color/organize). can you make that a skill so it just always applies?
   assert:
     - *skill_validates
-    - *package_shape
     - *spec_budget_refs
     - type: llm-rubric
       metric: control_quality
