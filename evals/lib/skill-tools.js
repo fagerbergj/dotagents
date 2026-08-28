@@ -19,6 +19,9 @@ const DEFAULTS = {
   // 64 KB is ~16 of this skill's files (largest is 4.1 KB, 173 KB bundled in
   // total). Enough to read widely, far short of inlining the whole tree.
   maxResourceBytes: 64 * 1024,
+  // "Batch your questions and ask early" is only a real claim if asking has a
+  // cost. Small enough that a chatty arm visibly pays for it in questionsAsked.
+  maxQuestions: 3,
 };
 
 const TOOL = {
@@ -55,10 +58,53 @@ const SOURCE_TOOL = {
   },
 };
 
+// Offered whenever the prompt hands the provider a `userPersona`, on the same
+// terms as read_source: having someone to ask is the environment the case sets
+// up, not a skill affordance, so both arms get it when a persona is configured
+// and neither does when it isn't. Otherwise a skill that says "ask before you
+// design" is graded down for having nobody to ask, and a skill that doesn't
+// say so wins by default for inventing an answer instead of stalling.
+const ASK_USER_TOOL = {
+  type: 'function',
+  function: {
+    name: 'ask_user',
+    description:
+      'Ask the user a single clarifying question before proceeding. Questions are limited - batch what you need into as few calls as possible. Returns the user\'s answer, or a refusal once the budget is spent.',
+    parameters: {
+      type: 'object',
+      properties: { question: { type: 'string', description: 'One question for the user.' } },
+      required: ['question'],
+      additionalProperties: false,
+    },
+  },
+};
+
+// The simulated user's whole world. A maximally cooperative persona is the
+// failure mode: asked what backoff library to use, an LLM playing "the user"
+// will happily suggest one from training data even though no case gave it
+// that fact, handing the model the exact thing a case tests whether it finds
+// on its own. Rule 2 forecloses that even when the model asks point-blank.
+function personaSystemPrompt(persona) {
+  return `You are role-playing the human user in a conversation. An AI assistant is doing work on your behalf and may ask you a clarifying question. Answer as that person would in a quick chat reply - not as a helpful assistant.
+
+What you know: ${persona.knows || '(nothing beyond what you already asked for)'}
+What you want: ${persona.wants || '(exactly what you already asked for, nothing more specific)'}
+What you explicitly do NOT know: ${persona.doesNotKnow || '(anything not listed under "what you know")'}
+
+Rules, in order:
+1. Answer only from "what you know" and "what you want" above. Never volunteer anything else, even if it seems helpful.
+2. If the question touches "what you explicitly do NOT know", or anything not covered above - including a specific library, tool, file, API, or technical choice you were not told about - say plainly that you don't know and it's the assistant's call. Do not guess, suggest, hint, or reason your way to a plausible answer.
+3. One or two sentences, the way a busy person types. No lists, no caveats about being an AI.`;
+}
+
 // Thrown for anything that means the harness could not run the turn. A grader or
 // tool that could not run is not a verdict, so this propagates and promptfoo
 // records an error row rather than scoring an empty completion as a bad answer.
 class LoopError extends Error {}
+
+function questionBudget(persona) {
+  return persona?.maxQuestions ?? DEFAULTS.maxQuestions;
+}
 
 function listing(dir, root) {
   const rel = path.relative(root, dir) || '.';
@@ -173,6 +219,41 @@ class SkillToolsProvider {
       && process.env.PROMPTFOO_CACHE_ENABLED !== 'false';
   }
 
+  // A second call through the same chat() plumbing the main loop uses, so it
+  // gets identical error handling (a dead gateway fails the turn the same way,
+  // rather than the sim going silently empty). It also gets identical caching
+  // semantics, which does NOT mean --repeat replays one answer: promptfoo
+  // namespaces every repeat index separately and wraps the whole per-step
+  // provider call in it, so the sim re-rolls each repeat exactly as the model
+  // does. Correct - --repeat exists for independent samples - but it means a
+  // persona doubles the independent LLM draws per row; see AGENTS.md Harness
+  // facts. Its tokens are folded into `state.usage` by the caller.
+  async askUser(question, persona, state, context) {
+    const max = questionBudget(persona);
+    if (!question || !String(question).trim()) return 'refused: question must be a non-empty string.';
+    if (state.count >= max) {
+      return `refused: question budget of ${max} is spent. Proceed on your stated assumptions and say what you assumed.`;
+    }
+    state.count += 1;
+    const body = {
+      model: this.config.model,
+      messages: [
+        { role: 'system', content: personaSystemPrompt(persona) },
+        { role: 'user', content: String(question) },
+      ],
+    };
+    const { json, cached } = await this.chat(body, context);
+    const u = json.usage || {};
+    const roundTotal = u.total_tokens ?? (u.prompt_tokens || 0) + (u.completion_tokens || 0);
+    state.usage.prompt += u.prompt_tokens || 0;
+    state.usage.completion += u.completion_tokens || 0;
+    state.usage.total += roundTotal;
+    if (cached) state.usage.cached += roundTotal;
+    state.usage.numRequests += 1;
+    const content = json.choices[0].message?.content ?? '';
+    return typeof content === 'string' ? content.trim() : content;
+  }
+
   async callApi(prompt, context = {}) {
     let messages;
     try {
@@ -187,6 +268,12 @@ class SkillToolsProvider {
     const skillDir = context.prompt?.config?.skillDir;
     // The source tree, when the suite reviews real code. Symmetric across arms.
     const repoDir = context.prompt?.config?.repoDir;
+    // Same symmetry: whichever arm's prompt function hands the provider a
+    // persona gets ask_user, and an arm that names none never sees the tool
+    // exist. Gating this on the skill instead would make the delta measure
+    // tool access, not the skill - the exact reasoning read_source already
+    // applies to the repo tree.
+    const persona = context.prompt?.config?.userPersona || null;
     const real = (dir, label) => {
       try {
         return fs.realpathSync(dir);
@@ -198,16 +285,24 @@ class SkillToolsProvider {
     if (skillDir) roots[TOOL.function.name] = real(skillDir, 'skillDir');
     if (repoDir) roots[SOURCE_TOOL.function.name] = real(repoDir, 'repoDir');
     const root = roots[TOOL.function.name] || null;
+    // A budget of 0 or less would offer a tool that always refuses, still
+    // costing the model a round to find that out - treat it as no persona.
     const tools = [
       ...(roots[TOOL.function.name] ? [TOOL] : []),
       ...(roots[SOURCE_TOOL.function.name] ? [SOURCE_TOOL] : []),
+      ...(persona && questionBudget(persona) > 0 ? [ASK_USER_TOOL] : []),
     ];
     const maxToolCalls = this.config.maxToolCalls ?? DEFAULTS.maxToolCalls;
     const maxBytes = this.config.maxResourceBytes ?? DEFAULTS.maxResourceBytes;
     const budget = { total: maxBytes, remaining: maxBytes };
+    const questions = { count: 0, usage: { prompt: 0, completion: 0, total: 0, cached: 0, numRequests: 0 } };
 
     const usage = { prompt: 0, completion: 0, total: 0, cached: 0, numRequests: 0 };
     const loaded = [];
+    // Counted separately from `loaded`: an ask_user call has no resource path, so
+    // a model that burns its rounds on refused questions would otherwise throw
+    // with an empty `requested:` and hide the real cause.
+    let askAttempts = 0;
     for (let round = 0; ; round += 1) {
       const body = {
         model: this.config.model,
@@ -234,14 +329,22 @@ class SkillToolsProvider {
         // reply with blank lines, and only the skill arm sends one - so untrimmed
         // output leaves the arms differing by whitespace as well as by the skill.
         const content = message.content ?? '';
+        // The sim's own tokens are a real cost of the turn, not a side channel -
+        // folded into the same usage object the grader's cost assertions read.
+        usage.prompt += questions.usage.prompt;
+        usage.completion += questions.usage.completion;
+        usage.total += questions.usage.total;
+        usage.cached += questions.usage.cached;
+        usage.numRequests += questions.usage.numRequests;
         return {
           output: typeof content === 'string' ? content.trim() : content,
           tokenUsage: usage,
-          metadata: { resourcesLoaded: loaded, toolRounds: round },
+          metadata: { resourcesLoaded: loaded, toolRounds: round, questionsAsked: questions.count },
         };
       }
       if (round >= maxToolCalls) {
-        throw new LoopError(`tool loop exceeded ${maxToolCalls} rounds (requested: ${loaded.join(', ')})`);
+        const hint = askAttempts ? `; ${askAttempts} were ask_user` : '';
+        throw new LoopError(`tool loop exceeded ${maxToolCalls} rounds (requested: ${loaded.join(', ')}${hint})`);
       }
       messages = messages.concat([message]);
       for (const call of calls) {
@@ -251,12 +354,18 @@ class SkillToolsProvider {
         } catch {
           args = {};
         }
-        const requested = args.path;
         const called = call.function?.name;
-        const content = roots[called]
-          ? loadResource(roots[called], requested, budget)
-          : `refused: unknown tool "${called}".`;
-        loaded.push(String(requested));
+        let content;
+        if (called === ASK_USER_TOOL.function.name) {
+          askAttempts += 1;
+          content = await this.askUser(args.question, persona || {}, questions, context);
+        } else {
+          const requested = args.path;
+          content = roots[called]
+            ? loadResource(roots[called], requested, budget)
+            : `refused: unknown tool "${called}".`;
+          loaded.push(String(requested));
+        }
         messages.push({ role: 'tool', tool_call_id: call.id, content });
       }
     }
