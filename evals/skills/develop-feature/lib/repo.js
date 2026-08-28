@@ -40,8 +40,10 @@ function materialise(log = () => {}) {
   }
   try {
     git(GIT_DIR, ['fetch', '-q', '--filter=blob:none', 'origin', SHA]);
-  } catch {
-    throw new Error(`repo fixture: ${SHA.slice(0, 12)} cannot be fetched from ${REPO} - GitHub has dropped it; re-pin.`);
+  } catch (err) {
+    // A dropped SHA and a dead network fail identically here, so the git error
+    // rides along as `cause` rather than being replaced by a guess at which.
+    throw new Error(`repo fixture: ${SHA.slice(0, 12)} cannot be fetched from ${REPO} - GitHub has dropped it, or the fetch could not reach GitHub at all; see cause. Re-pin if the commit is gone.`, { cause: err });
   }
   fs.rmSync(TREE_DIR, { recursive: true, force: true });
   fs.mkdirSync(TREE_DIR, { recursive: true });

@@ -78,8 +78,9 @@ defaultTest:
     # declares no per-token price, so it would read zero and pass trivially.
     #
     # Kept despite sitting at ceiling (sd 0.000) in both arms on the 4-case
-    # --repeat 3 run, which looks like the AGENTS.md "dead metric" case for
-    # cutting. It isn't one: check-suite.py exempts latency from needing a
+    # --repeat 3 run it was first measured on (the suite is 11 cases now),
+    # which looks like the AGENTS.md "dead metric" case for cutting. It isn't
+    # one: check-suite.py exempts latency from needing a
     # `metric` at all (NO_METRIC_NEEDED) because this was never meant as a
     # scored comparison axis, only a runaway guard - it costs nothing beyond
     # the generation call already happening (no extra judge round-trip, unlike
