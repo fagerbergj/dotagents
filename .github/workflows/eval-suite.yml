@@ -33,7 +33,7 @@ on:
           deliberately as the harness moves, the same way a caller would bump
           their own pin.
         type: string
-        default: '2a8c67a0d9324375b01a08d78cd8773fd927e7ff'
+        default: '7ccf646e62aa02c7f3986de8c39eb32004440064'
       environment:
         description: >
           Deployment environment gating the paid job. Required - GitHub's
