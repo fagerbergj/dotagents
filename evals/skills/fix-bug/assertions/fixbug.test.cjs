@@ -2,7 +2,12 @@
 // fixtures. Run `node lib/fetch-bugfix-fixtures.js .` first; skips cleanly if
 // that hasn't happened yet (same convention as review-code's assertion test).
 const assert = require('node:assert');
+const path = require('node:path');
 const { noInventedFileRefs, touchesRealFix } = require('./fixbug.cjs');
+const { specs } = require('../lib/bugfix-fixtures.js');
+
+// Same resolution fixbug.cjs uses: independent of the cwd the test is run from.
+const CONTROLS = specs(path.resolve(__dirname, '..')).filter((f) => f.verdict === 'not-a-bug');
 
 const ctx = (fixture, issueBody = '') => ({ vars: { fixture, issueBody } });
 
@@ -15,11 +20,23 @@ try {
   assert.equal(touchesRealFix('getCompletions in completions.go mutates the args slice.', ctx('cobra-2356')).score, 1, 'cobra: file + function both cited');
   assert.equal(touchesRealFix('findRoute in tree.go should dedupe.', ctx('chi-1029')).score, 1, 'chi: file + function both cited');
 
-  // touchesRealFix - the "not a bug" control: no diff proposed passes,
+  // touchesRealFix - the "not a bug" controls: no diff proposed passes,
   // a proposed diff against the source fails even if well-formed.
-  assert.equal(touchesRealFix('This traces to a local http.py shadowing the stdlib module. No change needed in requests.', ctx('requests-7006')).pass, true, 'no phantom fix: pass');
-  const phantom = touchesRealFix('```diff\n--- a/src/requests/models.py\n+++ b/src/requests/models.py\n@@ -1,2 +1,2 @@\n-old\n+new\n```', ctx('requests-7006'));
-  assert.equal(phantom.pass, false, 'a diff block against a non-bug fails');
+  //
+  // Run over EVERY control, not just requests-7006, and asserting score 1
+  // rather than pass. echo-3052 shipped with a `fix` SHA (its PR touches only
+  // group_test.go) and empty sourceFiles, which sent it down the recall branch
+  // where the correct "no source change" answer scored 0 - in both arms, so the
+  // row was dead weight that penalised the right answer. A control is shaped
+  // `fix: null` or it is not a control; this pins that.
+  assert.ok(CONTROLS.length, 'the suite has at least one not-a-bug control');
+  for (const f of CONTROLS) {
+    assert.equal(f.fix, null, `${f.name}: a not-a-bug control must carry "fix": null - a fix SHA with empty sourceFiles routes it to the recall branch, where it scores 0 forever`);
+    const declined = touchesRealFix('No change needed here - this is intended behaviour, not a defect in this codebase.', ctx(f.name));
+    assert.equal(declined.score, 1, `${f.name}: the correct "no source change" answer must score 1, got ${declined.score} (${declined.reason})`);
+    const phantom = touchesRealFix('```diff\n--- a/router.go\n+++ b/router.go\n@@ -1,2 +1,2 @@\n-old\n+new\n```', ctx(f.name));
+    assert.equal(phantom.pass, false, `${f.name}: a diff block against a non-bug fails`);
+  }
 
   // noInventedFileRefs
   assert.equal(noInventedFileRefs('See src/flask/app.py for the fix.', ctx('flask-6096')).score, 1, 'real path in the tree passes');

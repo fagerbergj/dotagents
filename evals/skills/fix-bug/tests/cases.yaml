@@ -1,14 +1,19 @@
 # Real bug-fix commits, each pinned at the fix's PARENT commit so the model
 # has to produce the fix rather than read it (see lib/bugfix-fixtures.js).
 #
-# 18 real bugs across Python (flask, jinja, click), TypeScript (vue), and Go
-# (cobra, chi, gorilla/mux, echo, urfave/cli), plus 3 negative controls:
-# cobra-2285 and click-3055 are real bugs whose accepted fix is a 1-2 line
-# change to one file - the correct answer stays that small. requests-7006 and
-# echo-3052 have no source fix at all: requests-7006's traceback fingerprints
-# the reporter's own environment, not a defect in requests; echo-3052's
-# "bug" is a maintainer-acknowledged surprising-but-intended default (quoted
-# in its rootCause) where the accepted PR adds only tests, no source change.
+# 20 fixtures: 18 real bugs across Python (flask, jinja, click), TypeScript
+# (vue), and Go (cobra, chi, gorilla/mux, echo, urfave/cli), plus 2 negative
+# controls. The controls - requests-7006 and echo-3052 - have no source fix at
+# all and carry `"fix": null` in bugfix-fixtures.json, which is what puts
+# touches_real_fix on its inverted branch (a control with a fix SHA and empty
+# sourceFiles scores 0 forever, including for the correct answer;
+# assertions/fixbug.test.cjs pins the shape). requests-7006's traceback
+# fingerprints the reporter's own environment, not a defect in requests;
+# echo-3052's "bug" is a maintainer-acknowledged surprising-but-intended
+# default (quoted in its rootCause) whose accepted PR touches only
+# group_test.go - tests, no source change. Two of the 18, cobra-2285 and
+# click-3055, double as restraint cases: their accepted fix is a 1-2 line
+# change to one file, so the correct answer stays that small.
 # Every issue and PR quoted as ground truth was authored by a human
 # (user.type == "User"), checked individually against the GitHub API, not a
 # bot - including a check of issue/PR body text for an AI-authorship

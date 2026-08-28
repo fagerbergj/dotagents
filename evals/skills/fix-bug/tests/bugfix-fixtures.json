@@ -178,10 +178,11 @@
     "repo": "labstack/echo",
     "issue": 2485,
     "parent": "ed8bbe4b6cbf519766c99e492b9cc427404b3719",
-    "fix": "2e1ed480a17f5839468dddc4bdf26373a67ce60a",
+    "fix": null,
     "issueAuthor": "endorama",
     "fixAuthor": "Solaris-star",
     "verdict": "not-a-bug",
+    "note": "negative control: the accepted PR (2e1ed480a17f5839468dddc4bdf26373a67ce60a, by Solaris-star) touches only group_test.go - it documents and tests an intended default, it does not change any source. `fix` is null like requests-7006's so touchesRealFix takes its no-real-fix branch; leaving the SHA here with empty sourceFiles put the row on the recall branch, where it scored 0 in both arms including for the correct answer.",
     "sourceFiles": [],
     "functions": []
   },
