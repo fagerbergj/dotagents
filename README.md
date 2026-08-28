@@ -14,7 +14,7 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 | `format-markdown` | [format-markdown.md](results/format-markdown.md) | `5f77503` | `5f77503` | rerun |
 | `issue-authoring` | [issue-authoring.md](results/issue-authoring.md) | `5f77503` | `5f77503` | rerun |
 | `mermaid-authoring` | [mermaid-authoring.md](results/mermaid-authoring.md) | `5f77503` | `5f77503` | rerun |
-| `pr-authoring` | [pr-authoring.md](results/pr-authoring.md) | `5c5d0dd` | `5c5d0dd` | rerun |
+| `pr-authoring` | [pr-authoring.md](results/pr-authoring.md) | `1c30357` | `1c30357` | rerun |
 | `rest-api-authoring` | [rest-api-authoring.md](results/rest-api-authoring.md) | `d84b1b4` :warning: | `1dfd6c8` | reused |
 | `review-code` | [review-code.md](results/review-code.md) | `5c5d0dd` | `5c5d0dd` | rerun |
 | `rfc-authoring` | [rfc-authoring.md](results/rfc-authoring.md) | `5f77503` | `5f77503` | rerun |
