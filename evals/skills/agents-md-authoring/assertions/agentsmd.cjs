@@ -289,6 +289,10 @@ function checkCargoFuzz(repoDir, cwdDir, rest) {
   const sub = rest[1];
   if (!sub) return null; // bare `cargo fuzz`: nothing to verify
   if (!CARGO_FUZZ_SUBCOMMANDS.has(sub)) return { ok: false, note: `cargo fuzz has no "${sub}" subcommand` };
+  // `add` and `init` CREATE the target, so a name they cite is not supposed to
+  // exist in the checkout yet; checking it against fuzz/ would fail a correct
+  // citation.
+  if (sub === 'add' || sub === 'init') return { ok: true };
   const target = rest.slice(2).find((t) => !t.startsWith('-'));
   if (!target) return { ok: true }; // no target named: only the subcommand itself was checkable
   const { names, hasFuzzDir } = readFuzzTargets(fuzzDir);
@@ -374,10 +378,11 @@ const GO_SUBCOMMANDS = new Set([
   'install', 'list', 'mod', 'run', 'test', 'tool', 'version', 'vet', 'work',
 ]);
 
-// `go <subcommand> [args...]`. Also checks a `-tags <name>` build-tag
-// argument against the repo's own `//go:build <name>` / `// +build <name>`
-// comments via repoContains - the only way a static checkout can
-// corroborate a build tag it does not compile. Module-boundary claims
+// `go <subcommand> [args...]`. Also checks a build-tag argument - separated
+// (`-tags foo`) or joined (`-tags=foo`), single or double dash, since the go
+// tool accepts all four - against the repo's own `//go:build <name>` /
+// `// +build <name>` comments via repoContains, the only way a static checkout
+// can corroborate a build tag it does not compile. Module-boundary claims
 // ("cmd/lint is its own module") are left to discoverability_filter; a
 // static per-directory check can't tell a nested go.mod is authoritative
 // without walking the module graph, which is more machinery than this
@@ -386,9 +391,10 @@ function checkGo(repoDir, tokens) {
   const sub = tokens[1];
   if (!sub) return null; // bare `go`: nothing to verify
   if (!GO_SUBCOMMANDS.has(sub)) return { ok: false, note: `go has no "${sub}" subcommand` };
-  const idx = tokens.indexOf('-tags');
-  if (idx !== -1 && tokens[idx + 1]) {
-    const tags = tokens[idx + 1].replace(/["']/g, '').split(/[,\s]+/).filter(Boolean);
+  const idx = tokens.findIndex((t) => /^--?tags(=|$)/.test(t));
+  const value = idx === -1 ? undefined : (tokens[idx].includes('=') ? tokens[idx].slice(tokens[idx].indexOf('=') + 1) : tokens[idx + 1]);
+  if (value) {
+    const tags = value.replace(/["']/g, '').split(/[,\s]+/).filter(Boolean);
     const missing = tags.filter((t) => !repoContains(repoDir, `build ${t}`));
     if (missing.length) return { ok: false, note: `no //go:build or // +build comment in the repo names tag(s) ${missing.join(', ')}` };
   }

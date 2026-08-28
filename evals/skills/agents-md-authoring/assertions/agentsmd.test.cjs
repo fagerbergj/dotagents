@@ -256,6 +256,8 @@ fs.writeFileSync(path.join(cargoDir, 'fuzz', 'Cargo.toml'), [
 ].join('\n'));
 
 const cargoPass = (text, opts) => citedFactsExistInRepoDir(text, cargoDir, opts).pass;
+const noCargoFuzz = fs.mkdtempSync(path.join(os.tmpdir(), 'agentsmd-cargo-nofuzz-'));
+fs.writeFileSync(path.join(noCargoFuzz, 'Cargo.toml'), '[package]\nname = "nofuzz"\n');
 
 // subcommand vocabulary: real vs invented, third-party subcommands accepted.
 assert.equal(cargoPass('run `cargo test`'), true, 'cargo test is real');
@@ -293,6 +295,12 @@ assert.equal(cargoPass('run `cargo fuzz run parse_version`'), true, 'a real fuzz
 assert.equal(cargoPass('run `cargo fuzz run made_up_target`'), false, 'an invented fuzz target fails');
 assert.equal(cargoPass('run `cargo fuzz build`'), true, 'a bare cargo fuzz build with no target only checks the subcommand');
 assert.equal(cargoPass('run `cargo fuzz nonsense`'), false, 'an invented cargo-fuzz subcommand fails');
+// `add`/`init` CREATE the target, so the name they cite is not in the checkout
+// yet and must not be checked against fuzz/ - without the exemption this is a
+// false flag on a correct citation.
+assert.equal(cargoPass('run `cargo fuzz add new_target` to start a new one'), true, 'cargo fuzz add names a target it creates, not one that must already exist');
+assert.equal(cargoPass('run `cargo fuzz init`'), true, 'cargo fuzz init scaffolds fuzz/ rather than naming an existing target');
+assert.equal(citedFactsExistInRepoDir('run `cargo fuzz add new_target`', noCargoFuzz).pass, true, 'cargo fuzz add passes even where the repo has no fuzz/ at all yet');
 assert.deepEqual(checkCargo(cargoDir, cargoDir, ['cargo', 'fuzz', 'run', 'parse_version']), { ok: true }, 'checkCargo takes (repoDir, cwdDir, tokens) directly and resolves a real fuzz target');
 
 // the fuzz_targets/ convention (other crates' layout) also resolves, from cwd: fuzz.
@@ -342,5 +350,11 @@ assert.deepEqual(checkGo(goDir, ['go']), null, 'bare go names no subcommand to c
 // invented one fails.
 assert.equal(goPass('run `go test -tags binary_log -race ./...`'), true, 'a real build tag passes');
 assert.equal(goPass('run `go test -tags made_up_tag ./...`'), false, 'an invented build tag fails');
+// The joined form is what `go help build` documents; reading only the
+// separated one skipped verification silently, so `-tags=bogus_tag` passed.
+assert.equal(goPass('run `go test -tags=binary_log ./...`'), true, 'the joined -tags=<name> form is verified too');
+assert.equal(goPass('run `go test -tags=made_up_tag ./...`'), false, 'an invented tag in the joined form fails rather than being skipped');
+assert.equal(goPass('run `go test --tags=made_up_tag ./...`'), false, 'the double-dash joined form is verified too');
+assert.equal(goPass('run `go build -tags=binary_log,made_up_tag ./...`'), false, 'a comma list in the joined form checks every tag');
 
 console.log('ok   checkGo / checksForSpan go (synthetic Go fixture)');
