@@ -39,8 +39,6 @@ module.exports = function arms(skillName, taskTemplate) {
   };
 
   return {
-    // The skill's own directory, for a provider that serves its bundled
-    // references on demand. Only an arm that loads the skill may name it.
     // The directory a `load_resource` tool would serve. It is the subject's own
     // folder, which for a bundled skill is exactly its references/ and assets/.
     // A subject sitting at a repo root would make this the whole repo, so a

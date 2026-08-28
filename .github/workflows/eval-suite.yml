@@ -33,7 +33,7 @@ on:
           deliberately as the harness moves, the same way a caller would bump
           their own pin.
         type: string
-        default: '03d5d3769627760940eec575ce27f8563178d529'
+        default: '2a8c67a0d9324375b01a08d78cd8773fd927e7ff'
       environment:
         description: >
           Deployment environment gating the paid job. Required - GitHub's
@@ -103,10 +103,13 @@ jobs:
       # unverified. Fail here, before any approval could be silently skipped,
       # rather than trust that reading.
       - name: Require a real approval environment
-        if: inputs.environment == ''
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
         run: |
-          echo "::error::inputs.environment is empty. GitHub's behaviour for an empty job 'environment' is unverified and the dangerous reading is 'no approval gate', so this workflow refuses to run the paid eval job. Pass a real GitHub Environment name." >&2
-          exit 1
+          if [ -z "$(printf '%s' "$ENVIRONMENT" | tr -d '[:space:]')" ]; then
+            echo "::error::inputs.environment is empty or whitespace-only. GitHub's behaviour for an empty job 'environment' is unverified and the dangerous reading is 'no approval gate', so this workflow refuses to run the paid eval job. Pass a real GitHub Environment name." >&2
+            exit 1
+          fi
 
       - uses: actions/checkout@v7
         with:
@@ -170,7 +173,7 @@ jobs:
               echo
               echo "**Estimate:** ~14 minutes wall-clock (suites run in a matrix, so this is roughly the time for one suite, not the sum) and ~\$$cost total (\$0.05/suite on \`openrouter:deepseek-v4-flash\`). An unchanged suite mostly replays from the cached promptfoo responses and costs far less than that."
               echo
-              echo "Evals do not run automatically. A maintainer must approve the \`eval-approval\` environment before this workflow spends anything. **Approval is per run, not per PR:** every push to this branch starts a new run that has to be approved again."
+              echo "Evals do not run automatically. A maintainer must approve the \`${{ inputs.environment }}\` environment before this workflow spends anything. **Approval is per run, not per PR:** every push to this branch starts a new run that has to be approved again."
             fi
           } > /tmp/comment-body.md
 
