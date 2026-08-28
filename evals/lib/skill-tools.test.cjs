@@ -58,6 +58,27 @@ const tight = { total: 4, remaining: 4 };
 assert.match(loadResource(real, 'references/flowchart/README.md', tight), /^refused:.*budget/);
 assert.equal(tight.remaining, 4);
 
+// Memoization at the loadResource level: a second read through the same cache
+// does not re-charge the budget and returns a marker, not the file again. No
+// cache argument (all the calls above) must keep behaving exactly as before.
+{
+  const b = budget();
+  const cache = new Map();
+  const first = loadResource(real, 'references/flowchart/README.md', b, cache);
+  assert.equal(first, 'flowchart syntax');
+  const afterFirst = b.remaining;
+  const second = loadResource(real, 'references/flowchart/README.md', b, cache);
+  assert.equal(b.remaining, afterFirst, 'a repeat must not decrement the budget again');
+  assert.match(second, /^already loaded:/);
+  assert.notEqual(second, first, 'a repeat returns a marker, not the file content again');
+  // A directory listing is free either way, so it is never cached or marked.
+  assert.equal(
+    loadResource(real, 'references', b, cache),
+    loadResource(real, 'references', b, new Map()),
+    'directory listings are unaffected by the cache',
+  );
+}
+
 // --- the loop: token usage sums across round-trips, tool only when skillDir set.
 const reply = (message, tokens) => ({
   ok: true,
@@ -86,6 +107,56 @@ global.fetch = async (_url, opts) => {
   assert.equal(withSkill.tokenUsage.numRequests, 2);
   assert.deepEqual(withSkill.metadata.resourcesLoaded, ['references/flowchart/README.md']);
   assert.equal(bodies[1].messages.at(-1).content, 'flowchart syntax', 'file contents must reach the next request');
+
+  // --- memoization: a repeat load of a path already served this invocation
+  // still costs a round (a free round would let a confused retry loop for
+  // free) but does not re-decrement the budget, and metadata says how often it
+  // happened so a suite can see a row thrashing.
+  bodies.length = 0;
+  const dedupProvider = new Provider({ config: { model: 'm', apiKeyEnvar: 'TEST_KEY', maxToolCalls: 5 } });
+  const loadFlowchart = (id) => ({
+    role: 'assistant',
+    content: null,
+    tool_calls: [{ id, type: 'function', function: { name: 'load_resource', arguments: JSON.stringify({ path: 'references/flowchart/README.md' }) } }],
+  });
+  const dedupQueue = [
+    reply(loadFlowchart('r1'), 3), // round 0: first read
+    reply(loadFlowchart('r2'), 3), // round 1: repeat of the same path
+    reply({ role: 'assistant', content: 'done' }, 5), // round 2: final
+  ];
+  let dq = 0;
+  global.fetch = async (_url, opts) => { bodies.push(JSON.parse(opts.body)); return dedupQueue[dq++]; };
+  const dedupResult = await dedupProvider.callApi(JSON.stringify([{ role: 'user', content: 'hi' }]), { prompt: { config: { skillDir: real } } });
+  assert.equal(dedupResult.output, 'done');
+  assert.equal(dedupResult.metadata.toolRounds, 2, 'a repeat still consumes a tool round');
+  assert.deepEqual(
+    dedupResult.metadata.resourcesLoaded,
+    ['references/flowchart/README.md', 'references/flowchart/README.md'],
+    'both the original request and the repeat are recorded',
+  );
+  assert.equal(dedupResult.metadata.resourcesDeduped, 1, 'metadata reports how many loads were repeats');
+  assert.equal(bodies[1].messages.at(-1).content, 'flowchart syntax', 'the first read still returns full content');
+  assert.match(bodies[2].messages.at(-1).content, /^already loaded:/, 'the repeat gets a marker, not the file again');
+
+  // The cache is per callApi invocation, not per provider or process: a second
+  // call on the SAME provider instance, for the SAME path, must not inherit the
+  // first call's cache - otherwise content served to one row would silently
+  // answer another.
+  bodies.length = 0;
+  const secondInvocationQueue = [reply(loadFlowchart('s1'), 3), reply({ role: 'assistant', content: 'done' }, 5)];
+  let sq = 0;
+  global.fetch = async (_url, opts) => { bodies.push(JSON.parse(opts.body)); return secondInvocationQueue[sq++]; };
+  const secondInvocation = await dedupProvider.callApi(JSON.stringify([{ role: 'user', content: 'hi again' }]), { prompt: { config: { skillDir: real } } });
+  assert.equal(bodies[1].messages.at(-1).content, 'flowchart syntax', 'a new callApi invocation must not inherit a previous call\'s cache');
+  assert.equal(secondInvocation.metadata.resourcesDeduped, 0, 'a fresh invocation starts with an empty cache');
+
+  // Restore the shared generic stub the rest of this file's tests rely on.
+  global.fetch = async (_url, opts) => {
+    bodies.push(JSON.parse(opts.body));
+    return bodies.length === 1 && bodies[0].tools
+      ? reply(toolCall, 10)
+      : reply({ role: 'assistant', content: 'done' }, 25);
+  };
 
   bodies.length = 0;
   const baseline = await provider.callApi(JSON.stringify([{ role: 'user', content: 'hi' }]), { prompt: { config: {} } });
