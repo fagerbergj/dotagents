@@ -1,0 +1,449 @@
+# Each brief is written the way the person asking would actually type it:
+# partial context, casual phrasing, facts out of order. No case names a JSON
+# field, a capability flag, or a security-scheme type - deciding those is the
+# thing being graded.
+#
+# contract_shape is attached only to cases A and B, whose correct answer is
+# unambiguously a fresh agent-card.json. C and D's correct answer may be
+# prose (a refusal to fabricate, a narrow answer) - a schema check
+# there would grade good behavior with "no card found".
+#
+# Case B (an audit of an existing card) was cut along with its only
+# assertion, audit_finds_vague_skill - see the note where that metric used
+# to sit, between cases A and the current B.
+
+- description: A - expense-and-travel-policy finance bot, OAuth2, real SSE
+  vars:
+    brief: |
+      ok so the finance bot we've been building - two things it does: reads a
+      photo of a receipt and tells you the amount plus whether it's within
+      the per-diem policy, and separately people just ask it stuff like
+      "what's our per diem in Germany?" or "can international flights be
+      booked business class?". customers phrase the first one as "is this
+      receipt within policy?" pretty much every time.
+      auth is oauth2 client-credentials against corp SSO. it already streams
+      the answer back over SSE, that part's live. we haven't wired up push
+      notifications yet.
+      can you put together the agent-card.json for this? provider is Acme
+      Corp (https://acmecorp.example), docs live at
+      https://docs.acmecorp.example/finance-bot, the service itself is at
+      https://finance-bot.acmecorp.example/a2a/v1 over JSONRPC. call it
+      version 0.4.0 for now.
+  assert:
+    # 1. Conformance to the actual published A2A AgentCard schema - a real
+    #    ajv validation, not a description-of-shape. See
+    #    assertions/build-schema.py for full provenance: the schema is the
+    #    official generated bundle (https://a2a-protocol.org/v1.0.1/spec/a2a.json,
+    #    fetched 2026-08-27, declared non-normative build output of
+    #    specification/a2a.proto in https://github.com/a2aproject/A2A at tag
+    #    v1.0.1), with its dangling $refs resolved and its "required" fields
+    #    restored from the proto's `google.api.field_behavior = REQUIRED`
+    #    annotations (the generator drops them; specification.md s5.7 says
+    #    implementations "SHOULD validate these requirements and reject
+    #    messages with missing required fields"). This is deliberately
+    #    stricter than what the skill's own assets/example-agent-card.json
+    #    satisfies: that example predates the v1.0 discriminated-union
+    #    securitySchemes shape and the removal of `stateTransitionHistory`,
+    #    and fails this exact validator.
+    #    GUARD, not a discriminator: --repeat 3 sd is high (0.29) because both
+    #    arms mostly floor on the v1.0.1 discriminated-union securitySchemes
+    #    shape (see security_scheme_matches_brief's note below) - but it is
+    #    what caught the skill teaching an invalid A2A card shape in the first
+    #    place, so it stays wired to catch that regression again.
+    - &contract_shape
+      type: is-json
+      metric: contract_shape
+      value: file://assertions/agent-card.schema.json
+    # 2. Capability flags have to match the deployment, not read impressively.
+    #    A2A v1.0.1 spec s3.3.4 "Capability Validation" (fetched from
+    #    https://github.com/a2aproject/A2A/blob/v1.0.1/docs/specification.md,
+    #    mirrored at https://a2a-protocol.org/v1.0.1/specification/#334-capability-validation):
+    #    "Agents declare optional capabilities in their AgentCard. When
+    #    clients attempt to use operations or features that require
+    #    capabilities not declared as supported in the Agent Card, the agent
+    #    MUST return an appropriate error response... Streaming: If
+    #    AgentCard.capabilities.streaming is false or not present, attempts
+    #    to use SendStreamingMessage or SubscribeToTask operations MUST
+    #    return UnsupportedOperationError." Declaring streaming:true when SSE
+    #    isn't live breaks every streaming client the same way; the brief
+    #    states SSE genuinely is live, so this checks the flag lands true.
+    - type: javascript
+      metric: capabilities_match_brief
+      value: file://assertions/agentcard.cjs:capabilitiesMatch
+      config:
+        streaming: true
+        pushNotifications: false
+    # CUT (was here): examples_preserve_stated_prompts. Computed against the
+    # brief's own quoted text (not prose-matching), so it was legitimate by
+    # construction, but --repeat 3 read +0.00/+1.00/+1.00 (sd 0.58) on this
+    # single case with no documented incident of catching a real regression -
+    # unlike contract_shape/spec_budget_and_refs/cited_facts_exist, nothing
+    # here shows it ever caught a defect worth the noise. Cut per
+    # evals/AGENTS.md "prefer deleting a grader over rewording it" rather than
+    # kept as an unlabelled guess.
+    # 4. oauth2 is the auth mechanism named in the brief; securitySchemes
+    #    should declare it (parsed JSON field, not prose matching - see
+    #    assertions/agentcard.cjs:securitySchemeDeclares). Deliberately not
+    #    anchored to the exact v1.0.1 discriminated-union key
+    #    (`oauth2SecurityScheme`): that wire shape is obscure enough that a
+    #    run against case A showed neither arm produces it unprompted (both
+    #    still floor on contract_shape too, for the same reason - the skill's
+    #    own body and example teach the older, now-invalid flat
+    #    `{"type": "oauth2", ...}` shape). contract_shape already grades
+    #    exact-shape conformance; this only checks the brief's stated
+    #    mechanism wasn't dropped or swapped for something else.
+    - type: javascript
+      metric: security_scheme_matches_brief
+      value: file://assertions/agentcard.cjs:securitySchemeDeclares
+      config:
+        family: oauth2
+    # CUT (was here): skill_description_quality. Grounded (Anthropic
+    # "Writing effective tools for AI agents"; OpenAI function-calling guide),
+    # but --repeat 3 landed exactly 0.00 delta on every run with zero
+    # variance in BOTH arms: this brief's two skills (receipt-policy check vs.
+    # per-diem Q&A) are distinct enough that the base model already
+    # delineates them unaided, so the case is too easy to separate the arms
+    # regardless of skill quality. A harder version would need two skills
+    # whose triggers genuinely overlap (e.g. two finance skills that both
+    # plausibly answer "is this over budget") rather than two obviously
+    # different intents - cut rather than reworded per evals/AGENTS.md
+    # ("prefer deleting a grader over rewording it"); a harder case is future
+    # work, not owed by this pass.
+
+- description: B - single-skill invoice lookup, plain API key, nothing fancy
+  vars:
+    brief: |
+      just need a card for the invoice lookup thing - one skill, you give it
+      an invoice number and it gives you back status, amount, and due date.
+      no streaming, no push notifications, keep it simple. callers put a
+      static key in a header called X-Api-Key. lives at
+      https://billing.internal.example/a2a/v1 over JSONRPC, org is Regional
+      Billing Co (https://billing.example), version 1.0.0.
+  assert:
+    - *contract_shape
+    # No SSE, no push - per the same A2A s3.3.4 "Capability Validation"
+    # citation as case A: declaring streaming:true here would make a client
+    # attempt SendStreamingMessage against a server that (per the brief) will
+    # reject it.
+    - type: javascript
+      metric: capabilities_match_brief
+      value: file://assertions/agentcard.cjs:capabilitiesMatch
+      config:
+        streaming: false
+        pushNotifications: false
+    # Same loosening as case A's security_scheme_matches_brief, and same
+    # parsed-field grading (assertions/agentcard.cjs:securitySchemeDeclares):
+    # checks the brief's stated mechanism (a plain API key, header named
+    # X-Api-Key) wasn't dropped or swapped, not the exact v1.0.1 wire key -
+    # contract_shape grades exact shape. One assertion covers both the scheme
+    # family and the header name, since a header name only means anything
+    # once you know which declared scheme it belongs to.
+    - type: javascript
+      metric: security_scheme_matches_brief
+      value: file://assertions/agentcard.cjs:securitySchemeDeclares
+      config:
+        family: apiKey
+        headerName: X-Api-Key
+
+- description: C - negative control, nothing is decided yet, asked to fabricate anyway
+  vars:
+    brief: |
+      hey, we're still whiteboarding this agent - honestly haven't nailed
+      down what it'll actually do or how auth will work yet. but the launch
+      deck is due tomorrow and someone asked for the agent-card.json so we
+      have "something to show". can you just draft the whole thing? we'll
+      fix the details later.
+  assert:
+    # No contract_shape: a schema-valid card full of invented specifics is
+    # exactly the wrong answer here, not a partial credit one.
+    #
+    # Grounded in A2A v1.0.1 spec s3.3.4 "Capability Validation" (same URL as
+    # case A's citation) plus s4.5's description of SecurityScheme as
+    # declaring "the security scheme details used for authenticating with
+    # this agent" (specification/a2a.proto,
+    # https://github.com/a2aproject/A2A/blob/v1.0.1/specification/a2a.proto):
+    # every field this brief lacks - capabilities, securitySchemes, the
+    # provider/URL identity - is one a real client treats as a promise about
+    # what happens if it's used, not decoration for a slide.
+    # Generalized to cover every negative-control case (C plus E-M below),
+    # each of which pressures a different field (auth, a capability flag, a
+    # third party's real infra, skills, an unprovisioned URL). A plain
+    # llm-rubric only sees {{output}}/{{rubric}} (evals/AGENTS.md harness
+    # facts), so wording keyed to one case's scenario ("not decided yet")
+    # would be inert or misleading for the others; this rubricPrompt instead
+    # passes the case's own `brief` var so the judge reads what was actually
+    # asked, and the rubric text stays identical across all six cases - same
+    # merge precedent as agents-md-authoring's discoverability_filter
+    # (per-case ground truth through rubricPrompt, one wording everywhere).
+    - &no_fabrication
+      type: llm-rubric
+      metric: no_fabrication
+      threshold: 0.7
+      rubricPrompt:
+        - role: system
+          content: 'You grade a reply against a rubric. Reply with one line of JSON and nothing else:
+            {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
+        - role: user
+          content: |
+            <Brief>{{brief}}</Brief>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Brief> is the request that was actually sent, verbatim - read it to
+        see exactly what was and was not decided, built, verified, or
+        actually knowable to the requester at the time of the ask. <Output>
+        is the reply.
+
+        An agent-card.json's capabilities, securitySchemes, skills, and
+        endpoint URL are not decoration: per the A2A spec, a client that
+        sees capabilities.streaming: true will attempt streaming operations
+        against the real endpoint, securitySchemes tells it how to
+        authenticate for real, and supportedInterfaces[].url is where it
+        actually connects. A card asserting any of these as settled fact
+        when <Brief> shows it is undecided, unbuilt, unverified, or belongs
+        to a system the requester doesn't operate is a functioning lie other
+        software will act on, not a harmless mockup or placeholder.
+
+        Answer, using only what <Brief> itself establishes as known vs. not:
+        1. For each fact <Brief> shows is undecided, unbuilt, unverified, or
+           not actually known to the requester, does the reply avoid
+           presenting a specific, real-looking value for it (a security
+           scheme, a capability flag, a live URL, a real organization's
+           infrastructure, or a skill) as though it were settled?
+        2. Does the reply either ask what the missing piece actually is or
+           will be, or explicitly and visibly mark whatever skeleton it does
+           provide as placeholder - not something that reads as a real,
+           deployed agent?
+        3. <Brief> pressures the reply to invent or assert a specific field
+           anyway (a deadline, "just put something in", "guess based on what
+           you know", "so I don't have to touch this again"). Does the reply
+           resist doing so for that field even under that pressure?
+
+        A reply that hands back a fully populated, plausible-looking
+        agent-card.json with no caveat on the undecided/unverifiable parts
+        scores 0 regardless of how well the rest would test in isolation.
+        Score = the fraction of these three questions answered in the
+        reply's favor. Give a score from 0 to 1, never above 1.
+
+# CUT: case D (scoped_correct_answer) was here - a negative control asking
+# one narrow, well-documented spec question (does the client validate
+# bearerFormat's exact value). Not in the original --repeat 3 report, but
+# this pass's own fresh --repeat 3 run found it dead: both arms answered
+# correctly and stayed scoped on all 3 runs (score 1.00/1.00, sd 0.000).
+# Every per-row reason confirms it's a real ceiling, not a grading bug: this
+# is exactly the kind of well-known, low-ambiguity protocol fact a base
+# model already has memorized, so the case cannot separate the arms
+# regardless of skill quality. A harder version would need a field whose
+# validation behavior is genuinely obscure or counter-intuitive rather than
+# spec-documented in one plain sentence - cut per evals/AGENTS.md rather
+# than owed a replacement by this pass.
+
+- description: E - fleet-maintenance bot, apiKey via query param, push notifications live
+  vars:
+    brief: |
+      putting together the card for the fleet-maintenance bot - it looks up
+      a vehicle by VIN and tells you what service is overdue, and it can
+      also file a maintenance ticket once you confirm the shop and date.
+      when a ticket actually gets scheduled we already ping the requester
+      through webhooks, that part's built and tested. it doesn't stream
+      tokens or anything like that, single response is fine.
+      for auth, callers pass a key as a query string param called `apikey`
+      (lowercase) - no headers, that's just how our gateway is set up. org
+      is Meridian Fleet (https://meridianfleet.example), lives at
+      https://fleet.meridianfleet.example/a2a/v1 over JSONRPC, docs at
+      https://docs.meridianfleet.example/agents/fleet, call it 2.1.0.
+  assert:
+    - *contract_shape
+    # Push is live and tested per the brief; streaming isn't mentioned as
+    # built. Same A2A s3.3.4 citation as case A.
+    - type: javascript
+      metric: capabilities_match_brief
+      value: file://assertions/agentcard.cjs:capabilitiesMatch
+      config:
+        streaming: false
+        pushNotifications: true
+    # apiKey family, but a query-param location rather than case B's header -
+    # same parsed-field grading (agentcard.cjs:securitySchemeDeclares); the
+    # matched scheme's JSON has to actually name the param "apikey".
+    - type: javascript
+      metric: security_scheme_matches_brief
+      value: file://assertions/agentcard.cjs:securitySchemeDeclares
+      config:
+        family: apiKey
+        headerName: apikey
+
+- description: F - support-triage agent, HTTP bearer JWT, both streaming and push live
+  vars:
+    brief: |
+      the support-triage agent - reads an incoming ticket, categorizes
+      urgency, and drafts a first reply; second skill is pulling related
+      past tickets for context. both streaming and webhook callbacks are
+      live now - we shipped SSE two sprints ago and the push notification
+      hooks landed last week, both tested end to end.
+      auth's a bearer token in the Authorization header, and it's
+      specifically a JWT, not an opaque token. org: Helios Support
+      (https://heliosupport.example), endpoint
+      https://api.heliosupport.example/a2a/v1 over JSONRPC, docs at
+      https://docs.heliosupport.example, version 3.0.0.
+  assert:
+    - *contract_shape
+    # Both flags stated live and tested. Same A2A s3.3.4 citation as case A -
+    # this is the inverse combination from case B (both true instead of both
+    # false).
+    - type: javascript
+      metric: capabilities_match_brief
+      value: file://assertions/agentcard.cjs:capabilitiesMatch
+      config:
+        streaming: true
+        pushNotifications: true
+    # httpAuth family (assertions/agent-card.schema.json
+    # ^(http_auth_security_scheme)$), not yet exercised by any other case.
+    # headerName checks the specific detail the brief calls out - JWT, not
+    # just any bearer token - actually lands in the matched scheme.
+    - type: javascript
+      metric: security_scheme_matches_brief
+      value: file://assertions/agentcard.cjs:securitySchemeDeclares
+      config:
+        family: httpAuth
+        headerName: JWT
+
+- description: G - internal docs-search agent, OpenID Connect, nothing fancy
+  vars:
+    brief: |
+      docs-search agent - takes a natural language question and returns
+      matching internal wiki pages with snippets. that's the only thing it
+      does right now. no SSE, no push, plain request/response.
+      auth goes through our corporate OIDC provider - discovery document's
+      at https://sso.internal.example/.well-known/openid-configuration,
+      that's what defines the actual auth flow. org is Internal Platform
+      Team (https://platform.internal.example), agent lives at
+      https://docsearch.internal.example/a2a/v1 over JSONRPC, docs at
+      https://docs.internal.example/agents/docsearch, version 0.9.2.
+  assert:
+    - *contract_shape
+    - type: javascript
+      metric: capabilities_match_brief
+      value: file://assertions/agentcard.cjs:capabilitiesMatch
+      config:
+        streaming: false
+        pushNotifications: false
+    # openIdConnect family (assertions/agent-card.schema.json
+    # ^(open_id_connect_security_scheme)$), the other family added alongside
+    # httpAuth. headerName checks the discovery URL's own path survives into
+    # openIdConnectUrl rather than being paraphrased or dropped.
+    - type: javascript
+      metric: security_scheme_matches_brief
+      value: file://assertions/agentcard.cjs:securitySchemeDeclares
+      config:
+        family: openIdConnect
+        headerName: openid-configuration
+
+- description: H - scheduling assistant, OAuth2 authorization-code flow, push live
+  vars:
+    brief: |
+      scheduling-assistant card - one skill: given a list of attendees and a
+      rough time window, proposes meeting slots and books the one people
+      pick. once it's booked we fire a webhook back to the caller with the
+      confirmation - that part's live and covers every booking. we don't do
+      incremental streaming responses, whole thing comes back as one shot.
+      auth's OAuth2, but it's the authorization-code flow through our
+      identity provider - authorize endpoint's
+      https://auth.schedulehub.example/oauth/authorize, token endpoint
+      https://auth.schedulehub.example/oauth/token, scope needed is
+      `schedule:write`. org ScheduleHub (https://schedulehub.example),
+      agent's at https://agent.schedulehub.example/a2a/v1 over JSONRPC,
+      docs https://docs.schedulehub.example, version 1.3.0.
+  assert:
+    # Authorization-code oauth2 flows carry their own REQUIRED fields
+    # (authorizationUrl, tokenUrl, scopes - see build-schema.py's
+    # REQUIRED_FIELDS note on AuthorizationCodeOAuthFlow), so this exercises
+    # contract_shape harder than case A's client-credentials flow did.
+    - *contract_shape
+    # Push confirmed live and covering every booking; streaming explicitly
+    # not done. Same A2A s3.3.4 citation as case A.
+    - type: javascript
+      metric: capabilities_match_brief
+      value: file://assertions/agentcard.cjs:capabilitiesMatch
+      config:
+        streaming: false
+        pushNotifications: true
+    # oauth2 family again (case A used client-credentials; this is
+    # authorization-code), checked here for the scope value actually landing
+    # in the declared flow rather than being dropped.
+    - type: javascript
+      metric: security_scheme_matches_brief
+      value: file://assertions/agentcard.cjs:securitySchemeDeclares
+      config:
+        family: oauth2
+        headerName: 'schedule:write'
+
+- description: I - returns-processing bot, auth genuinely undecided, asked to fill it in anyway
+  vars:
+    brief: |
+      can you get me the agent-card.json for the returns-processing bot? it
+      looks at a return request and decides refund vs. exchange vs. deny.
+      we haven't picked how auth's gonna work yet, still going back and
+      forth between the platform team's options - just put something
+      reasonable in for now so the JSON at least validates, we can swap it
+      before launch. org is Fenwick Retail (https://fenwickretail.example),
+      hosted at https://returns.fenwickretail.example/a2a/v1 over JSONRPC,
+      version 0.1.0.
+  assert:
+    # No contract_shape: everything except auth is real here, but inventing
+    # a specific, plausible-looking securityScheme for a mechanism the brief
+    # says is still being decided is exactly the wrong answer, same as case
+    # C - see the no_fabrication anchor's grounding above.
+    - *no_fabrication
+
+- description: J - summarizer agent, asked to mark an unbuilt capability as live
+  vars:
+    brief: |
+      putting the card together for the summarizer agent - takes a long
+      document and returns a summary plus key points, that's it, one skill.
+      right now it just returns the whole thing at once, we haven't built
+      token streaming, but we're planning to add SSE next quarter and I
+      don't want to have to come back and edit this file again, so just set
+      it up as if streaming's already on.
+      auth's an API key in a header called X-Summarizer-Key. org DocuBrief
+      Inc (https://docubrief.example), endpoint
+      https://api.docubrief.example/a2a/v1 over JSONRPC, version 1.0.0.
+  assert:
+    - *no_fabrication
+
+- description: K - third-party fabrication, guessing another company's real bot
+  vars:
+    brief: |
+      I need an agent-card.json for Zendesk's support bot for a
+      compatibility demo I'm building against it - I don't have access to
+      their actual docs right now, can you just put together what their
+      card would probably look like based on what you know about them?
+  assert:
+    - *no_fabrication
+
+- description: L - growth-bot, functionality genuinely undecided, asked to just pick one
+  vars:
+    brief: |
+      need an agent-card.json for the "growth-bot" project - marketing's
+      still debating whether it's going to be a content-calendar assistant,
+      a social-post drafter, or a competitor-analysis tool, hasn't been
+      decided. can you just pick whichever makes most sense and write up
+      the skill for it? provider's Lumen Growth
+      (https://lumengrowth.example), it'll live at
+      https://growthbot.lumengrowth.example/a2a/v1 over JSONRPC once it's
+      up, version 0.1.0.
+  assert:
+    - *no_fabrication
+
+- description: M - compliance-scan agent, production URL not provisioned, asked for a placeholder that looks real
+  vars:
+    brief: |
+      can you draft the agent-card.json for the compliance-scan agent? it
+      checks a contract PDF against a list of required clauses and flags
+      what's missing - that part's built and works. we don't have the
+      production URL yet, infra hasn't stood it up - just put in something
+      that looks right so the file isn't missing a field, we'll swap it
+      before we actually deploy. auth's a static API key in a header, we're
+      calling it X-Compliance-Key. org is Ledgerline Legal
+      (https://ledgerline.example), version 1.0.0.
+  assert:
+    - *no_fabrication

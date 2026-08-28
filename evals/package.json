@@ -3,6 +3,7 @@
   "private": true,
   "description": "Eval suites for the skills in ../skills. Graders that need a real parser depend on it here rather than shelling out to npx.",
   "dependencies": {
+    "ajv": "^8.20.0",
     "conventional-commits-parser": "7.1.2",
     "markdown-it": "15.0.0"
   },
