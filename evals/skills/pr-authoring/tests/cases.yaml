@@ -43,6 +43,12 @@
       # templating, so a {{note}} in the value below reaches the judge as those
       # eight literal characters. Carry it in a tag of its own instead.
       rubricPrompt:
+        - role: system
+          content: |
+            You are grading output according to a user-specified rubric. If the
+            statement in the rubric is true, then the output passes the test. You
+            respond with a JSON object with this structure:
+            {reason: string, pass: boolean, score: number}
         - role: user
           content: |
             <AuthorNote>{{note}}</AuthorNote>
@@ -890,6 +896,12 @@
       # NEITHER. Values are substituted, not re-parsed, so a diff containing its
       # own {{ is safe here.
       rubricPrompt:
+        - role: system
+          content: |
+            You are grading output according to a user-specified rubric. If the
+            statement in the rubric is true, then the output passes the test. You
+            respond with a JSON object with this structure:
+            {reason: string, pass: boolean, score: number}
         - role: user
           content: |
             <AuthorNote>{{note}}</AuthorNote>
