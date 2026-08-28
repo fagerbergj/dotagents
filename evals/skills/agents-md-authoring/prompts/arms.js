@@ -1,6 +1,14 @@
 const { checkout } = require('../lib/repo.js');
 
-const arms = require('../../../lib/arms.js')('agents-md-authoring', (vars) => `${vars.task.trim()}${vars.existingRoot ? `\n\nThis is the root AGENTS.md we already have - do not repeat it, only add what is specific to this subtree:\n\n\`\`\`\n${vars.existingRoot.trim()}\n\`\`\`` : ''}
+// Whether a nested file should repeat, narrow, or add to the root is exactly
+// what nested_not_redundant (assertions/agentsmd.cjs) grades and what the
+// skill's own "Place narrowly" step decides - telling the model not to
+// repeat it here would foreclose that metric by construction, identically
+// for both arms (evals/AGENTS.md: "never let the case do the skill's job").
+// So this hands over the root file for reference only, the way a person
+// asking would actually say it ("we've already got a root one, it's below
+// for reference" - see tests/cases.yaml's task text), with no steer either way.
+const arms = require('../../../lib/arms.js')('agents-md-authoring', (vars) => `${vars.task.trim()}${vars.existingRoot ? `\n\nThis is the root AGENTS.md we already have, for reference:\n\n\`\`\`\n${vars.existingRoot.trim()}\n\`\`\`` : ''}
 
 Return only the file content in a single fenced code block, nothing else.`);
 

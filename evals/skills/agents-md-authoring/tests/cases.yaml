@@ -110,31 +110,46 @@
         glance at the repo's own files already gives an agent for free -
         restating any of it is clutter, not content.
 
-        Answer each with a quote from <Output>, or NONE:
+        Answer every item with a quote from <Output>, or NONE - a holistic
+        impression is not an answer. A live failure on this exact rubric
+        scored an output containing a directory tree and an invented
+        "Release checklist" a 1.0, reasoning "obvious clutter is absent" -
+        false against the text being judged. An item is not satisfied until
+        you can point to the specific words that satisfy or violate it.
 
         1. If <Evidence> names a fact serious enough that missing it would
            cause a real mistake (a broken build or test run, a violated
            policy, a wasted debugging session), does <Output> state it and
            say how to actually avoid the mistake - not just gesture at the
-           topic? If <Evidence> says no such fact exists for this repo,
-           score this item 1 automatically.
-        2. Does <Output> avoid restating anything in <Obvious> (a
-           dependency list, a directory/file tour, license text, a
-           boilerplate contribution template, or generic software-
-           engineering advice not specific to this repo)? Score by
-           absence: 1 if none of it appears, 0 if any does.
-        3. Is <Output>'s overall length and depth proportionate to how much
-           real, non-obvious signal <Evidence> actually contains -
-           substantive where <Evidence> holds real hazards, and near-empty
-           (or an explicit statement that there is nothing more to add)
-           where it does not?
+           topic? Quote the sentence(s) that do this, or NONE if it is
+           missing or only gestured at. If <Evidence> says no such fact
+           exists for this repo, score this item 1 automatically.
+        2. Does <Output> restate anything in <Obvious> (a dependency list,
+           a directory/file tour, license text, a boilerplate contribution
+           template, or generic software-engineering advice not specific to
+           this repo)? Quote the specific offending passage, or NONE if
+           none appears. Score 1 for NONE, 0 for a quote.
+        3. Does <Output> contain any passage that is not grounded in
+           <Evidence> and not needed to state <Evidence>'s facts - padding
+           such as a "Useful links" section, an invented checklist, restated
+           ceremony, or elaboration beyond what the fact requires? Quote the
+           specific offending passage, or NONE if none appears. Score 1 for
+           NONE, 0 for a quote.
 
         Score from 0 to 1, never above 1: 0.4 for the first, 0.3 for the
-        second, 0.3 for the third. Award nothing for item 1 if there is no
-        quote to support it (unless <Evidence> says it doesn't apply);
-        items 2 and 3 are judged by absence/proportion rather than a quote.
+        second, 0.3 for the third. Award nothing for any item where you
+        cannot produce the quote it requires (unless <Evidence> says item 1
+        doesn't apply).
       threshold: 0.5
       metric: discoverability_filter
+
+    # Deterministic backstop for item 3 above, computed against this case's
+    # own vars.evidence rather than a fixed word count (assertions/agentsmd.cjs
+    # comment has the full rationale for why item 3 needed one).
+    - &length_proportionate
+      type: javascript
+      value: file://assertions/agentsmd.cjs:lengthProportionateToEvidence
+      metric: length_proportionate
 
 - description: nested AGENTS.md for requests/docs - people keep botching the sphinx build
   vars:
@@ -196,19 +211,22 @@
       metric: cited_facts_exist
 
     - *discoverability_filter
+    - *length_proportionate
 
-    # CUT: nested_not_redundant (nestedDoesNotRepeatRoot) was here - "a
-    # nested file narrows the root, it does not repeat it," computed
-    # against the case's own vars.existingRoot. First suspected of being
-    # foreclosed by the prompt (a prior task wording said "don't just copy
-    # it in" outright, doing the skill's job) - that wording was removed
-    # above, and a fresh --repeat 3 run afterward still read ceiling in
-    # BOTH arms (no-skill 0.875/1.0/1.0, skill-current 1.0/1.0/1.0): a
-    # model asked for a docs-specific file, given a root file "for
-    # reference," already avoids copy-pasting it almost every time with no
-    # skill guidance at all. The fix was tried first, per evals/AGENTS.md;
-    # it did not create separation, so this is cut rather than kept as a
-    # second unlabelled guess.
+    # REINSTATED: nested_not_redundant was cut here after a --repeat 3 run
+    # still read ceiling in both arms (no-skill 0.875/1.0/1.0, skill-current
+    # 1.0/1.0/1.0), on the theory the case's own "don't just copy it in"
+    # wording (removed above) had foreclosed it. It hadn't, fully - a
+    # second, separate foreclosure lived in prompts/arms.js's shared
+    # template, appended to EVERY nested case regardless of per-case
+    # wording ("do not repeat it, only add what is specific to this
+    # subtree"), so the prior run was never a clean test. That template
+    # instruction is now removed (see prompts/arms.js), which makes this
+    # the first genuinely unforeclosed run of this metric on this case -
+    # earning its place fresh rather than staying cut on stale evidence.
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
+      metric: nested_not_redundant
 
 - description: AGENTS.md for is-plain-obj - five files, nothing hidden
   vars:
@@ -288,6 +306,7 @@
       metric: cited_facts_exist
 
     - *discoverability_filter
+    - *length_proportionate
 
 # --- New repos below: dtolnay/semver (Rust/cargo) and jqlang/jq (C/autotools),
 # added alongside a third requests case, to grow n on all three retained
@@ -335,6 +354,7 @@
       metric: cited_facts_exist
 
     - *discoverability_filter
+    - *length_proportionate
 
 - description: nested AGENTS.md for semver/fuzz - not part of cargo test at all
   vars:
@@ -385,6 +405,7 @@
       metric: cited_facts_exist
 
     - *discoverability_filter
+    - *length_proportionate
 
     - type: javascript
       value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
@@ -438,6 +459,7 @@
       metric: cited_facts_exist
 
     - *discoverability_filter
+    - *length_proportionate
 
     - type: javascript
       value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
@@ -486,6 +508,7 @@
       metric: cited_facts_exist
 
     - *discoverability_filter
+    - *length_proportionate
 
 - description: nested AGENTS.md for jq/docs - the manual build degrades silently, not loudly
   vars:
@@ -542,6 +565,7 @@
       metric: cited_facts_exist
 
     - *discoverability_filter
+    - *length_proportionate
 
     - type: javascript
       value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
@@ -587,6 +611,7 @@
       metric: cited_facts_exist
 
     - *discoverability_filter
+    - *length_proportionate
 
 - description: nested AGENTS.md for zerolog/journald - the test file only runs on Linux
   vars:
@@ -634,6 +659,7 @@
       metric: cited_facts_exist
 
     - *discoverability_filter
+    - *length_proportionate
 
     - type: javascript
       value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
@@ -686,6 +712,7 @@
       metric: cited_facts_exist
 
     - *discoverability_filter
+    - *length_proportionate
 
     - type: javascript
       value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
@@ -739,6 +766,7 @@
       metric: cited_facts_exist
 
     - *discoverability_filter
+    - *length_proportionate
 
     - type: javascript
       value: file://assertions/agentsmd.cjs:nestedDoesNotRepeatRoot
