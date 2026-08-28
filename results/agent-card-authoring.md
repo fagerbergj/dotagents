@@ -4,12 +4,12 @@
 
 | model | metric | no-skill | skill@1.0.1 | Δ |
 | --- | --- | ---: | ---: | ---: |
-| ci:deepseek-v4-flash | capabilities_match_brief | 0.00 | 0.83 | +0.83 |
-| ci:deepseek-v4-flash | contract_shape | 0.00 | 0.17 | +0.17 |
-| ci:deepseek-v4-flash | latency max (s) | 35.00 | 57.20 | +22.2 |
-| ci:deepseek-v4-flash | latency p50 (s) | 14.70 | 28.60 | +13.9 |
-| ci:deepseek-v4-flash | latency_s | 15.89 | 30.91 | +15.0 |
+| ci:deepseek-v4-flash | capabilities_match_brief | 0.17 | 0.83 | +0.67 |
+| ci:deepseek-v4-flash | contract_shape | 0.00 | 0.50 | +0.50 |
+| ci:deepseek-v4-flash | latency max (s) | 28.40 | 49.10 | +20.7 |
+| ci:deepseek-v4-flash | latency p50 (s) | 10.40 | 22.50 | +12.1 |
+| ci:deepseek-v4-flash | latency_s | 12.16 | 26.40 | +14.2 |
 | ci:deepseek-v4-flash | no_fabrication | 0.00 | 0.17 | +0.17 |
-| ci:deepseek-v4-flash | security_scheme_matches_brief | 0.00 | 1.00 | +1.00 |
-| ci:deepseek-v4-flash | tokens p50 | 819 | 11106 | +10287 |
-| ci:deepseek-v4-flash | tokens total | 10461 | 120091 | +109630 |
+| ci:deepseek-v4-flash | security_scheme_matches_brief | 0.00 | 0.67 | +0.67 |
+| ci:deepseek-v4-flash | tokens p50 | 869 | 9034 | +8165 |
+| ci:deepseek-v4-flash | tokens total | 9902 | 98895 | +88993 |
