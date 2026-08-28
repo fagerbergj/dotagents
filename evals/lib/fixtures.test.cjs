@@ -53,8 +53,14 @@ assert.ok(fs.existsSync(path.join(p.tree, 'added.txt')),
 // reviewing a different tree.
 // Same repo, so paths() hands back the same git dir - no second remote to add.
 const bogus = { ...f, name: 'local-2', reviewed: '0'.repeat(40) };
-assert.throws(() => materialise(bogus), /cannot be fetched|not a valid|fatal/i,
-  'an unobtainable reviewed commit throws');
+assert.throws(() => materialise(bogus), (err) => {
+  assert.match(err.message, /cannot be fetched|not a valid|fatal/i, 'an unobtainable reviewed commit throws');
+  // Without the cause a network outage reads as a dropped commit, and the
+  // operator re-pins a fixture that was fine.
+  assert.match(err.cause?.stderr ?? err.cause?.message ?? '', /git|fetch|fatal/i,
+    'the git error survives on `cause`');
+  return true;
+});
 
 fs.rmSync(path.join(ROOT, 'x-' + path.basename(upstream)), { recursive: true, force: true });
 fs.rmSync(tmp, { recursive: true, force: true });
