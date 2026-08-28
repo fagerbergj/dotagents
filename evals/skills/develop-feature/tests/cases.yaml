@@ -1,0 +1,429 @@
+# Four feature requests against cli/cli (github.com/cli/cli) pinned at the
+# v2.86.0 tag, commit 49f72234acd346666a4646a0f5a427fb3543debc - a real merge
+# commit by a human maintainer (Kynan Ware), not a bot. lib/repo.js checks the
+# tree out once; every case plans against that same tree via the read_source
+# tool both arms get (prompts/arms.js). A userPersona is attached to every arm
+# (prompts/arms.js, via evals/lib/arms.js's withPersonaEveryArm) so the skill's
+# "ask before you design" instruction has somewhere to land instead of tripping
+# a made-up answer - see prompts/arms.js for why the persona is written blind
+# to every case's answer.
+#
+# Each `existingIdentifier` is a real symbol/package confirmed present in that
+# tree by reading the source directly (not from memory), chosen because it
+# already covers most of what the request asks for. Three cases (backoff,
+# browser, ConfirmDeletion) are positive: the ask is real but a plan that
+# ignores the existing mechanism and hand-rolls a parallel one is worse than
+# one that builds on it. One (AddJSONFlags) is a negative control: the feature
+# already exists, and the right plan is "this is already there, at X" - not a
+# design document.
+#
+#   - cenkalti/backoff/v4 - direct go.mod dependency. pkg/cmd/agent-task/
+#     create/create.go imports it AND uses it (fetchJobWithBackoff, line 235)
+#     to poll for a job's PR, but a second poll loop in the SAME FILE -
+#     followLogs's `opts.Sleep(defaultLogPollInterval)`, line 276 - is a flat
+#     5s sleep that doesn't. The original fixture (`gh pr checks --watch`,
+#     pkg/cmd/pr/checks/checks.go) put the reuse target in an unrelated
+#     command (pkg/cmd/repo/create) that neither arm's normal browsing of the
+#     touched package would ever reach - both arms scored 0 on
+#     names_existing_solution, which is a broken case, not a null result. This
+#     one is discoverable by reading the file the request is about.
+#     existingIdentifier is "backoff/v4", not the fuller "cenkalti/backoff":
+#     a real run showed a plan that genuinely reused the dependency (quoting
+#     `fetchJobWithBackoff` and calling `backoff.Retry` verbatim) but wrote the
+#     import as `backoff/v4` rather than spelling out the `cenkalti` org, and
+#     namesExistingSolution's substring check scored that plan 0 - a false
+#     negative, not a real miss (evals/AGENTS.md "Blind oracle"). "backoff/v4"
+#     still only appears when citing the actual Go module (nobody writes a
+#     Go-versioned import suffix while merely describing a backoff strategy in
+#     prose), so it keeps the check honest without the false negative.
+#   - internal/browser - the Browser interface (Browse(string) error), already
+#     wired into two sibling files in the same package,
+#     pkg/cmd/agent-task/list/list.go and pkg/cmd/agent-task/view/view.go
+#     (both `opts.Browser = f.Browser` + a `--web` flag). The touched command,
+#     pkg/cmd/agent-task/create/create.go, has no --web flag and instead
+#     fmt.Fprintln's a bare URL (line 183) that its own agentSessionWebURL
+#     helper (line 197) already builds. The original fixture (`gh release
+#     list --web`) sat at 1/1/1/1 for both arms: --web is such a pervasive,
+#     repeated convention across dozens of gh commands that a single grep hit
+#     surfaces it regardless of skill or effort, so the case measured nothing.
+#     This one needs an actual look at sibling files in the package, not a
+#     lucky grep - the request itself never says "browser".
+#   - ConfirmDeletion - a method on the `Prompter` interface
+#     (internal/prompter/prompter.go:37), already wired into six sibling
+#     delete commands (pkg/cmd/label/delete.go, pkg/cmd/repo/delete/delete.go,
+#     pkg/cmd/issue/delete/delete.go, ...). The touched command,
+#     pkg/cmd/release/delete/delete.go, uses a plain yes/no `Confirm` instead
+#     (line 19's local `iprompter` interface only declares `Confirm`, not
+#     ConfirmDeletion - reading this file alone does not reveal the stronger
+#     mechanism exists). The original fixture (`gh label delete`) already HAD
+#     ConfirmDeletion wired in and the request said "confirmation prompt" -
+#     close enough to the identifier's own name that both arms found it by
+#     keyword luck, not investigation, and scored 1/1/1/1. This one asks for
+#     something ConfirmDeletion still needs to be reused INTO, worded so nothing
+#     in the request hints that the fix is a rename of the confirmation
+#     mechanism.
+#   - AddJSONFlags - pkg/cmdutil/json_flags.go, already wired into
+#     pkg/cmd/pr/list/list.go via `cmdutil.AddJSONFlags(cmd, &opts.Exporter,
+#     api.PullRequestFields)`, giving `gh pr list --json <fields>` today. Kept
+#     unchanged: the only case in the prior run that separated the arms (the
+#     skill arm lost, having opened with "I don't have the ask_user tool
+#     available" and then invented a --format flag) - the persona now fixes
+#     the missing-tool artifact without touching the fixture itself.
+#
+# Seven more added at once (evals/AGENTS.md "earn the case before adding it" -
+# n=4 was the binding constraint on a --repeat 3 pass, not any grader; sd
+# scales as 1/sqrt(n), so this is the fix). Every identifier below was
+# confirmed the same way as the four above: read directly out of the pinned
+# tree, not recalled. All still cli/cli - the read_source tool and
+# noInventedCitations both resolve against the single tree lib/repo.js
+# materialises (lib/repo.js's dir()), so a request about a second repository
+# would leave that arm unable to actually look anything up and would make
+# noInventedCitations flag every real citation into it as invented. Widening
+# that is a lib/repo.js and prompts/arms.js change this task is scoped out of
+# (evals/lib/ and run.sh are off-limits, and this repo's own lib/repo.js is
+# built around exactly one tree) - variety here comes from shape, not repo.
+#
+#   - "--dry-run" - pkg/cmd/pr/create/create.go declares `DryRun bool` (line
+#     75) and `fl.BoolVar(&opts.DryRun, "dry-run", false, "Print details
+#     instead of creating the PR. May still push git changes.")` (line 359).
+#     The touched command, pkg/cmd/issue/create/create.go, has no dry-run
+#     field or flag at all, but already imports pr's own shared package -
+#     `prShared "github.com/cli/cli/v2/pkg/cmd/pr/shared"` (line 16) - so the
+#     sibling that has the feature is one import away, not a cold grep. Uses
+#     the flag spelling, not "DryRun", the same reasoning as backoff/v4: a
+#     plan proposing the flag is far more likely to write `--dry-run` than to
+#     spell the Go field name.
+#   - "clipboard.WriteAll" - internal/authflow/flow.go imports
+#     github.com/atotto/clipboard (line 10) and calls `clipboard.WriteAll(code)`
+#     (line 50) to put the device login code on the clipboard. The touched
+#     command, pkg/cmd/release/create/create.go, ends by printing the bare
+#     release URL (`fmt.Fprintf(opts.IO.Out, "%s\n", newRelease.URL)`, line
+#     565) - no browser, no clipboard, nothing. This is the one case where the
+#     reuse target sits nowhere near the touched file or its siblings; it only
+#     turns up on a repo-wide look for "how does this codebase ever get
+#     something onto the user's clipboard", which is exactly what step 3 of
+#     the skill ("already-installed dependency") asks for. The identifier is
+#     the actual call, not the bare package name "clipboard" - too close to
+#     the ordinary English word to trust as a substring check on its own.
+#   - "versionGreaterThan" - internal/update/update.go imports
+#     github.com/hashicorp/go-version and defines `versionGreaterThan(v, w
+#     string) bool` (line 168, real semver compare via version.NewVersion +
+#     GreaterThan), which CheckForUpdate uses for gh's own self-update check.
+#     The SAME FILE's CheckForExtensionUpdate, a few lines above, instead
+#     calls `ext.UpdateAvailable()` - and that method, in
+#     pkg/cmd/extension/extension.go (lines 213-220), is a naive
+#     `e.CurrentVersion() == e.LatestVersion()` string comparison, not a real
+#     version compare. The touched command here is the extension update-check
+#     path; the fix already lives a few lines away in the file that calls it.
+#     This is the backoff/v4 shape (correct approach already in the file doing
+#     the calling) applied to a bug rather than a missing feature - a plan
+#     that "fixes" this by writing its own version-parsing logic reinvents
+#     what versionGreaterThan already does one file over.
+#   - "MarkdownEditor" - a Prompter method (internal/prompter/prompter.go)
+#     already used by several other "create"-shaped commands to let the user
+#     compose text in $EDITOR - pkg/cmd/agent-task/create/create.go:145,
+#     pkg/cmd/pr/shared/editable.go:292. The touched command,
+#     pkg/cmd/gist/create/create.go, has no Prompter field on CreateOptions at
+#     all (only IO, Config, HttpClient, Browser), and its Args func hard-fails
+#     with "no filenames passed and nothing on STDIN" the moment there's no
+#     file argument and stdin is a TTY - there is no interactive path today.
+#     cmdutil.Factory already exposes f.Prompter (pkg/cmdutil/factory.go:27),
+#     so wiring it in is small; the request never says "editor" or "prompt".
+#   - "AddJSONFlags" (again, deliberately) - the same helper case 4 uses as a
+#     negative control, but this time on a command that does NOT have it yet:
+#     pkg/cmd/org/list/list.go has no Exporter field and never calls
+#     cmdutil.AddJSONFlags, unlike the ~30 sibling list/view commands that do.
+#     Reusing the identifier is intentional - it tests the opposite side of
+#     the same convention (build it here vs. recognize it's already there on
+#     pr list), and the prior run already showed this exact mechanism
+#     separates the arms rather than being grep-trivial for both, unlike the
+#     --web fixture that got cut.
+#
+# Two more negative controls (over-building is this skill's observed failure
+# mode; these test whether a plan says "there's nothing to build" instead of
+# designing something).
+#
+#   - "exclude-drafts" - pkg/cmd/release/list/list.go already declares
+#     `ExcludeDrafts`/`ExcludePreReleases` fields (lines 27-28) and
+#     `--exclude-drafts`/`--exclude-pre-releases` flags (lines 55-56), both
+#     already threaded into fetchReleases (line 87). Unlike every other case
+#     here, the answer sits in the exact file the request is about, in the
+#     flags block a reasonable read would hit first - the starkest version of
+#     "look before you design."
+#   - "GH_NO_UPDATE_NOTIFIER" - internal/update.ShouldCheckForUpdate (line 80)
+#     checks `os.Getenv("GH_NO_UPDATE_NOTIFIER")` and is documented publicly
+#     in pkg/cmd/root/help_topic.go:94 ("set to any value to disable GitHub
+#     CLI update notifications"). Not attached to any command file at all -
+#     the only case here where the fix is a config/env toggle, not code, so
+#     finding it means checking `gh help environment` or grepping the repo for
+#     how updates get suppressed rather than reading one command's source.
+
+- description: "gh agent-task create --follow hammers the api on a flat poll"
+  vars:
+    request: "gh agent-task create --follow polls the session logs every 5 seconds flat the whole time it's running, no matter how long the task takes - during a long agent run that's a lot of constant hammering on the api for no reason. can you plan out making that polling smarter instead of a fixed interval forever"
+    existingIdentifier: "backoff/v4"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - type: javascript
+      value: file://assertions/plan.cjs:noInventedCitations
+      metric: no_invented_citations
+    - &plan_quality_reuse
+      type: llm-rubric
+      # The system half of promptfoo's own DEFAULT_GRADING_PROMPT, restated
+      # verbatim (dist/src/graders-*.js): a custom rubricPrompt replaces the
+      # WHOLE grading prompt, not just the user turn, so omitting this drops
+      # the JSON-response contract and the judge answers in prose - "Could not
+      # extract JSON from llm-rubric response" (evals/AGENTS.md Harness facts).
+      # It was missing here; a real run showed a numeric score (extraction
+      # still limped through via brace-matching) but the per-row `reason` came
+      # back as promptfoo's generic "Grading passed" instead of the judge's
+      # stated arithmetic - silent, not a 0.00, so it would have gone
+      # unnoticed without inspecting raw rows.
+      rubricPrompt:
+        - role: system
+          content: |
+            You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}
+
+            Examples:
+
+            <Output>Hello world</Output>
+            <Rubric>Content contains a greeting</Rubric>
+            {"reason": "the content contains the word 'Hello'", "pass": true, "score": 1.0}
+
+            <Output>Avast ye swabs, repel the invaders!</Output>
+            <Rubric>Does not speak like a pirate</Rubric>
+            {"reason": "'avast ye' is a common pirate term", "pass": false, "score": 0.0}
+        - role: user
+          content: |
+            <FeatureRequest>{{request}}</FeatureRequest>
+            <ExistingMechanism>{{existingIdentifier}}</ExistingMechanism>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> is an implementation PLAN, not code, written against the
+        cli/cli (GitHub CLI) codebase in response to <FeatureRequest>.
+        <ExistingMechanism> is real, present in that codebase right now, and
+        confirmed to already cover most of what the request needs.
+
+        Do not reward structure, headings or length - only substance.
+
+        Answer each with a quote from <Output>, or NONE.
+
+        1. The plan is built around <ExistingMechanism> as the mechanism it
+           extends or wires into, not named once and then set aside for a
+           separate, parallel implementation that duplicates what it already
+           does. Eric S. Raymond, "The Cathedral and the Bazaar" (1998, lesson
+           2): "Good programmers know what to write. Great ones know what to
+           rewrite (and reuse)." A plan that lists <ExistingMechanism> as one
+           option among others it then argues against fails this even though
+           it named it. The quote for this item must contain <ExistingMechanism>'s
+           own literal name or import path - describing the same general shape
+           of fix in the plan's own words ("add an exponential backoff between
+           polls", "back off gradually") without ever writing the literal
+           identifier is NOT naming it, however similar the strategy sounds;
+           score this item 0 in that case, no matter how well-reasoned the
+           parallel version is.
+        2. It identifies at least one concrete edge case or failure mode
+           specific to this change - not a generic call for "error handling"
+           or "tests" - and states how it should be handled. Joel Spolsky, on
+           functional specs: "Somebody has to decide what the policy is going
+           to be for a forgotten password. If you don't decide, you can't
+           write the code." A plan that leaves the equivalent decision open
+           for this change fails this.
+        3. It scopes the work to what the request needs, without adding
+           speculative extra surface - new config, new flags, new layers of
+           abstraction - the request never asked for. Martin Fowler on YAGNI:
+           "some capability we presume our software needs in the future
+           should not be built now because 'you aren't gonna need it'."
+
+        Score from 0 to 1, never above 1: 0.5 for the first, 0.25 for the
+        second, 0.25 for the third. Award nothing for an item you cannot quote
+        for. Brevity is never a deduction. State the arithmetic.
+      threshold: 0.5
+      metric: plan_quality
+
+- description: "gh agent-task create dumps a bare url instead of opening it"
+  vars:
+    request: "once gh agent-task create finishes i just get a url dumped in the terminal and have to copy-paste it every time to go look at the session - can you plan out making it jump straight there for me when it's done"
+    existingIdentifier: "internal/browser"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - type: javascript
+      value: file://assertions/plan.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *plan_quality_reuse
+
+- description: "worried about fat-fingering gh release delete"
+  vars:
+    request: "gh release delete only asks a plain yes/no before it deletes something, and it's way too easy to just mash enter on that and lose a release for good. can you plan out making it harder to blow one away by accident"
+    existingIdentifier: "ConfirmDeletion"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - type: javascript
+      value: file://assertions/plan.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *plan_quality_reuse
+
+- description: "want to script against pr list output"
+  vars:
+    request: "we want to pull pr data into a script - can you plan out adding a way for `gh pr list` to spit out structured output instead of the human-readable table"
+    existingIdentifier: "AddJSONFlags"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - type: javascript
+      value: file://assertions/plan.cjs:noInventedCitations
+      metric: no_invented_citations
+    - &plan_quality_negative
+      type: llm-rubric
+      # See the plan_quality_reuse anchor above for why the system message is
+      # restated here too - same custom-rubricPrompt bug, same fix.
+      rubricPrompt:
+        - role: system
+          content: |
+            You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}
+
+            Examples:
+
+            <Output>Hello world</Output>
+            <Rubric>Content contains a greeting</Rubric>
+            {"reason": "the content contains the word 'Hello'", "pass": true, "score": 1.0}
+
+            <Output>Avast ye swabs, repel the invaders!</Output>
+            <Rubric>Does not speak like a pirate</Rubric>
+            {"reason": "'avast ye' is a common pirate term", "pass": false, "score": 0.0}
+        - role: user
+          content: |
+            <FeatureRequest>{{request}}</FeatureRequest>
+            <ExistingMechanism>{{existingIdentifier}}</ExistingMechanism>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> is an implementation PLAN, not code, written against the
+        cli/cli (GitHub CLI) codebase in response to <FeatureRequest>.
+        <ExistingMechanism> is real, present in that codebase right now, and
+        already does everything the request is asking for - the correct
+        answer here is that little or nothing needs to be built.
+
+        Answer each with a quote from <Output>, or NONE.
+
+        1. It says plainly that this already exists and names
+           <ExistingMechanism>, or points at the same place in the code, as
+           where. A plan that goes straight into design steps without first
+           checking whether the feature is already there fails this even if
+           it stumbles onto the right file along the way. Eric S. Raymond,
+           "The Cathedral and the Bazaar": "Good programmers know what to
+           write. Great ones know what to rewrite (and reuse)" - the reuse
+           starts with noticing there is nothing to write.
+        2. It does not propose new code, new abstractions, or a redesign to
+           accomplish what <ExistingMechanism> already does. At most a
+           trivial, explicitly-scoped next step (a doc note, a one-line
+           follow-up) is acceptable. Martin Fowler on YAGNI: "some capability
+           we presume our software needs in the future should not be built
+           now because 'you aren't gonna need it'" - here it is not even
+           presumed, it is already there.
+
+        Score from 0 to 1, never above 1: 0.5 for each. Award nothing for an
+        item you cannot quote for. Brevity is never a deduction - a plan that
+        is three sentences long and correct on both counts should score 1.
+        State the arithmetic.
+      threshold: 0.5
+      metric: plan_quality
+
+- description: "gh issue create should let me see it before it actually posts"
+  vars:
+    request: "before gh issue create actually posts anything i'd love a way to see what the issue is going to look like without it going live - can you plan out adding some kind of preview step so i'm not just guessing what's about to get filed"
+    existingIdentifier: "--dry-run"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - type: javascript
+      value: file://assertions/plan.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *plan_quality_reuse
+
+- description: "always have to copy the url gh release create prints"
+  vars:
+    request: "gh release create just prints the release url at the end and every single time i have to manually select and copy it out of the terminal to paste into our announcement channel - can you plan out getting rid of that manual copy step"
+    existingIdentifier: "clipboard.WriteAll"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - type: javascript
+      value: file://assertions/plan.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *plan_quality_reuse
+
+- description: "gh extension upgrade nags about updates that aren't real"
+  vars:
+    request: "gh extension upgrade keeps telling me there's a new version available for one of my extensions even right after i just upgraded it, so the check for whether an update is actually available seems off - can you plan out making that reliable"
+    existingIdentifier: "versionGreaterThan"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - type: javascript
+      value: file://assertions/plan.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *plan_quality_reuse
+
+- description: "gh gist create makes you have a file first"
+  vars:
+    request: "gh gist create is great if i already have a file sitting around, but if i just want to jot something down real quick i have to go make a file first or pipe something in from stdin - can you plan out letting me just start typing instead"
+    existingIdentifier: "MarkdownEditor"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - type: javascript
+      value: file://assertions/plan.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *plan_quality_reuse
+
+- description: "want to script against gh org list output too"
+  vars:
+    request: "we've got some tooling that needs to enumerate the orgs a user belongs to programmatically, but gh org list only gives me the human-readable table - can you plan out a way to get structured output out of it instead"
+    existingIdentifier: "AddJSONFlags"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - type: javascript
+      value: file://assertions/plan.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *plan_quality_reuse
+
+- description: "gh release list is cluttered with stuff we never actually shipped"
+  vars:
+    request: "gh release list dumps every single thing we've ever cut in that repo, beta and rc builds included, and i just want to see what actually went out the door to real users - can you plan out a way to cut down on the noise"
+    existingIdentifier: "exclude-drafts"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - type: javascript
+      value: file://assertions/plan.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *plan_quality_negative
+
+- description: "gh version nag is polluting our ci logs"
+  vars:
+    request: "we run gh inside a bunch of ci jobs and it keeps printing that a new version is available at the end of the run, which is just noise in logs nobody reads - can you plan out getting it to stop doing that in our pipelines"
+    existingIdentifier: "GH_NO_UPDATE_NOTIFIER"
+  assert:
+    - type: javascript
+      value: file://assertions/plan.cjs:namesExistingSolution
+      metric: names_existing_solution
+    - type: javascript
+      value: file://assertions/plan.cjs:noInventedCitations
+      metric: no_invented_citations
+    - *plan_quality_negative
