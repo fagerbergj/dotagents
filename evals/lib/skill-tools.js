@@ -143,7 +143,10 @@ function resolveInside(root, rel) {
   return { target, nearest: real, exists: probe === target };
 }
 
-function loadResource(root, rel, budget) {
+// `cache` is optional and owned by the caller (one per callApi invocation, never
+// process-global): omitting it reproduces the old unmemoized behaviour exactly,
+// which is what keeps every direct call in skill-tools.test.cjs unchanged.
+function loadResource(root, rel, budget, cache) {
   const r = resolveInside(root, rel);
   if (r.refused) return `refused: ${r.refused}`;
   if (!r.exists) {
@@ -153,12 +156,26 @@ function loadResource(root, rel, budget) {
   }
   const stat = fs.statSync(r.target);
   if (stat.isDirectory()) return listing(r.target, root);
+  // Root-prefixed key: load_resource and read_source share this function but must
+  // not share a cache slot, even if a path string coincides between skillDir and
+  // repoDir.
+  const key = cache && `${root}::${r.target}`;
+  if (cache && cache.has(key)) {
+    // A marker, not the file again: a model that re-requests the same path isn't
+    // missing the bytes, it's failed to recognise the earlier tool result (the
+    // measured case re-requested one file 7 times past a spent budget). Repeating
+    // the content wouldn't fix that recognition failure and would only add to the
+    // transcript bloat this exists to cut.
+    cache.set(key, cache.get(key) + 1);
+    return `already loaded: "${rel}" was served earlier in this conversation - reuse that content, it has not changed. Not charged against the ${budget.total}-byte budget.`;
+  }
   if (stat.size > budget.remaining) {
     // Never truncate: a half file of syntax is worse than none, and a silent cut
     // would look like the skill documenting the type badly.
     return `refused: "${rel}" is ${stat.size} bytes and only ${budget.remaining} of the ${budget.total}-byte resource budget is left. Stop loading and write the answer from what you already have.`;
   }
   budget.remaining -= stat.size;
+  if (cache) cache.set(key, 1);
   return fs.readFileSync(r.target, 'utf8');
 }
 
@@ -296,6 +313,9 @@ class SkillToolsProvider {
     const maxBytes = this.config.maxResourceBytes ?? DEFAULTS.maxResourceBytes;
     const budget = { total: maxBytes, remaining: maxBytes };
     const questions = { count: 0, usage: { prompt: 0, completion: 0, total: 0, cached: 0, numRequests: 0 } };
+    // Scoped to this callApi call - one row, one arm - never process-global, or
+    // content served to one row would silently answer another.
+    const resourceCache = new Map();
 
     const usage = { prompt: 0, completion: 0, total: 0, cached: 0, numRequests: 0 };
     const loaded = [];
@@ -336,10 +356,14 @@ class SkillToolsProvider {
         usage.total += questions.usage.total;
         usage.cached += questions.usage.cached;
         usage.numRequests += questions.usage.numRequests;
+        // Sum(hits - 1) over every cached path: how many of `loaded` were repeats
+        // a suite can use to see a row thrashing without diffing the transcript.
+        let resourcesDeduped = 0;
+        for (const hits of resourceCache.values()) resourcesDeduped += hits - 1;
         return {
           output: typeof content === 'string' ? content.trim() : content,
           tokenUsage: usage,
-          metadata: { resourcesLoaded: loaded, toolRounds: round, questionsAsked: questions.count },
+          metadata: { resourcesLoaded: loaded, toolRounds: round, questionsAsked: questions.count, resourcesDeduped },
         };
       }
       if (round >= maxToolCalls) {
@@ -362,7 +386,7 @@ class SkillToolsProvider {
         } else {
           const requested = args.path;
           content = roots[called]
-            ? loadResource(roots[called], requested, budget)
+            ? loadResource(roots[called], requested, budget, resourceCache)
             : `refused: unknown tool "${called}".`;
           loaded.push(String(requested));
         }
