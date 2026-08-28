@@ -16,16 +16,27 @@ function result(pass, score, reason) {
 // content routinely nests one. A non-greedy match on the first ``` close
 // stops at that INNER fence and throws away everything after it (reproduced
 // live: 2442 raw chars in, 231 out). Anchor on the outermost fence instead:
-// the first opening marker to the LAST ``` in the text. Falls back to
-// "everything after the opening line" when there is no second marker at all.
+// the first opening marker to the LAST ``` in the text.
+//
+// That still fails when the model never closes the outer fence at all - an
+// odd total marker count means whichever ``` is "last" is actually an INNER
+// close, not the true end, and slicing to it silently drops everything
+// after (reproduced live: a jq case's only real citation, `git submodule
+// update --init`, sat in the discarded tail - 1620 raw chars in, 248 out).
+// Falls back to "everything after the opening line" whenever the fence
+// count can't pair up cleanly, including when there is no second marker at
+// all (first === last, covered by the same odd-count check: one marker is
+// always an odd count).
 function content(output) {
   const text = stripReasoning(String(output));
   const first = text.indexOf('```');
   if (first === -1) return text.trim();
   const openLineEnd = text.indexOf('\n', first);
   if (openLineEnd === -1) return text.trim();
+  const fenceCount = (text.match(/```/g) || []).length;
+  if (fenceCount % 2 !== 0) return text.slice(openLineEnd + 1).trim();
   const last = text.lastIndexOf('```');
-  if (last === first || last <= openLineEnd) return text.slice(openLineEnd + 1).trim();
+  if (last <= openLineEnd) return text.slice(openLineEnd + 1).trim();
   return text.slice(openLineEnd + 1, last).trim();
 }
 
@@ -195,6 +206,195 @@ function checkGit(tokens) {
   return GIT_SUBCOMMANDS.has(sub) ? { ok: true } : { ok: false, note: `git has no "${sub}" subcommand` };
 }
 
+// A fixed, real external vocabulary, same shape as GIT_SUBCOMMANDS - cargo's
+// own built-ins plus the handful of third-party subcommands (fuzz, miri,
+// nextest, ...) an agent-authored AGENTS.md legitimately cites for a Rust repo.
+const CARGO_SUBCOMMANDS = new Set([
+  'add', 'bench', 'build', 'b', 'check', 'c', 'clean', 'clippy', 'doc', 'd', 'fetch', 'fix', 'fmt',
+  'generate-lockfile', 'init', 'install', 'locate-project', 'login', 'logout', 'metadata',
+  'new', 'owner', 'package', 'pkgid', 'publish', 'remove', 'report', 'run', 'r', 'rustc', 'rustdoc',
+  'search', 'test', 't', 'tree', 'uninstall', 'update', 'vendor', 'verify-project', 'version', 'yank',
+  'fuzz', 'miri', 'nextest', 'audit', 'deny', 'udeps', 'watch', 'expand', 'outdated', 'edit',
+]);
+
+function readCargoToml(dir) {
+  try { return fs.readFileSync(path.join(dir, 'Cargo.toml'), 'utf8'); } catch { return null; }
+}
+
+// Narrow, regex-based read of these Cargo.toml shapes, same trade-off as
+// readPyprojectExtras: not a real TOML parser, just the handful of tables
+// this suite needs to check citations against.
+function readCargoFeatures(text) {
+  const section = text.match(/\[features\]\s*\n([\s\S]*?)(?:\n\[|$)/);
+  const features = new Set(['default']);
+  if (section) for (const m of section[1].matchAll(/^([A-Za-z0-9_-]+)\s*=/gm)) features.add(m[1]);
+  return features;
+}
+
+// `[[bin]]`/`[[bench]]`/`[[example]]`/`[[test]]` array-of-tables, each with a
+// `name = "..."` key - the target names `cargo bench <name>`, `cargo run
+// --example <name>` etc. select between.
+function readCargoTargets(text, kind) {
+  const names = new Set();
+  const re = new RegExp(`\\[\\[${kind}\\]\\]([\\s\\S]*?)(?=\\n\\[|$)`, 'g');
+  let m;
+  while ((m = re.exec(text))) {
+    const nameMatch = m[1].match(/name\s*=\s*"([^"]+)"/);
+    if (nameMatch) names.add(nameMatch[1]);
+  }
+  return names;
+}
+
+function readCargoWorkspaceMembers(text) {
+  const section = text.match(/\[workspace\]\s*\n([\s\S]*?)(?:\n\[|$)/);
+  if (!section) return null;
+  const listMatch = section[1].match(/members\s*=\s*\[([\s\S]*?)\]/);
+  const members = new Set();
+  if (listMatch) for (const m of listMatch[1].matchAll(/"([^"]+)"/g)) members.add(m[1]);
+  return members;
+}
+
+function readCargoPackageName(text) {
+  const section = text.match(/\[package\]\s*\n([\s\S]*?)(?:\n\[|$)/);
+  return section ? section[1].match(/name\s*=\s*"([^"]+)"/)?.[1] : undefined;
+}
+
+// `cargo fuzz <subcommand> [<target>]`. fuzz/ is conventionally its own
+// isolated cargo workspace (semver: fuzz/Cargo.toml declares `[workspace]`
+// and points `[[bin]]` targets straight at files in fuzz/, not the
+// cargo-fuzz-generated fuzz/fuzz_targets/ layout other crates use) - so
+// target names are read from whichever of those two shapes the repo actually
+// has, at the fuzz directory, not the crate root.
+const CARGO_FUZZ_SUBCOMMANDS = new Set(['init', 'add', 'list', 'run', 'build', 'check', 'tmin', 'cmin', 'cov', 'fmt']);
+
+function readFuzzTargets(fuzzDir) {
+  const names = new Set();
+  const toml = readCargoToml(fuzzDir);
+  if (toml) for (const n of readCargoTargets(toml, 'bin')) names.add(n);
+  try {
+    for (const f of fs.readdirSync(path.join(fuzzDir, 'fuzz_targets'))) {
+      if (f.endsWith('.rs')) names.add(f.slice(0, -3));
+    }
+  } catch { /* no fuzz_targets/ dir - the flat-file convention may still apply */ }
+  return { names, hasFuzzDir: toml !== null || fs.existsSync(path.join(fuzzDir, 'fuzz_targets')) };
+}
+
+// `rest` is already stripped of `cargo` and any leading `+toolchain` - so
+// rest[0] === 'fuzz' and rest[1] is the fuzz subcommand, regardless of
+// whether the original span was `cargo fuzz run x` or `cargo +nightly fuzz
+// run x`. Passing the raw, unstripped tokens here previously misread
+// `+nightly` as the subcommand slot on any toolchain-qualified citation.
+function checkCargoFuzz(repoDir, cwdDir, rest) {
+  const fuzzDir = path.basename(cwdDir) === 'fuzz' ? cwdDir : path.join(repoDir, 'fuzz');
+  const sub = rest[1];
+  if (!sub) return null; // bare `cargo fuzz`: nothing to verify
+  if (!CARGO_FUZZ_SUBCOMMANDS.has(sub)) return { ok: false, note: `cargo fuzz has no "${sub}" subcommand` };
+  const target = rest.slice(2).find((t) => !t.startsWith('-'));
+  if (!target) return { ok: true }; // no target named: only the subcommand itself was checkable
+  const { names, hasFuzzDir } = readFuzzTargets(fuzzDir);
+  if (!hasFuzzDir) return { ok: false, note: `no fuzz/Cargo.toml or fuzz/fuzz_targets/ in the repo to name a "${target}" target` };
+  if (!names.size) return null; // fuzz/ exists but declares no named bin targets - unverifiable, not fabricated
+  return names.has(target) ? { ok: true } : { ok: false, note: `fuzz/ has no target named "${target}" (has: ${[...names].join(', ') || 'none'})` };
+}
+
+// `cargo [+toolchain] <subcommand> [args...]`. Checks the subcommand against
+// real cargo vocabulary, then - only for the subcommands where it means
+// something - the specific `--features`/`--no-default-features`,
+// `--example`/`--bin`, bare bench-target, and `-p`/`--package` arguments
+// against what Cargo.toml actually declares. Deliberately does not validate
+// the argument to `install`/`add`/`remove`: those name an arbitrary registry
+// crate, not a repo fact (same reasoning as npm's builtin-subcommand carve-out).
+function checkCargo(repoDir, cwdDir, tokens) {
+  let rest = tokens.slice(1);
+  if (rest[0]?.startsWith('+')) rest = rest.slice(1); // `+nightly` toolchain override
+  const sub = rest[0];
+  if (!sub) return null;
+  if (sub === 'fuzz') return checkCargoFuzz(repoDir, cwdDir, rest);
+  if (!CARGO_SUBCOMMANDS.has(sub)) return { ok: false, note: `cargo has no "${sub}" subcommand` };
+
+  const toml = readCargoToml(cwdDir);
+  if (!toml) return { ok: true }; // no Cargo.toml to check args against - the subcommand itself is real
+
+  const featureFlagged = ['test', 't', 'check', 'c', 'build', 'b', 'run', 'r', 'bench'].includes(sub);
+  if (featureFlagged) {
+    const idx = rest.indexOf('--features');
+    if (idx !== -1 && rest[idx + 1] && !rest[idx + 1].startsWith('-')) {
+      const wanted = rest[idx + 1].split(/[,\s]+/).filter(Boolean);
+      const known = readCargoFeatures(toml);
+      const missing = wanted.filter((f) => !known.has(f));
+      if (missing.length) return { ok: false, note: `Cargo.toml declares no feature(s) ${missing.join(', ')} (has: ${[...known].join(', ') || 'none'})` };
+    }
+  }
+
+  if (sub === 'bench') {
+    const name = rest.slice(1).find((t) => !t.startsWith('-') && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(t));
+    if (name) {
+      const known = readCargoTargets(toml, 'bench');
+      if (known.size && !known.has(name)) return { ok: false, note: `Cargo.toml declares no [[bench]] named "${name}" (has: ${[...known].join(', ')})` };
+    }
+  }
+
+  if ((sub === 'run' || sub === 'r')) {
+    for (const flag of ['--example', '--bin']) {
+      const idx = rest.indexOf(flag);
+      if (idx !== -1 && rest[idx + 1]) {
+        const known = readCargoTargets(toml, flag === '--example' ? 'example' : 'bin');
+        if (known.size && !known.has(rest[idx + 1])) {
+          return { ok: false, note: `Cargo.toml declares no [[${flag.slice(2)}]] named "${rest[idx + 1]}" (has: ${[...known].join(', ')})` };
+        }
+      }
+    }
+  }
+
+  const pIdx = rest.findIndex((t) => t === '-p' || t === '--package');
+  if (pIdx !== -1 && rest[pIdx + 1]) {
+    const wanted = rest[pIdx + 1];
+    const members = readCargoWorkspaceMembers(toml);
+    const ownName = readCargoPackageName(toml);
+    if (members) {
+      if (![...members].some((m) => m === wanted || m.endsWith(`/${wanted}`)) && wanted !== ownName) {
+        return { ok: false, note: `Cargo.toml's [workspace] has no member "${wanted}" (has: ${[...members].join(', ') || 'none'})` };
+      }
+    } else if (ownName && wanted !== ownName) {
+      return { ok: false, note: `this is not a workspace and its package is "${ownName}", not "${wanted}"` };
+    }
+  }
+
+  return { ok: true };
+}
+
+// Same fixed-vocabulary shape as GIT_SUBCOMMANDS/CARGO_SUBCOMMANDS - real vs
+// invented is the only thing worth checking cheaply; this suite's zerolog
+// cases already cite `go test`/`go vet`/`go build` for real, and without
+// this those spans produced no check at all, the same dead-metric-zero
+// pattern the missing cargo checker caused (assertions/agentsmd.test.cjs has
+// the fixture for it).
+const GO_SUBCOMMANDS = new Set([
+  'bug', 'build', 'clean', 'doc', 'env', 'fix', 'fmt', 'generate', 'get',
+  'install', 'list', 'mod', 'run', 'test', 'tool', 'version', 'vet', 'work',
+]);
+
+// `go <subcommand> [args...]`. Also checks a `-tags <name>` build-tag
+// argument against the repo's own `//go:build <name>` / `// +build <name>`
+// comments via repoContains - the only way a static checkout can
+// corroborate a build tag it does not compile. Module-boundary claims
+// ("cmd/lint is its own module") are left to discoverability_filter; a
+// static per-directory check can't tell a nested go.mod is authoritative
+// without walking the module graph, which is more machinery than this
+// grader's other checks take on for any other ecosystem either.
+function checkGo(repoDir, tokens) {
+  const sub = tokens[1];
+  if (!sub) return null; // bare `go`: nothing to verify
+  if (!GO_SUBCOMMANDS.has(sub)) return { ok: false, note: `go has no "${sub}" subcommand` };
+  const idx = tokens.indexOf('-tags');
+  if (idx !== -1 && tokens[idx + 1]) {
+    const tags = tokens[idx + 1].replace(/["']/g, '').split(/[,\s]+/).filter(Boolean);
+    const missing = tags.filter((t) => !repoContains(repoDir, `build ${t}`));
+    if (missing.length) return { ok: false, note: `no //go:build or // +build comment in the repo names tag(s) ${missing.join(', ')}` };
+  }
+  return { ok: true };
+}
+
 const PYTHON_MARKERS = ['pyproject.toml', 'setup.py', 'setup.cfg', 'tox.ini'];
 
 // A citation invoking python/pytest/pip only means anything if this is a
@@ -245,13 +445,14 @@ function checkNetworkCommand(repoDir, span) {
     : { ok: false, note: `no file in the repo mentions "${host}" - this URL is not verifiable against the checkout` };
 }
 
-const KNOWN_EXTENSIONS = new Set(['md', 'txt', 'ini', 'toml', 'cfg', 'json', 'yaml', 'yml', 'py', 'js', 'ts', 'sh', 'mk', 'lock', 'rst', 'in', 'cjs', 'mjs']);
+const KNOWN_EXTENSIONS = new Set(['md', 'txt', 'ini', 'toml', 'cfg', 'json', 'yaml', 'yml', 'py', 'js', 'ts', 'sh', 'mk', 'lock', 'rst', 'in', 'cjs', 'mjs', 'rs', 'go']);
 // Canonical casing only - looksLikePath() and existsCaseInsensitive() below
 // both compare case-insensitively, so "makefile" resolves the same as
 // "Makefile" without needing every casing spelled out here.
 const KNOWN_FILENAMES = new Set([
   'Makefile', 'package.json', 'pyproject.toml', 'tox.ini', 'setup.py', 'setup.cfg',
   '.pre-commit-config.yaml', '.git-blame-ignore-revs', '.coveragerc', '.gitignore', '.readthedocs.yaml',
+  'go.mod', 'go.sum',
 ]);
 
 // Rules out prose that merely contains a dot ("e.g.", "3.10", "v4.1.0"): a
@@ -300,6 +501,28 @@ function existsCaseInsensitive(root, relPath) {
   return true;
 }
 
+// `owner/repo` (e.g. a backticked "dtolnay/semver") matches the same
+// two-segment slash shape as a real repo-relative path, but it names a
+// GitHub repository, not a file - checking it against the checkout and
+// failing it as "does not exist" was a live false positive. A genuine
+// repo-relative path's first segment is almost always one of the repo's own
+// top-level entries (fuzz/, tests/, docs/, .github/); an external slug's
+// first segment (a GitHub username) essentially never is. Gated on no known
+// extension in the second segment so a real two-segment path like
+// ".github/AI_POLICY.md" is never in scope - that one already resolves by
+// existence before this is even consulted.
+function looksLikeGithubSlug(repoDir, clean) {
+  const parts = clean.split('/');
+  if (parts.length !== 2) return false;
+  const [owner, name] = parts;
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(owner)) return false;
+  if (!/^[\w.-]+$/.test(name)) return false;
+  if (name.includes('.') && KNOWN_EXTENSIONS.has(name.split('.').pop().toLowerCase())) return false;
+  let entries = [];
+  try { entries = fs.readdirSync(repoDir); } catch { /* unreadable: treat as not a repo-owned dir */ }
+  return !entries.some((e) => e.toLowerCase() === owner.toLowerCase());
+}
+
 function checkPath(repoDir, token) {
   const clean = token.replace(/^\.\/+/, '').replace(/[.,;:)]+$/, '');
   if (!clean || /^https?:\/\//.test(clean) || clean.includes(' ')) return null;
@@ -307,6 +530,7 @@ function checkPath(repoDir, token) {
   if (fs.existsSync(path.join(repoDir, clean))) return { ok: true };
   if (existsCaseInsensitive(repoDir, clean)) return { ok: true };
   if (!clean.includes('/') && findByBasename(repoDir, clean)) return { ok: true };
+  if (looksLikeGithubSlug(repoDir, clean)) return null;
   return { ok: false, note: `"${clean}" does not exist in the repo` };
 }
 
@@ -328,6 +552,8 @@ function checksForSpan(repoDir, span, opts = {}) {
   else if (['npm', 'yarn', 'pnpm'].includes(head)) add(head, checkPackageScript(cwdDir, tokens));
   else if (head === 'tox') add('tox', checkTox(cwdDir, tokens));
   else if (head === 'git') add('git', checkGit(tokens));
+  else if (head === 'cargo') add('cargo', checkCargo(repoDir, cwdDir, tokens));
+  else if (head === 'go') add('go', checkGo(repoDir, tokens));
 
   add('pip-extra', checkPipExtras(cwdDir, span));
   if (tokens.some((t) => /^(python3?|pytest|pip3?)$/i.test(t))) add('python-ecosystem', checkPythonEcosystem(cwdDir));
@@ -411,8 +637,35 @@ function nestedDoesNotRepeatRoot(output, context) {
       : 'No substantive line restates the root file.');
 }
 
+// --- proportionality guard --------------------------------------------------
+
+// Deterministic backstop for discoverability_filter's item 3 (proportionality),
+// which a judge scored 1.0 on an output padded with a directory tree and an
+// invented "Release checklist", reasoning "length is proportionate to the
+// real signal" - false against the text it was judging. Holistic
+// proportionality is exactly the kind of claim an LLM judge is unreliable on;
+// this computes against the case's own vars.evidence text instead of a fixed
+// word count. RATIO_CAP is deliberately generous (evidence is often terse
+// bullets while a real answer needs connecting prose) - this is a guard
+// against gross padding, not a substitute for the rubric's finer judgment.
+const RATIO_CAP = 3;
+function lengthProportionateToEvidence(output, context) {
+  const evidence = context?.vars?.evidence;
+  if (!evidence) throw new Error('lengthProportionateToEvidence needs vars.evidence - the case\'s own ground truth about the repo.');
+  const evLen = evidence.trim().length;
+  const outLen = content(output).length;
+  const ratio = outLen / evLen;
+  if (ratio <= RATIO_CAP) {
+    return result(true, 1, `Output is ${outLen} chars, ${ratio.toFixed(1)}x the ${evLen}-char evidence - within the ${RATIO_CAP}x proportionality guard.`);
+  }
+  return result(false, Math.max(0, RATIO_CAP / ratio),
+    `Output is ${outLen} chars, ${ratio.toFixed(1)}x the ${evLen}-char evidence - over the ${RATIO_CAP}x proportionality guard, likely padding rather than signal.`);
+}
+
 module.exports = {
+  checkCargo,
   checkGit,
+  checkGo,
   checkMake,
   checkNetworkCommand,
   checkPackageScript,
@@ -426,6 +679,8 @@ module.exports = {
   content,
   existsCaseInsensitive,
   findByBasename,
+  lengthProportionateToEvidence,
+  looksLikeGithubSlug,
   nestedDoesNotRepeatRoot,
   readMakeTargets,
   repoContains,

@@ -5,10 +5,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {
+  checkCargo,
   checkGit,
+  checkGo,
   checkPipExtras,
   citedFactsExistInRepoDir,
   content,
+  lengthProportionateToEvidence,
+  looksLikeGithubSlug,
   nestedDoesNotRepeatRoot,
   checksForSpan,
 } = require('./agentsmd.cjs');
@@ -170,6 +174,35 @@ assert.equal(citedFactsExistInRepoDir(nestedFence, dir).pass, true, 'the citatio
 
 console.log('ok   content() (outermost-fence anchoring, nested fence)');
 
+// Reproduces a second, live failure: the model opens an outer fence, nests
+// an inner one, closes ONLY the inner one, and never closes the outer -
+// three total ``` markers, an odd count. The real citation
+// (`git submodule update --init`) sat after the inner close, in the
+// silently-discarded tail (1620 raw chars in, 248 out on a live row).
+const unclosedOuterFence = [
+  '```markdown',
+  '# AGENTS.md',
+  '',
+  'Build steps:',
+  '',
+  '```sh',
+  'git submodule update --init',
+  'make check',
+  '```',
+  '',
+  'If that fails, see `docs/windows.md`.',
+].join('\n');
+const extractedUnclosed = content(unclosedOuterFence);
+assert.ok(extractedUnclosed.includes('git submodule update --init'), 'content() must not truncate when the outer fence is never closed');
+assert.ok(extractedUnclosed.includes('docs/windows.md'), 'text after the inner close is kept, not discarded as if the inner close were the real end');
+assert.deepEqual(
+  require('./agentsmd.cjs').checksForSpan(dir, 'git submodule update --init'),
+  [{ kind: 'git', ok: true }],
+  'sanity: the citation this bug used to drop is itself real and checkable',
+);
+
+console.log('ok   content() (outermost-fence anchoring, unclosed outer fence)');
+
 // --- nested-instructions grader ---------------------------------------------
 
 const root = [
@@ -186,3 +219,128 @@ assert.equal(narrowed.pass, true, 'subtree-specific content that never appears i
 assert.throws(() => nestedDoesNotRepeatRoot('anything', { vars: {} }), /existingRoot/, 'missing existingRoot throws rather than scoring');
 
 console.log('ok   nestedDoesNotRepeatRoot (synthetic fixture)');
+
+// --- GitHub-slug path misclassification -------------------------------------
+// Live bug: a backticked "dtolnay/semver" matches the same two-segment slash
+// shape as a real repo-relative path and was scored as a nonexistent file.
+
+assert.equal(looksLikeGithubSlug(dir, 'dtolnay/semver'), true, 'an owner/repo slug is recognised as a GitHub reference, not a path');
+assert.deepEqual(checksForSpan(dir, 'dtolnay/semver'), [], 'a slug produces no path check at all - unverifiable, not fabrication, not silently excluded');
+assert.equal(pass('see `dtolnay/semver` on GitHub and run `make test`'), true, 'a slug alongside a real citation does not drag a true answer down as if the slug were a fabricated path');
+
+// Real repo-relative paths must keep resolving, including a slug-shaped
+// two-segment one whose first segment is a real top-level directory of the
+// checkout, and a deeper one carrying a known extension.
+assert.equal(looksLikeGithubSlug(dir, 'docs/Makefile'), false, 'a real two-segment repo path is not misread as a slug - its first segment is a real top-level dir');
+assert.equal(pass('see `.github/AI_POLICY.md`'), true, 'a real nested path with a known extension still resolves (regression: src/requests/__init__.py shape)');
+assert.equal(pass('see `nonexistent-owner/nonexistent-file.md`'), false, 'a slug-shaped span WITH a known extension is still checked as a path and fails when invented');
+
+console.log('ok   looksLikeGithubSlug (GitHub slug vs. repo-relative path)');
+
+// --- cargo/Rust checker ------------------------------------------------------
+
+const cargoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentsmd-cargo-'));
+fs.writeFileSync(path.join(cargoDir, 'Cargo.toml'), [
+  '[package]', 'name = "mycrate"', 'version = "0.1.0"', '',
+  '[features]', 'default = []', 'serde = []', '',
+  '[[bench]]', 'name = "parse"', 'harness = false', '',
+  '[[example]]', 'name = "demo"', '',
+  '[workspace]', 'members = ["crates/sub"]', '',
+].join('\n'));
+fs.mkdirSync(path.join(cargoDir, 'fuzz'));
+fs.writeFileSync(path.join(cargoDir, 'fuzz', 'Cargo.toml'), [
+  '[package]', 'name = "mycrate-fuzz"', 'version = "0.0.0"', '',
+  '[workspace]', '',
+  '[[bin]]', 'name = "parse_version"', 'path = "parse_version.rs"', '',
+  '[[bin]]', 'name = "sort_version"', 'path = "sort_version.rs"', '',
+].join('\n'));
+
+const cargoPass = (text, opts) => citedFactsExistInRepoDir(text, cargoDir, opts).pass;
+
+// subcommand vocabulary: real vs invented, third-party subcommands accepted.
+assert.equal(cargoPass('run `cargo test`'), true, 'cargo test is real');
+assert.equal(cargoPass('run `cargo frobnicate`'), false, 'an invented cargo subcommand fails');
+assert.equal(cargoPass('run `cargo clippy --tests --benches -- -Dclippy::all -Dclippy::pedantic`'), true, 'clippy with lint flags is real');
+assert.equal(cargoPass('run `cargo miri test`'), true, 'miri is a recognised third-party subcommand');
+
+// `cargo install <crate>` installs from the registry - not a repo fact, same
+// carve-out as npm's builtin subcommands.
+assert.deepEqual(checksForSpan(cargoDir, 'cargo install cargo-fuzz'), [{ kind: 'cargo', ok: true }], 'cargo install <crate> is checked only as a real subcommand, not against repo state');
+
+// feature flags: real vs invented, checked against [features].
+assert.equal(cargoPass('run `cargo check --features serde`'), true, 'a real feature passes');
+assert.equal(cargoPass('run `cargo check --features bogus`'), false, 'an invented feature fails');
+assert.equal(cargoPass('run `cargo check --no-default-features --features serde`'), true, '--no-default-features alongside a real --features value passes');
+
+// bench/example/bin targets: real vs invented, checked against [[bench]]/[[example]].
+assert.equal(cargoPass('run `cargo bench parse`'), true, 'a real [[bench]] target passes');
+assert.equal(cargoPass('run `cargo bench nope`'), false, 'an invented bench target fails');
+assert.equal(cargoPass('run `cargo run --example demo`'), true, 'a real [[example]] target passes');
+assert.equal(cargoPass('run `cargo run --example nope`'), false, 'an invented example target fails');
+
+// workspace members / package name via -p/--package.
+assert.equal(cargoPass('run `cargo test -p sub`'), true, 'a workspace member (by its path tail) resolves');
+assert.equal(cargoPass('run `cargo test -p mycrate`'), true, 'the crate\'s own package name resolves via -p');
+assert.equal(cargoPass('run `cargo test -p nope`'), false, 'an invented package name fails');
+
+// toolchain override: `cargo +nightly fuzz ...` must not misread "+nightly" as the fuzz subcommand.
+assert.equal(cargoPass('run `cargo +nightly fuzz check`'), true, 'a toolchain-qualified cargo fuzz citation is parsed correctly');
+assert.equal(cargoPass('run `cargo +nightly fuzz run parse_version`'), true, 'toolchain override plus a real fuzz target both resolve');
+
+// cargo-fuzz: real vs invented target, resolved against fuzz/Cargo.toml's own
+// [[bin]] entries (semver's actual layout - not the fuzz_targets/ convention).
+assert.equal(cargoPass('run `cargo fuzz run parse_version`'), true, 'a real fuzz [[bin]] target passes');
+assert.equal(cargoPass('run `cargo fuzz run made_up_target`'), false, 'an invented fuzz target fails');
+assert.equal(cargoPass('run `cargo fuzz build`'), true, 'a bare cargo fuzz build with no target only checks the subcommand');
+assert.equal(cargoPass('run `cargo fuzz nonsense`'), false, 'an invented cargo-fuzz subcommand fails');
+assert.deepEqual(checkCargo(cargoDir, cargoDir, ['cargo', 'fuzz', 'run', 'parse_version']), { ok: true }, 'checkCargo takes (repoDir, cwdDir, tokens) directly and resolves a real fuzz target');
+
+// the fuzz_targets/ convention (other crates' layout) also resolves, from cwd: fuzz.
+const fuzzTargetsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentsmd-cargo-fuzztargets-'));
+fs.mkdirSync(path.join(fuzzTargetsDir, 'fuzz', 'fuzz_targets'), { recursive: true });
+fs.writeFileSync(path.join(fuzzTargetsDir, 'fuzz', 'fuzz_targets', 'roundtrip.rs'), '');
+assert.equal(citedFactsExistInRepoDir('run `cargo fuzz run roundtrip`', fuzzTargetsDir, { cwd: 'fuzz' }).pass, true, 'the fuzz_targets/*.rs convention resolves target names too');
+assert.equal(citedFactsExistInRepoDir('run `cargo fuzz run nope`', fuzzTargetsDir, { cwd: 'fuzz' }).pass, false, 'an invented target still fails under the fuzz_targets/ convention');
+
+// no Cargo.toml at all: the subcommand itself still checks real vs invented,
+// but no repo state exists to check args against.
+const noCargo = fs.mkdtempSync(path.join(os.tmpdir(), 'agentsmd-nocargo-'));
+assert.equal(citedFactsExistInRepoDir('run `cargo test`', noCargo).pass, true, 'cargo test is a real subcommand even with no Cargo.toml to check args against');
+assert.equal(citedFactsExistInRepoDir('run `cargo bogus`', noCargo).pass, false, 'an invented subcommand still fails with no Cargo.toml at all');
+
+console.log('ok   checkCargo / checksForSpan cargo (synthetic Rust fixture)');
+
+// --- length-proportionality guard -------------------------------------------
+
+const shortEvidence = 'a'.repeat(100);
+assert.equal(lengthProportionateToEvidence('x'.repeat(250), { vars: { evidence: shortEvidence } }).pass, true, 'within the ratio cap passes');
+const overCap = lengthProportionateToEvidence('x'.repeat(500), { vars: { evidence: shortEvidence } });
+assert.equal(overCap.pass, false, 'output many times longer than the evidence fails the proportionality guard');
+assert.ok(overCap.score < 1 && overCap.score > 0, 'over-cap score decays smoothly rather than jumping straight to 0');
+assert.throws(() => lengthProportionateToEvidence('x', { vars: {} }), /vars\.evidence/, 'missing vars.evidence throws rather than scoring');
+
+console.log('ok   lengthProportionateToEvidence (synthetic fixture)');
+
+// --- go checker --------------------------------------------------------------
+// Live dead-metric-zero pattern: zerolog rows citing real `go test`/`go
+// vet`/`-tags binary_log` produced NO check at all (checksForSpan had no `go`
+// handler), the same root cause as the missing cargo checker, just for Go.
+
+const goDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentsmd-go-'));
+fs.mkdirSync(path.join(goDir, 'encoder'));
+fs.writeFileSync(path.join(goDir, 'encoder', 'encoder_cbor.go'), '//go:build binary_log\n\npackage encoder\n');
+fs.writeFileSync(path.join(goDir, 'encoder', 'encoder_json.go'), '//go:build !binary_log\n\npackage encoder\n');
+
+const goPass = (text, opts) => citedFactsExistInRepoDir(text, goDir, opts).pass;
+
+assert.equal(goPass('run `go test -race -bench . -benchmem ./...`'), true, 'a real go subcommand with flags passes');
+assert.equal(goPass('run `go vet ./cmd/lint/...`'), true, 'go vet is real');
+assert.equal(goPass('run `go frobnicate`'), false, 'an invented go subcommand fails');
+assert.deepEqual(checkGo(goDir, ['go']), null, 'bare go names no subcommand to check');
+
+// -tags: a real build tag the repo's own //go:build comments name passes; an
+// invented one fails.
+assert.equal(goPass('run `go test -tags binary_log -race ./...`'), true, 'a real build tag passes');
+assert.equal(goPass('run `go test -tags made_up_tag ./...`'), false, 'an invented build tag fails');
+
+console.log('ok   checkGo / checksForSpan go (synthetic Go fixture)');
