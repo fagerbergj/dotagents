@@ -267,7 +267,7 @@ jobs:
           set -euo pipefail
           mkdir -p evals
           cp -r .eval-harness/evals/lib evals/lib
-          cp .eval-harness/evals/run.sh .eval-harness/evals/report.js .eval-harness/evals/rollup.js evals/
+          cp .eval-harness/evals/run.sh .eval-harness/evals/report.js .eval-harness/evals/report.test.cjs .eval-harness/evals/rollup.js evals/
           # Only when the caller ships none of its own: a caller whose grader
           # needs an extra package commits its own evals/package.json (starting
           # from the harness's and adding to it) and that copy wins here. This

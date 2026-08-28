@@ -8,13 +8,39 @@ const file = process.argv[2];
 const mdFlag = process.argv.indexOf('--md');
 const mdPath = mdFlag > -1 ? process.argv[mdFlag + 1] : null;
 if (!file) { console.error('usage: report.js <results.json> [--md <out.md>]'); process.exit(2); }
-const rows = JSON.parse(fs.readFileSync(file, 'utf8')).results.results;
+const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+const rows = data.results.results;
 
 // Deterministic order: baseline first, then the arm under test. The delta is
 // meaningless if the arms come back in whatever order the results happen to hold.
 const ORDER = ['no-skill', 'skill-current', 'skill-next'];
 const arms = [...new Set(rows.map((r) => r.prompt.label))]
   .sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99));
+
+// A result set with no rows, one arm, or badly unequal arms is not a measurement,
+// and a tidy empty table reading "no differences found" is how one becomes a
+// confident wrong claim later. Refuse before anything that looks like a result
+// reaches stdout; the CAUTION prefix keeps eval-publish.yml's gate dropping it.
+const armRows = Object.fromEntries(arms.map((a) => [a, rows.filter((r) => r.prompt.label === a).length]));
+const most = Math.max(0, ...Object.values(armRows));
+const skew = most ? (most - Math.min(...Object.values(armRows))) / most : 0;
+const armList = () => arms.map((a) => `${a}=${armRows[a]}`).join(' ');
+// Scores are 0..1, so k rows missing from n can move that arm's mean by up to
+// k/n. Past 5% that alone clears reliability()'s smallest floor, so the delta
+// could be the dropped rows rather than the skill. Under it, say so and go on.
+const SKEW_FAIL = 0.05;
+const fatal = !rows.length
+  ? 'the results file holds no rows - the run made no measurement'
+  : arms.length < 2
+    ? `only one arm produced rows (${armList()}) - there is nothing to compare against`
+    : skew > SKEW_FAIL
+      ? `arms lost too many rows to compare: ${armList()}`
+      : null;
+if (fatal) {
+  console.error(`!! CAUTION: ${fatal}. Refusing to print a report - this is not a measurement.`);
+  process.exit(1);
+}
+
 const metrics = [...new Set(rows.flatMap((r) => Object.keys(r.namedScores || {})))];
 const cell = (arm, metric) => {
   const scores = rows.filter((r) => r.prompt.label === arm)
@@ -46,6 +72,26 @@ const droppedTotal = Object.values(dropped).reduce((a, b) => a + b, 0);
 const droppedUneven = new Set(arms.map((a) => dropped[a] || 0)).size > 1;
 
 const banners = [];
+// Every case runs in every arm, so equal row counts are the design, not luck.
+// A small drop cannot move a mean far enough to matter (SKEW_FAIL above is where
+// it can), but tolerating unequal denominators in silence is the defect.
+if (skew) banners.push({
+  level: 'CAUTION',
+  text: `arms came back with unequal row counts: ${armList()}`
+    + '. Every case runs in every arm, so the missing rows were lost, not skipped - '
+    + 'the means below rest on different denominators.',
+});
+// Rows with no usage at all contradict themselves: something produced this output
+// without buying a token. Warn rather than refuse - a wholly cached re-report and
+// a provider that omits usage both look like this and their scores still stand.
+const totalTokens = rows.reduce((a, r) => a + (r.tokenUsage?.total || 0), 0);
+const numRequests = data.results.stats?.tokenUsage?.numRequests;
+if (!totalTokens || numRequests === 0) banners.push({
+  level: 'CAUTION',
+  text: `${rows.length} rows carry ${totalTokens} tokens across ${numRequests ?? '?'} requests`
+    + '. Rows without usage did not come from a call made here - check the run really produced them '
+    + 'before reading any number below.',
+});
 if (droppedTotal) banners.push({
   level: droppedUneven ? 'CAUTION' : 'WARNING',
   text: `${droppedTotal} row(s) produced no scores and are excluded${droppedUneven ? ', UNEVENLY' : ''}: `

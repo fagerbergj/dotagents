@@ -43,6 +43,8 @@ tokens (avg)      300             5620
 
 It also lists failed non-`select-best` assertions with the grader's reason—where diagnosis usually is.
 
+It refuses (exit 1, no table) a result set that is not a measurement: no rows, only one arm, or arms whose row counts differ by more than 5%. Smaller imbalances and a run with no token usage still print, under a `CAUTION` banner. `eval-publish.yml` drops any suite whose report emits `CAUTION`, so a caveated run is reported to a human but never published as a baseline.
+
 Read per-metric deltas, never aggregate pass rate. `select-best` marks every non-winning arm as failed by design, mixing it with unrelated metrics. Latency and token rows are the price of carrying the skill in context and usually the largest, most reliable difference.
 
 ## Suites
