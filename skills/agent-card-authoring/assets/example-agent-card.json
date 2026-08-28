@@ -17,14 +17,14 @@
   ],
   "capabilities": {
     "streaming": true,
-    "pushNotifications": true,
-    "stateTransitionHistory": false
+    "pushNotifications": true
   },
   "securitySchemes": {
     "bearerAuth": {
-      "type": "http",
-      "scheme": "bearer",
-      "bearerFormat": "JWT"
+      "httpAuthSecurityScheme": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
     }
   },
   "defaultInputModes": ["application/json"],

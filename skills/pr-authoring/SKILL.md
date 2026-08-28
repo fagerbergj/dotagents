@@ -8,7 +8,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
-  version: "1.0.1"
+  version: "1.0.2"
 ---
 
 # PR Authoring
@@ -23,7 +23,7 @@ A pull request exists to **communicate with the reviewer**, and the author contr
 
 Before writing the body, pick the template:
 
-1. **Read the target repo's `.github/pull_request_template.md`** (`read_file`). If it exists, fill *its* sections - respect the repo's own conventions over ours.
+1. **Read the target repo's `.github/pull_request_template.md`.** If it exists, fill *its* sections - respect the repo's own conventions over ours.
 2. **Otherwise** use this skill's `assets/default-pr-template.md` as the skeleton.
 
 Either way, delete sections that don't apply - a two-line fix keeps only Why + Verification.
