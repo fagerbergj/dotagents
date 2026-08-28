@@ -5,11 +5,11 @@
 | model | metric | no-skill | skill@1.0 | Δ |
 | --- | --- | ---: | ---: | ---: |
 | ci:deepseek-v4-flash | heading_hierarchy | 0.92 | 1.00 | +0.08 |
-| ci:deepseek-v4-flash | latency max (s) | 4.20 | 1.90 | −2.3 |
-| ci:deepseek-v4-flash | latency p50 (s) | 0.90 | 0.40 | −0.5 |
-| ci:deepseek-v4-flash | latency_s | 1.11 | 0.67 | −0.4 |
-| ci:deepseek-v4-flash | preserved | 0.24 | 0.91 | +0.67 |
-| ci:deepseek-v4-flash | readability | 0.53 | 0.83 | +0.30 |
-| ci:deepseek-v4-flash | tokens p50 | 379 | 1028 | +649 |
-| ci:deepseek-v4-flash | tokens total | 4928 | 12865 | +7937 |
-| ci:deepseek-v4-flash | unchanged_when_clean | 0.10 | 0.92 | +0.82 |
+| ci:deepseek-v4-flash | latency max (s) | 5.50 | 2.30 | −3.2 |
+| ci:deepseek-v4-flash | latency p50 (s) | 0.70 | 0.90 | +0.2 |
+| ci:deepseek-v4-flash | latency_s | 1.00 | 1.01 | +0.0 |
+| ci:deepseek-v4-flash | preserved | 0.33 | 0.91 | +0.58 |
+| ci:deepseek-v4-flash | readability | 0.67 | 0.85 | +0.18 |
+| ci:deepseek-v4-flash | tokens p50 | 358 | 1029 | +671 |
+| ci:deepseek-v4-flash | tokens total | 4723 | 13071 | +8348 |
+| ci:deepseek-v4-flash | unchanged_when_clean | 0.06 | 0.79 | +0.73 |
