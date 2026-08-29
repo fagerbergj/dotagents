@@ -195,6 +195,10 @@ function anchors(output, dir, touched) {
       if (!lines) continue;
       // A claim about a symbol is usually a claim about its declaration; the
       // first mention is the fallback.
+      // ponytail: a line-grep, not a parser. It anchors an overloaded or
+      // re-declared name to the first touched file that matches. Reach for a
+      // real symbol index (ctags, tree-sitter) only if the judge starts
+      // reporting UNSETTLED because it was shown the wrong site.
       let i = lines.findIndex((l) => DECLARES.test(l) && word.test(l));
       if (i < 0) i = lines.findIndex((l) => word.test(l));
       if (i < 0) continue;
