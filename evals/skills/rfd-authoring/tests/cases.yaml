@@ -105,8 +105,10 @@
         List every figure, identifier, system name, team name, date or measurement the reply
         asserts as established fact that appears nowhere in the colleague's message above,
         quoting each. A specific the reply explicitly marks as an assumption, an example, an
-        open question, or a target still to be agreed is not on the list. Answer NONE if
-        there are none.
+        open question, or a target still to be agreed is not on the list, and neither is a
+        published standard, specification or process the reply cites as an authority - that
+        is a citation, not a claim about the colleague's own systems. Answer NONE if there
+        are none.
 
         Score from 0 to 1, never above 1: start at 1.00 and subtract 0.25 for each item on
         your list, floored at 0. State the list and the arithmetic.

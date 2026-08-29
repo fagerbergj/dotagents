@@ -90,7 +90,9 @@
       asserts as established fact. Go through that list one at a time and answer IN NOTE or
       INVENTED for each, quoting the source note where it is IN NOTE. A specific the document
       explicitly marks as an assumption, a placeholder, an open question or a proposal is not
-      INVENTED. A document that asserts nothing specific lists nothing and loses nothing.
+      INVENTED, and neither is a published standard, specification or process the document
+      cites as an authority - that is a citation, not a claim about the team's own systems.
+      A document that asserts nothing specific lists nothing and loses nothing.
 
       Score from 0 to 1, never above 1: start at 1.00 and subtract 0.25 for each INVENTED,
       floored at 0. State the list and the arithmetic.

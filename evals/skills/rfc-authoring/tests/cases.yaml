@@ -117,6 +117,8 @@
         estimate, a placeholder or an open question does not go on the list; one presented
         as fact does. A figure the document proposes as a target, a deadline to agree, or
         an acceptance threshold is not an invention either - it is being set, not claimed.
+        Nor is a published standard, specification or process the document cites as an
+        authority: that is a citation, not a claim about the engineer's own systems.
 
         Score from 0 to 1, never above 1: start at 1.00 and subtract 0.25 for each
         unsourced specific on your list, floored at 0. State the list and the arithmetic.
