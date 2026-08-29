@@ -14,92 +14,157 @@
 # not carry and nothing else, the rest are self-evident throughout. None of them
 # has a second defensible answer - restraint scores adding nothing and adding
 # only an assumption-carrying comment the same, so both correct answers pass.
-
-- description: go constraint - retry policy and backoff budget
+#
+# PROVENANCE. Eight of the nine graded cases were sourced from
+# `fagerbergj/quack` and have been removed. quack is an AI code-review bot that
+# runs these very skills, so its code may have been commented with the skill
+# under test, and grading a model on it risks scoring the model for reproducing
+# its own idiom. Do not reintroduce quack material. Each removed case was
+# replaced one-for-one, same shape, from `turnstone` (Python / TypeScript /
+# JavaScript, github.com/turnstonelabs/turnstone), at commit
+# 40354da712a3a0c6a5130c095145afc2ca5cffdb. The code is the real file with its
+# comments and docstrings stripped. Where a case shows only part of a module -
+# the TLS client without `_request_cert`, the token store without its cipher -
+# that is deliberate: the file is a coherent extract, not a compiling program,
+# and every fact the ask carries is about code that IS shown.
+#
+#   - python constraint - `turnstone/core/mcp_oauth.py`, the refresh-backoff
+#     constants and helpers. Qualifies: what the cooldown is for (skipping a
+#     round trip during an AS outage, not rate-limiting), what the streak
+#     escalates to, and why the permanent flag is armed on one path only are
+#     none of them readable off the statements.
+#   - python workaround - `turnstone/core/tls.py`, `complete_tls_cleanup`.
+#     Qualifies: the loop exists because a one-shot `asyncio.shield` returns
+#     the moment its caller is cancelled, which is a fact about the stdlib and
+#     not about this code. `turnstone/core/mcp_client.py`'s teardown protocol
+#     was the first pick here and was REJECTED: `git blame` puts 7 lines of the
+#     extract, including the function signature, in 217d3a3a, which carries a
+#     `Co-authored-by: Copilot` trailer.
+#   - python security - `turnstone/core/output_guard.py`, the credential
+#     pattern set and `redact_credentials`. Qualifies: what the output feeds
+#     (persisted audit rows), why http(s) is in the connection-string scheme
+#     list, why the single-quoted JSON pattern is not a duplicate, and why the
+#     substitution is positional.
+#   - python performance - `turnstone/core/thumbnails.py`, whole file.
+#     Qualifies: the library's own pixel ceiling does not enforce the bound
+#     between 1x and 2x the cap, which is the entire reason the explicit check
+#     exists and why it sits where it does.
+#   - typescript public API - `sdk/typescript/src/base.ts`, the option
+#     interfaces plus `BaseClient.request`, `_buildUrl` and `streamSSE`.
+#     Qualifies: four contract facts a caller cannot read off the signatures.
+#   - javascript public API - `turnstone/shared_static/list_cache.js`, whole
+#     file. Qualifies: four modules build on it, and its never-rejects,
+#     never-blanks, force-chains and null-prototype guarantees are all
+#     invisible.
+#   - python invariant - `turnstone/core/tls.py`, `prepare_pem_runtime_dir` and
+#     `refresh_runtime_pems`. Qualifies: a boot-only sweep with a
+#     one-node-per-root assumption and an ordering that a probe depends on.
+#     Two cases draw on tls.py; they share no function.
+#   - python security plus deferred work - `turnstone/core/mcp_crypto.py`,
+#     `MCPTokenStore.get_oidc_credential` and
+#     `update_oidc_credential_after_redeem`. Qualifies: the compare-and-swap's
+#     purpose, why it cannot compare ciphertext, what the remaining race window
+#     is, and that the window is an accepted finding with a named condition
+#     that would retire it. Replaces a Java case whose package was
+#     `com.quack.webhooks`; turnstone has no Java, so this case is Python and
+#     the suite no longer covers Java. Nothing grades on the language: the
+#     comment scanner reads Java through the same C-like path the three Go
+#     negative controls exercise.
+#
+# The one graded case that predates the removal is unchanged: the python
+# client method with a clamp and an error contract. So are all five negative
+# controls - their Go and TypeScript sources carry no quack identifier and do
+# not appear anywhere in quack's history.
+#
+# AI-AUTHORSHIP SCREEN. Every turnstone commit touching the files above was
+# checked for an authorship disclosure - `Co-Authored-By: Claude ...
+# <noreply@anthropic.com>`, a "Generated with Claude Code" trailer, a bot
+# co-author. turnstone carries 13 such commits (8 `Co-authored-by: Copilot`,
+# 1 `Co-Authored-By: Claude` on the Helm chart fix 73fb84b4, and 4 bot
+# commits). The screen was run twice: once over every commit touching each
+# candidate file, and again as a `git blame` over the exact line ranges shown.
+# It cost one case - see the workaround entry above. Every range that survives
+# blames clean. Subject-matter mentions of Anthropic or Copilot inside a body
+# are not authorship claims.
+#
+# Metric counts after the replacement, all unchanged: not_narration 9,
+# fact_transfer 9, restraint 5, doc_placement_floor 4 assertions over 3 cases.
+# NOT RE-MEASURED. Every stored baseline for this suite was taken on a case set
+# that included eight quack files and no longer describes it.
+- description: python constraint - a refresh cooldown and the streak that escalates past it
   vars:
-    lang: go
+    lang: python
     ask: |
-      Can you comment this up before I push it back? Got a review saying "why is
-      POST treated differently, looks like a bug". It isn't. A POST that times out
-      mid-flight may already have been processed server-side, so we only send it
-      again when the connection provably never landed - WithIdempotent is the
-      escape hatch for calls where a repeat is harmless, like regenerating a model
-      completion. The 4 attempts and the 200ms/5s pair are there so a dead upstream
-      gives up after about a second instead of grinding away for minutes.
+      Can you comment this up before I push it back? Review read the cooldown as
+      rate-limiting the user, which it is not. The 30 seconds exists to short-circuit
+      the token-endpoint round trip while the authorization server is down - it is a
+      cost thing, not a punishment. The five-strike ambiguous streak is the opposite
+      direction: a rejection we cannot classify but that keeps happening escalates to
+      re-consent, so a dead grant in some non-standard shape can't strand the user
+      forever. And last_failure_permanent only ever gets armed on the obo path,
+      because that path's shared credential survives a per-server revoke - the
+      in-cooldown short-circuit reads it so it tells the user "re-login" instead of a
+      misleading "try again". A transient or ambiguous arm resets it to False on
+      purpose so a later transient window can't inherit a stale permanent flag.
     code: |
-      package httpx
+      from __future__ import annotations
 
-      import (
-      	"context"
-      	"errors"
-      	"net"
-      	"net/http"
-      	"strconv"
-      	"time"
-      )
+      import time
+      from dataclasses import dataclass
+      from typing import Any
 
-      const (
-      	DefaultMaxAttempts = uint(4)
-      	DefaultBaseDelay   = 200 * time.Millisecond
-      	DefaultMaxDelay    = 5 * time.Second
-      )
+      from turnstone.core.mcp_types import TokenLookupResult
 
-      type idempotencyKey struct{}
+      _REFRESH_TRANSIENT_COOLDOWN_SECONDS = 30.0
+      _AMBIGUOUS_ESCALATION_THRESHOLD = 5
 
-      func WithIdempotent(ctx context.Context) context.Context {
-      	return context.WithValue(ctx, idempotencyKey{}, true)
-      }
+      @dataclass
+      class _RefreshBackoffState:
 
-      func isIdempotent(ctx context.Context) bool {
-      	v, _ := ctx.Value(idempotencyKey{}).(bool)
-      	return v
-      }
+          last_failure_monotonic: float = 0.0
+          ambiguous_streak: int = 0
+          last_failure_permanent: bool = False
 
-      type transport struct {
-      	next        http.RoundTripper
-      	maxAttempts uint
-      	baseDelay   time.Duration
-      	maxDelay    time.Duration
-      }
+      def _refresh_backoff_state(app_state: Any, user_id: str, server_name: str) -> _RefreshBackoffState:
+          states = getattr(app_state, "mcp_oauth_refresh_backoff", None)
+          if states is None:
+              states = {}
+              app_state.mcp_oauth_refresh_backoff = states
+          key = (user_id, server_name)
+          state = states.get(key)
+          if state is None:
+              state = _RefreshBackoffState()
+              states[key] = state
+          return state
 
-      func (t *transport) shouldRetry(req *http.Request, resp *http.Response, err error) bool {
-      	free := req.Method == http.MethodGet || req.Method == http.MethodHead || isIdempotent(req.Context())
-      	if err != nil {
-      		var netErr net.Error
-      		if errors.As(err, &netErr) && netErr.Timeout() {
-      			return free
-      		}
-      		var opErr *net.OpError
-      		if errors.As(err, &opErr) && !opErr.Temporary() {
-      			return true
-      		}
-      		return free
-      	}
-      	if resp == nil {
-      		return false
-      	}
-      	if resp.StatusCode == http.StatusTooManyRequests {
-      		return free
-      	}
-      	return free && resp.StatusCode >= 500
-      }
+      def _arm_cooldown(
+          app_state: Any, user_id: str, server_name: str, *, permanent: bool = False
+      ) -> _RefreshBackoffState:
+          state = _refresh_backoff_state(app_state, user_id, server_name)
+          state.last_failure_monotonic = time.monotonic()
+          state.last_failure_permanent = permanent
+          return state
 
-      func retryAfter(resp *http.Response) (time.Duration, bool) {
-      	if resp == nil {
-      		return 0, false
-      	}
-      	v := resp.Header.Get("Retry-After")
-      	if v == "" {
-      		return 0, false
-      	}
-      	if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
-      		return time.Duration(secs) * time.Second, true
-      	}
-      	if at, err := http.ParseTime(v); err == nil {
-      		return time.Until(at), true
-      	}
-      	return 0, false
-      }
+      def _clear_refresh_backoff(app_state: Any, user_id: str, server_name: str) -> None:
+          states = getattr(app_state, "mcp_oauth_refresh_backoff", None)
+          if isinstance(states, dict):
+              states.pop((user_id, server_name), None)
+
+      def _refresh_in_cooldown(app_state: Any, user_id: str, server_name: str) -> bool:
+          states = getattr(app_state, "mcp_oauth_refresh_backoff", None)
+          if not isinstance(states, dict):
+              return False
+          state: _RefreshBackoffState | None = states.get((user_id, server_name))
+          if state is None or not state.last_failure_monotonic:
+              return False
+          elapsed = time.monotonic() - state.last_failure_monotonic
+          return elapsed < _REFRESH_TRANSIENT_COOLDOWN_SECONDS
+
+      def _token_result(
+          app_state: Any, user_id: str, server_name: str, token: str | None
+      ) -> TokenLookupResult:
+          _clear_refresh_backoff(app_state, user_id, server_name)
+          return TokenLookupResult(kind="token", token=token)
   assert:
     # not_narration, enumerate-and-divide. The three-band holistic version had the
     # worst per-cell spread in the suite (0.568 over five identical runs) even at
@@ -161,60 +226,75 @@
         than saying something about the declaration it sits on, carries no facts. Facts must be
         stated as claims about this code.
 
-          (a) a POST that times out may already have executed server-side, so it is retried
-              only when the request provably never reached the server; the asymmetry is
-              correctness, not a bug.
-          (b) WithIdempotent is a caller's opt-in for requests where a duplicate is harmless.
-          (c) the attempt count and the base/max delay pair bound total time against a dead
-              upstream to roughly a second rather than minutes.
+          (a) the cooldown exists to skip the token-endpoint round trip while the authorization
+              server is down, not to rate-limit the user.
+          (b) the ambiguous streak escalates an unclassifiable but persistent rejection to
+              re-consent, so a dead grant in a non-standard shape cannot strand the user forever.
+          (c) the permanent flag is armed only on the path whose shared credential survives a
+              per-server revoke, and the in-cooldown short-circuit reads it so it reports the
+              honest permanent outcome instead of a misleading "retry".
+          (d) a transient or ambiguous arm resets that flag so a later transient window cannot
+              inherit a stale permanent classification.
 
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried.
-        Award nothing for a comment that only renames the code in English, such as restating
-        that GET, HEAD and idempotent requests are retried.
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that only says the helpers "track refresh backoff state" carries none of them.
 
         Ignore comment placement, length and syntax.
-
-
-- description: go workaround - span reparenting around an upstream context rebuild
+- description: python workaround - a cancellation shield that has to be retried
   vars:
-    lang: go
+    lang: python
     ask: |
-      Nobody remembers why this re-injects a span context instead of just using
-      the one on ctx, and someone already "simplified" it once and silently broke
-      our traces for a week. The ADK rebuilds the child context this callback runs
-      under, so oteltrace.SpanFromContext(ctx) hands back the no-op span and we
-      root a brand new disconnected trace. Coords carries the SpanContext we
-      captured before that rebuild. And no, StartLinked is not the fix - it forces
-      WithNewRoot and forks the trace anyway. Comment it so the next person leaves
-      it alone.
+      Nobody remembers why this loops instead of just awaiting the shield once, and
+      someone already "simplified" it and gave us leaked TLS sessions for a week. A
+      one-shot asyncio.shield still returns immediately the moment its own caller is
+      cancelled - the shielded task keeps running but nothing owns or observes it any
+      more. Retrying the shield is what keeps the cleanup owned until it actually
+      finishes. The two CancelledError cases are different on purpose: if the cleanup
+      task itself was cancelled we stop, and if it was the caller we remember that and
+      keep draining, then re-raise it afterwards so the caller still sees its
+      cancellation. And when we have both a remembered cancellation and a cleanup
+      error, the cancellation wins and the error is only logged - swallowing the
+      cancellation would be the worse bug. Comment it so the next person leaves it
+      alone.
     code: |
-      package agent
+      from __future__ import annotations
 
-      import (
-      	"go.opentelemetry.io/otel/attribute"
-      	oteltrace "go.opentelemetry.io/otel/trace"
-      	adkagent "google.golang.org/adk/v2/agent"
+      from collections.abc import Coroutine
+      from typing import Any
 
-      	"github.com/fagerbergj/quack/internal/ledger"
-      	"github.com/fagerbergj/quack/internal/otelobs"
-      	"github.com/fagerbergj/quack/internal/stream"
-      )
+      from turnstone.core.log import get_logger
 
-      func emitCompaction(ctx adkagent.Context, before, after int) {
-      	coords := ledger.CoordsFromContext(ctx)
-      	parentCtx := oteltrace.ContextWithSpanContext(ctx, coords.SpanContext)
-      	_, span := otelobs.Start(parentCtx, "compaction",
-      		attribute.String("node_id", coords.Node),
-      		attribute.String("run_id", coords.Round),
-      		attribute.Bool(otelobs.GenAIConversationCompacted, true))
-      	span.End()
+      log = get_logger(__name__)
 
-      	sink, ok := stream.YieldFromContext(ctx)
-      	if !ok {
-      		return
-      	}
-      	sink(stream.Compaction(coords.Node, coords.Round, int32(before), int32(after)))
-      }
+      async def complete_tls_cleanup(cleanup: Coroutine[Any, Any, None]) -> None:
+          import asyncio
+
+          task = asyncio.create_task(cleanup)
+          cancellation: asyncio.CancelledError | None = None
+          while not task.done():
+              try:
+                  await asyncio.shield(task)
+              except asyncio.CancelledError as exc:
+                  if task.done() and task.cancelled():
+                      break
+                  if cancellation is None:
+                      cancellation = exc
+
+          cleanup_error: BaseException | None = None
+          try:
+              task.result()
+          except BaseException as exc:
+              cleanup_error = exc
+
+          if cancellation is not None:
+              if cleanup_error is not None:
+                  log.error(
+                      "tls.cleanup.failed_during_cancellation",
+                      error=f"{type(cleanup_error).__name__}: {cleanup_error}",
+                  )
+              raise cancellation
+          if cleanup_error is not None:
+              raise cleanup_error
   assert:
     - *not_narration
     - type: llm-rubric
@@ -239,91 +319,133 @@
         than saying something about the declaration it sits on, carries no facts. Facts must be
         stated as claims about this code.
 
-          (a) the ADK rebuilds the context this callback runs under, so SpanFromContext on ctx
-              returns a no-op span and starting from ctx would root a new disconnected trace.
-          (b) Coords carries the SpanContext captured before that rebuild, which is why the
-              span context is re-injected rather than taken from ctx.
-          (c) StartLinked is not the fix - it forces WithNewRoot and forks the trace anyway.
+          (a) a one-shot shield still returns as soon as its own caller is cancelled, leaving the
+              cleanup running but unowned and unobserved - which is why the shield is retried in
+              a loop rather than awaited once.
+          (b) the two cancellation cases are handled differently on purpose: the cleanup task being
+              cancelled ends the wait, while the caller being cancelled is remembered and the
+              drain continues.
+          (c) the remembered caller cancellation is re-raised after cleanup finishes, so the caller
+              still observes its own cancellation rather than having it swallowed.
+          (d) when both a remembered cancellation and a cleanup error exist the cancellation is
+              raised and the error only logged, because dropping the cancellation is the worse
+              failure.
 
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. Fact (c) counts only if
-        the Reply names the alternative explicitly; a general "do not simplify this" warning
-        does not count.
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that only narrates the loop ("wait for the task, catch CancelledError, re-raise")
+        carries none of them.
 
         Ignore comment placement, length and syntax.
-
-
-- description: go security - credential redaction before anything is persisted
+- description: python security - credential redaction on everything that gets persisted
   vars:
-    lang: go
+    lang: python
     ask: |
-      This one guards the ledger - anything that gets past it lands in a file we
-      keep for months and ship to support. Two things people keep trying to
-      "clean up": the string branch re-parses values as JSON because half our
-      upstreams hand us a pre-marshalled blob and the keys would otherwise sail
-      straight through, and the key set is matched lowercased because header
-      casing is whatever the sender felt like that day. Comment it before I open
-      the PR.
+      This is the thing standing between a leaked secret and our audit tables -
+      whatever gets past it lands in close_reason rows, audit details and the
+      coordinator inspect surfaces, and those stick around. Three things people keep
+      trying to "clean up". http and https are in the connection-string scheme list
+      deliberately: a misconfigured base URL with user:pass@ in it ends up inside an
+      httpx error string, and the user:pass@ shape is specific enough that a plain
+      host:port with no @ does not match. The single-quoted JSON pattern is not a
+      duplicate - Python dict reprs and JS object literals emit single quotes and the
+      double-quoted one misses them completely. And the JSON substitution is
+      positional off group 1 rather than a plain sub because otherwise the key gets
+      mangled whenever the value happens to equal the key name. Comment it before I
+      open the PR.
     code: |
-      package ledger
+      from __future__ import annotations
 
-      import (
-      	"encoding/json"
-      	"strings"
+      import re
+
+      _RE_PRIVATE_KEY_BLOCK = re.compile(
+          r"-----BEGIN\s+(?:RSA\s+|EC\s+|OPENSSH\s+|PGP\s+)?PRIVATE\s+KEY-----"
+          r"[\s\S]*?"
+          r"-----END\s+(?:RSA\s+|EC\s+|OPENSSH\s+|PGP\s+)?PRIVATE\s+KEY-----",
+      )
+      _RE_CONNECTION_STRING = re.compile(
+          r"(?:postgresql|mysql|mongodb|rediss?|amqps?|sqlite|https?)(?:\+[a-z0-9]*)?"
+          r"://[^:@\s]+:[^@\s]+@",
+          re.IGNORECASE,
+      )
+      _RE_ENV_SECRET_LINE = re.compile(r"[A-Z][A-Z_0-9]+=\S+")
+      _RE_ENV_SECRET_KEY = re.compile(
+          r"(?:^|_)(?:SECRET|TOKEN|PASSWORD|CREDENTIAL|DSN)(?:_|$)"
+          r"|(?:^|_)KEY(?:_|$)"
+          r"|^(?:DATABASE_URL|TURNSTONE_DB_URL|DB_URL)$",
+          re.IGNORECASE,
+      )
+      _RE_JSON_SECRET = re.compile(
+          r'"(?:api_key|apikey|api_secret|secret_key|secret|password|passwd|'
+          r"token|access_token|refresh_token|auth_token|private_key|"
+          r"client_secret|webhook_secret|signing_key|encryption_key|"
+          r"x_api_key|x-api-key|"
+          r'authorization)"\s*:\s*"([^"]{8,})"',
+          re.IGNORECASE,
+      )
+      _RE_JSON_SECRET_SQ = re.compile(
+          r"'(?:api_key|apikey|api_secret|secret_key|secret|password|passwd|"
+          r"token|access_token|refresh_token|auth_token|private_key|"
+          r"client_secret|webhook_secret|signing_key|encryption_key|"
+          r"x_api_key|x-api-key|"
+          r"authorization)'\s*:\s*'([^']{8,})'",
+          re.IGNORECASE,
       )
 
-      var redactedKeys = map[string]bool{
-      	"authorization": true, "www-authenticate": true, "proxy-authorization": true,
-      	"api_key": true, "apikey": true, "api-key": true, "x-api-key": true,
-      	"token": true, "access_token": true, "refresh_token": true, "id_token": true,
-      	"secret": true, "client_secret": true, "webhook_secret": true,
-      	"password": true, "passwd": true,
-      	"private_key": true, "privatekey": true,
-      	"cookie": true, "set-cookie": true,
-      }
+      _CREDENTIAL_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+          (re.compile(r"sk-proj-[a-zA-Z0-9\-]{20,}"), "api_key"),
+          (re.compile(r"sk-[a-zA-Z0-9]{20,}"), "api_key"),
+          (re.compile(r"ghp_[a-zA-Z0-9]{36}"), "api_key"),
+          (re.compile(r"gho_[a-zA-Z0-9]{36}"), "api_key"),
+          (re.compile(r"AKIA[0-9A-Z]{16}"), "api_key"),
+          (re.compile(r"AIza[a-zA-Z0-9_\-]{35}"), "api_key"),
+          (re.compile(r"Bearer\s+[a-zA-Z0-9._~+/=\-]{20,}", re.IGNORECASE), "api_key"),
+          (
+              re.compile(
+                  r"(?:(?:api|secret|session|auth|encryption|signing|private|public|access|"
+                  r"secret_access|aws_secret_access)_?key|"
+                  r"(?<![a-zA-Z0-9_])key)="
+                  r"[a-zA-Z0-9]{20,}"
+              ),
+              "api_key",
+          ),
+          (
+              re.compile(
+                  r"(?:(?:access|refresh|auth|api|session|bearer|secret)_?token|"
+                  r"(?<![a-zA-Z0-9_])token)="
+                  r"[a-zA-Z0-9]{20,}"
+              ),
+              "api_key",
+          ),
+      ]
 
-      const redactedValue = "[REDACTED]"
+      def redact_credentials(text: str) -> str:
+          return _redact_credentials(text)
 
-      func Redact(v any) any {
-      	switch x := v.(type) {
-      	case map[string]any:
-      		out := make(map[string]any, len(x))
-      		for k, val := range x {
-      			if redactedKeys[strings.ToLower(k)] {
-      				out[k] = redactedValue
-      				continue
-      			}
-      			out[k] = Redact(val)
-      		}
-      		return out
-      	case []any:
-      		out := make([]any, len(x))
-      		for i, e := range x {
-      			out[i] = Redact(e)
-      		}
-      		return out
-      	case string:
-      		return redactJSONString(x)
-      	default:
-      		return v
-      	}
-      }
+      def _redact_credentials(text: str) -> str:
+          result = _RE_PRIVATE_KEY_BLOCK.sub("[REDACTED:private_key]", text)
 
-      func redactJSONString(s string) string {
-      	var decoded any
-      	if err := json.Unmarshal([]byte(s), &decoded); err != nil {
-      		return s
-      	}
-      	switch decoded.(type) {
-      	case map[string]any, []any:
-      	default:
-      		return s
-      	}
-      	b, err := json.Marshal(Redact(decoded))
-      	if err != nil {
-      		return s
-      	}
-      	return string(b)
-      }
+          def _redact_conn(m: re.Match[str]) -> str:
+              return re.sub(r"://([^:@\s]+):([^@\s]+)@", r"://\1:[REDACTED:password]@", m.group())
+
+          result = _RE_CONNECTION_STRING.sub(_redact_conn, result)
+          for pattern, redact_type in _CREDENTIAL_PATTERNS:
+              result = pattern.sub(f"[REDACTED:{redact_type}]", result)
+
+          def _redact_env(m: re.Match[str]) -> str:
+              key = m.group().split("=", 1)[0]
+              return key + "=[REDACTED:secret]" if _RE_ENV_SECRET_KEY.search(key) else m.group()
+
+          result = _RE_ENV_SECRET_LINE.sub(_redact_env, result)
+
+          def _redact_json_secret(m: re.Match[str]) -> str:
+              start = m.start(1) - m.start()
+              end = m.end(1) - m.start()
+              full = m.group()
+              return full[:start] + "[REDACTED:secret]" + full[end:]
+
+          result = _RE_JSON_SECRET.sub(_redact_json_secret, result)
+          result = _RE_JSON_SECRET_SQ.sub(_redact_json_secret, result)
+          return result
   assert:
     - *not_narration
     - type: llm-rubric
@@ -348,91 +470,91 @@
         than saying something about the declaration it sits on, carries no facts. Facts must be
         stated as claims about this code.
 
-          (a) the string branch re-parses values as JSON because some upstreams hand over a
-              pre-marshalled blob whose keys would otherwise pass through unredacted.
-          (b) keys are matched lowercased because header casing is not controlled by this code.
-          (c) anything that gets past this is persisted for months and shipped to support, so a
-              miss is a durable disclosure.
+          (a) whatever survives this is persisted - close_reason rows, audit details, the
+              coordinator inspect surfaces - so a miss is a durable disclosure rather than a
+              transient one.
+          (b) http and https are in the connection-string scheme set on purpose, because a
+              misconfigured base URL carrying user:pass@ reaches this through an httpx error
+              string; the user:pass@ shape is what keeps a bare host:port from matching.
+          (c) the single-quoted JSON pattern exists because Python dict reprs and JS object literals
+              emit single quotes, which the double-quoted pattern does not match at all.
+          (d) the JSON value is replaced by group-1 offsets rather than a plain substitution so the
+              key is not corrupted when the value equals the key name.
 
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A comment that merely
-        labels the key set "sensitive keys" or the function "redacts secrets" carries none of
-        them.
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that only labels the pattern list "credential patterns" or the function
+        "redacts secrets" carries none of them.
 
         Ignore comment placement, length and syntax.
-
-
-- description: go performance - the ugly cap ladder that keeps a request under budget
+- description: python performance - a decode bound that the library's own ceiling does not enforce
   vars:
-    lang: go
+    lang: python
     ask: |
-      I know this looks like something written at 2am, and it sort of was. The
-      three-pass cap ladder is deliberate: one pass at 500 chars shreds tool
-      results that would have fit fine at 8k, so we squeeze in stages and stop as
-      soon as we're under. The char-per-token divisor of 4 and the 1.3 calibration
-      ratio came out of comparing our estimate against what the provider actually
-      billed us. Can you put some comments on it so the next reader doesn't
-      "simplify" it into a single pass?
+      Someone is going to look at this and delete the explicit pixel check because
+      "MAX_IMAGE_PIXELS already does that". It does not: Pillow only RAISES above
+      twice the cap - between the cap and 2x it just warns and decodes the whole
+      thing, so a 40-80M pixel image still lands as ~480MB of RGB. That is why there
+      is an explicit check, why it runs on the header-declared size straight after
+      open() and before exif_transpose or convert (both of those decode the pixels),
+      and why it is a check and not a warnings filter - this runs in a thread and the
+      global warnings state is not thread-safe. The 40M cap is deliberately below
+      PIL's ~89M default, which still lets a few-KB file decode to something like
+      530MB. Can you comment it so nobody simplifies it away?
     code: |
-      package agent
+      from __future__ import annotations
 
-      import (
-      	"log/slog"
+      from io import BytesIO
 
-      	adkagent "google.golang.org/adk/v2/agent"
-      	"google.golang.org/adk/v2/model"
-      	"google.golang.org/genai"
-      )
+      from turnstone.core.log import get_logger
 
-      const (
-      	charsPerToken           = 4
-      	toolOutputMaxChars      = 2_000
-      	minPreserveTokens       = 2_000
-      	defaultCalibrationRatio = 1.3
-      )
+      log = get_logger(__name__)
 
-      func backstop(ctx adkagent.Context, req *model.LLMRequest, threshold int) {
-      	if len(req.Contents) == 0 {
-      		return
-      	}
-      	ratio := defaultCalibrationRatio
-      	overhead := intState(ctx, overheadKey)
+      _THUMB_MAX_PX = 160
 
-      	if head := calibrated(estimateTokens(req.Contents[:1]), ratio, overhead); head > threshold {
-      		if truncateHeadToFit(req.Contents, threshold, ratio) {
-      			slog.Warn("compaction truncated an oversized prompt as a last resort",
-      				"component", "agent", "threshold", threshold, "head_tokens", head)
-      		}
-      	}
-      	for _, cap := range []int{8_000, toolOutputMaxChars, 500} {
-      		if calibrated(estimateTokens(req.Contents), ratio, overhead) <= threshold {
-      			break
-      		}
-      		if n := clampToolResults(req.Contents[1:], cap); n > 0 {
-      			slog.Warn("compaction clamped oversized tool results",
-      				"component", "agent", "clamped", n, "cap_chars", cap)
-      		}
-      	}
-      	if got := calibrated(estimateTokens(req.Contents), ratio, overhead); got > threshold {
-      		slog.Warn("compaction could not bring request under budget; overflow likely",
-      			"component", "agent", "calibrated_tokens", got, "threshold", threshold)
-      	}
-      }
+      _MAX_IMAGE_PIXELS = 40_000_000
 
-      func truncateHeadToFit(contents []*genai.Content, budget int, ratio float64) bool {
-      	if len(contents) == 0 || contents[0] == nil {
-      		return false
-      	}
-      	headBudgetEst := int(float64(budget)/ratio) - estimateTokens(contents[1:])
-      	if headBudgetEst < minPreserveTokens {
-      		headBudgetEst = minPreserveTokens
-      	}
-      	headMaxChars := headBudgetEst * charsPerToken
-      	if contentBytes(contents[0]) <= headMaxChars {
-      		return false
-      	}
-      	contents[0] = truncateContentMiddle(contents[0], headMaxChars)
-      	return true
-      }
+      def make_thumbnail(data: bytes, kind: str, *, max_px: int = _THUMB_MAX_PX) -> bytes | None:
+          try:
+              from PIL import Image, ImageOps
+          except ImportError:
+              log.warning("Pillow not installed; thumbnails unavailable")
+              return None
+
+          Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
+          try:
+              if kind == "pdf":
+                  from turnstone.core.pdf import rasterize_pdf
+
+                  pages = rasterize_pdf(data, max_pages=1)
+                  if not pages:
+                      return None
+                  img = Image.open(BytesIO(pages[0]))
+              elif kind == "image":
+                  img = Image.open(BytesIO(data))
+              else:
+                  return None
+              px = img.size[0] * img.size[1]
+              if px > _MAX_IMAGE_PIXELS:
+                  log.warning(
+                      "thumbnail rejected: %d×%d (%d px) exceeds %d-pixel cap",
+                      img.size[0],
+                      img.size[1],
+                      px,
+                      _MAX_IMAGE_PIXELS,
+                  )
+                  return None
+              oriented = ImageOps.exif_transpose(img) or img
+              rgb = oriented.convert("RGB")
+              rgb.thumbnail((max_px, max_px))
+              buf = BytesIO()
+              rgb.save(buf, format="PNG")
+              return buf.getvalue()
+          except Image.DecompressionBombError as exc:
+              log.warning("thumbnail rejected: image exceeds %d-pixel cap: %s", _MAX_IMAGE_PIXELS, exc)
+              return None
+          except Exception as exc:
+              log.warning("thumbnail generation failed (kind=%s): %s", kind, exc)
+              return None
   assert:
     - *not_narration
     - type: llm-rubric
@@ -457,179 +579,161 @@
         than saying something about the declaration it sits on, carries no facts. Facts must be
         stated as claims about this code.
 
-          (a) the staged cap ladder is deliberate - a single pass at the smallest cap would
-              shred tool results that would have fit under a larger cap, so it stops as soon as
-              the request is under budget.
-          (b) the chars-per-token divisor is an estimate, not an exact conversion.
-          (c) the calibration ratio was derived by comparing the local estimate against what the
-              provider actually billed.
+          (a) the library ceiling only raises above twice the cap - between the cap and 2x it warns
+              and decodes fully - so the explicit size check is what actually bounds the decode.
+          (b) the check runs on the header-declared size right after open() and before
+              exif_transpose and convert, because both of those decode the pixels.
+          (c) it is an explicit check rather than a warnings filter because this runs in a thread and
+              the global warnings state is not thread-safe.
+          (d) the cap is deliberately tighter than the library default, which still permits a few-KB
+              file to decode into hundreds of megabytes of RGB.
 
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A comment saying the loop
-        "tries progressively smaller caps" carries none of them.
-
-        Ignore comment placement, length and syntax.
-
-
-- description: go public API - godoc contract on an encode/decode pair
-  vars:
-    lang: go
-    ask: |
-      This package is the bit three other packages import, and I keep getting
-      asked the same questions in review, so I want it written down next to the
-      code. Things worth knowing: the scheme is chosen so it can never collide
-      with a real FileData part (gs://, https://), Decode returns ok=false for
-      anything that isn't ours rather than erroring, and callers must not assume
-      the revision still exists in the artifact store by the time they resolve it.
-      Comment it for me.
-    code: |
-      package artifactref
-
-      import (
-      	"net/url"
-      	"strconv"
-      	"strings"
-
-      	"google.golang.org/genai"
-      )
-
-      const AppName = "quack"
-
-      const Scheme = "quack-artifact"
-
-      func Encode(userID, sessionID, name string, revision int64, mimeType string) *genai.Part {
-      	u := url.URL{
-      		Scheme: Scheme,
-      		Path:   "/" + url.PathEscape(userID) + "/" + url.PathEscape(sessionID) + "/" + url.PathEscape(name),
-      	}
-      	q := url.Values{}
-      	q.Set("v", strconv.FormatInt(revision, 10))
-      	u.RawQuery = q.Encode()
-      	return &genai.Part{FileData: &genai.FileData{FileURI: u.String(), MIMEType: mimeType}}
-      }
-
-      func Decode(p *genai.Part) (userID, sessionID, name string, revision int64, ok bool) {
-      	if p == nil || p.FileData == nil || p.FileData.FileURI == "" {
-      		return "", "", "", 0, false
-      	}
-      	u, err := url.Parse(p.FileData.FileURI)
-      	if err != nil || u.Scheme != Scheme {
-      		return "", "", "", 0, false
-      	}
-      	segs := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
-      	if len(segs) != 3 {
-      		return "", "", "", 0, false
-      	}
-      	uid, err1 := url.PathUnescape(segs[0])
-      	sid, err2 := url.PathUnescape(segs[1])
-      	nm, err3 := url.PathUnescape(segs[2])
-      	if err1 != nil || err2 != nil || err3 != nil || uid == "" || sid == "" || nm == "" {
-      		return "", "", "", 0, false
-      	}
-      	rev, err := strconv.ParseInt(u.Query().Get("v"), 10, 64)
-      	if err != nil {
-      		return "", "", "", 0, false
-      	}
-      	return uid, sid, nm, rev, true
-      }
-  assert:
-    - *not_narration
-    - type: llm-rubric
-      metric: fact_transfer
-      threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
-
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the URI scheme is chosen so it can never collide with a real FileData part such as
-              a gs:// or https:// URI.
-          (b) Decode reports ok=false for any part that is not one of ours rather than returning
-              an error - a false result is a normal outcome, not a failure.
-          (c) a successful Decode does not mean the revision still exists in the artifact store,
-              so callers must not assume it is resolvable.
-
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A doc comment that only
-        restates the signature carries none of them.
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment saying the function "rejects oversized images" carries none of them.
 
         Ignore comment placement, length and syntax.
-        Also ignore whether the comment opens with the identifier name.
-    # Placement only, and a conformance floor rather than a discriminator: go doc and
-    # pkgsite drop a comment that is not immediately above the declaration, so the
-    # rendered artifact differs. The name-prefix half is gone - it patterns over the
-    # comment's prose and is the skill's own instruction.
-    - type: regex
-      value: '(?:^|\n)(?://[^\n]*\n)+func Encode\('
-      metric: doc_placement_floor
-    - type: regex
-      value: '(?:^|\n)(?://[^\n]*\n)+func Decode\('
-      metric: doc_placement_floor
-
-
-- description: typescript public API - exported router helpers other pages call
+- description: typescript public API - the SDK base client other packages extend
   vars:
     lang: ts
     ask: |
-      Handing this module to the extensions team tomorrow and they'll be calling
-      it without reading the body. Stuff they'll trip on: navigate() keeps the
-      current query string when the path has no '?' of its own, which is what
-      stops a chat switch from dropping the sidebar's filters; the route matches
-      are anchored to a whole segment on purpose, because startsWith('/memory')
-      also matches /memory-export; and the hooks re-render on popstate, so they
-      only work inside a component. Comment it up for them.
+      Handing this to the integrations team tomorrow and they will use it without
+      reading the body. Things they will trip on: the tls option is documentation
+      only - the SDK never opens those files, and anyone who actually needs mTLS has
+      to pass their own fetch wired to their runtime's agent; Content-Type is left
+      off deliberately when form is set, because the runtime's fetch writes it along
+      with the multipart boundary and setting it ourselves breaks the upload; a
+      non-2xx always arrives as a TurnstoneAPIError carrying the status, with the
+      message taken from error, then detail, then the raw body; and baseUrl has its
+      trailing slash stripped in the constructor, so every path they pass needs a
+      leading slash. Comment it up for them.
     code: |
-      import { useState, useEffect } from 'react'
+      import { TurnstoneAPIError } from "./errors.js";
+      import { parseSSEStream } from "./sse.js";
 
-      export type Route = 'chat' | 'memory' | 'ext'
-
-      function readChatId(): string | undefined {
-        const m = window.location.pathname.match(/^\/chat\/([^/]+)/)
-        return m ? decodeURIComponent(m[1]) : undefined
+      export interface TlsOptions {
+        caCert?: string;
+        clientCert?: string;
+        clientKey?: string;
       }
 
-      export function navigate(path: string, opts?: { replace?: boolean }) {
-        const full = path.includes('?') ? path : path + window.location.search
-        if (opts?.replace) window.history.replaceState(null, '', full)
-        else window.history.pushState(null, '', full)
-        window.dispatchEvent(new PopStateEvent('popstate'))
+      export interface ClientOptions {
+        baseUrl: string;
+        token?: string;
+        fetch?: typeof globalThis.fetch;
+        tls?: TlsOptions;
       }
 
-      export function routeFor(pathname: string): Route {
-        if (/^\/ext(\/|$)/.test(pathname)) return 'ext'
-        return /^\/memory(\/|$)/.test(pathname) ? 'memory' : 'chat'
+      export interface RequestOptions {
+        json?: object;
+        params?: Record<string, string | number>;
+        form?: FormData;
       }
 
-      export function useChatId(): string | undefined {
-        const [chatId, setChatId] = useState(readChatId)
-        useEffect(() => {
-          const onPop = () => setChatId(readChatId())
-          window.addEventListener('popstate', onPop)
-          return () => window.removeEventListener('popstate', onPop)
-        }, [])
-        return chatId
-      }
+      export class BaseClient {
+        protected readonly baseUrl: string;
+        protected readonly token: string;
+        protected readonly fetchFn: typeof globalThis.fetch;
 
-      export function useSearch(): string {
-        const [search, setSearch] = useState(() => window.location.search)
-        useEffect(() => {
-          const onPop = () => setSearch(window.location.search)
-          window.addEventListener('popstate', onPop)
-          return () => window.removeEventListener('popstate', onPop)
-        }, [])
-        return search
+        constructor(options: ClientOptions) {
+          this.baseUrl = options.baseUrl.replace(/\/$/, "");
+          this.token = options.token ?? "";
+          this.fetchFn = options.fetch ?? globalThis.fetch.bind(globalThis);
+        }
+
+        protected async request<T>(
+          method: string,
+          path: string,
+          options?: RequestOptions,
+        ): Promise<T> {
+          const headers: Record<string, string> = {};
+          if (!options?.form) {
+            headers["Content-Type"] = "application/json";
+          }
+          if (this.token) {
+            headers["Authorization"] = `Bearer ${this.token}`;
+          }
+
+          const url = this._buildUrl(path, options?.params);
+
+          let body: BodyInit | undefined;
+          if (options?.form) {
+            body = options.form;
+          } else if (options?.json) {
+            body = JSON.stringify(options.json);
+          }
+
+          const resp = await this.fetchFn(url, {
+            method,
+            headers,
+            body,
+          });
+
+          if (!resp.ok) {
+            let msg = "";
+            try {
+              const errBody = (await resp.json()) as Record<string, unknown>;
+              msg = (errBody.error as string) ?? (errBody.detail as string) ?? "";
+            } catch {
+              msg = await resp.text().catch(() => "");
+            }
+            throw new TurnstoneAPIError(resp.status, msg || `HTTP ${resp.status}`);
+          }
+
+          return (await resp.json()) as T;
+        }
+
+        private _buildUrl(
+          path: string,
+          params?: Record<string, string | number>,
+        ): string {
+          let url = `${this.baseUrl}${path}`;
+          if (params) {
+            const searchParams = new URLSearchParams();
+            for (const [key, value] of Object.entries(params)) {
+              if (value !== undefined && value !== "") {
+                searchParams.set(key, String(value));
+              }
+            }
+            const qs = searchParams.toString();
+            if (qs) url += `?${qs}`;
+          }
+          return url;
+        }
+
+        protected async *streamSSE<T = Record<string, unknown>>(
+          path: string,
+          params?: Record<string, string | number>,
+          signal?: AbortSignal,
+        ): AsyncIterableIterator<T> {
+          const headers: Record<string, string> = {
+            Accept: "text/event-stream",
+          };
+          if (this.token) {
+            headers["Authorization"] = `Bearer ${this.token}`;
+          }
+
+          let url = `${this.baseUrl}${path}`;
+          if (params) {
+            const searchParams = new URLSearchParams();
+            for (const [key, value] of Object.entries(params)) {
+              if (value !== undefined && value !== "") {
+                searchParams.set(key, String(value));
+              }
+            }
+            const qs = searchParams.toString();
+            if (qs) url += `?${qs}`;
+          }
+
+          const resp = await this.fetchFn(url, { method: "GET", headers, signal });
+          if (!resp.ok) {
+            throw new TurnstoneAPIError(
+              resp.status,
+              `SSE connection failed: HTTP ${resp.status}`,
+            );
+          }
+
+          yield* parseSSEStream<T>(resp);
+        }
       }
   assert:
     - *not_narration
@@ -655,20 +759,202 @@
         than saying something about the declaration it sits on, carries no facts. Facts must be
         stated as claims about this code.
 
-          (a) navigate carries the current query string forward when the path has no '?' of its
-              own, which is what stops a chat switch from dropping the sidebar's filters.
-          (b) the route patterns are anchored to a whole path segment on purpose, because a
-              prefix match would also claim sibling paths such as /memory-export.
-          (c) the hooks re-render on popstate, so they only work inside a React component and
-              cannot be called from plain module code.
+          (a) the tls option is documentation only - the SDK never reads those paths, and a caller
+              needing mTLS must supply a custom fetch configured with their runtime's agent.
+          (b) Content-Type is deliberately omitted when a form body is sent, because the runtime's
+              fetch sets it together with the multipart boundary.
+          (c) a non-2xx response always surfaces as a TurnstoneAPIError carrying the status, with the
+              message taken from error, then detail, then the raw body text.
+          (d) the constructor strips a trailing slash from baseUrl, so paths passed in are expected to
+              start with one.
 
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A comment that restates
-        the TypeScript signature, or says a hook "subscribes to popstate", carries none.
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that restates the TypeScript signature, or says request "throws on error",
+        carries none.
 
         Ignore comment placement, length and syntax.
-        Ignore whether JSDoc block syntax was used.
+        Ignore whether TSDoc block syntax was used.
+    # Placement only, and a conformance floor rather than a discriminator: tsc
+    # --declaration and every TSDoc-based generator carry over only the comment
+    # immediately above the declaration, so a comment placed elsewhere changes the
+    # emitted artifact. Nothing here patterns over the comment's prose.
+    - type: regex
+      value: '(?:^|\n)(?:(?://[^\n]*|\s*\*[^\n]*|/\*\*?)\n)+export class BaseClient'
+      metric: doc_placement_floor
+    - type: regex
+      value: '(?:^|\n)(?:(?://[^\n]*|\s*\*[^\n]*|/\*\*?)\n)+export interface ClientOptions'
+      metric: doc_placement_floor
+- description: javascript public API - the shared list cache four data layers build on
+  vars:
+    lang: js
+    ask: |
+      Four modules are about to be rewritten on top of this and none of their authors
+      will read the body. What they need to know: refresh() never rejects - a failed
+      refresh keeps the last-known rows, records the status on error() and resolves
+      with the cache, so a bare .then is safe; a non-OK status is emphatically not
+      "zero rows", and blanking the cache on a 403 is the bug this avoids;
+      refresh({force:true}) is an invalidation, so it chains ONE trailing refetch
+      after an in-flight request rather than coalescing onto a response that may
+      predate the change, and _pending is cleared before the recursive call so a force
+      arriving during the trailing fetch chains a new one; and _byKey is
+      null-prototype so a row keyed "__proto__" can't swap the map's prototype and a
+      lookup for "toString" misses instead of returning an inherited member as a row.
+      Comment it for them.
+    code: |
+      import { authFetch } from "./auth.js";
 
+      export function makeListCache(opts) {
+        const url = opts.url;
+        const dataKey = opts.dataKey;
+        const name = opts.name;
+        const keyField = opts.keyField || null;
+        const fpRow = opts.fpRow;
+        const captureExtra = opts.captureExtra || null;
+        const extraDefaults = opts.extraDefaults || null;
+        const resetExtraOnError = opts.resetExtraOnError !== false;
 
+        let _cache = [];
+        let _byKey = Object.create(null);
+        let _loaded = false;
+        let _lastError = null;
+        let _inflight = null;
+        let _pending = null;
+        let _fingerprint = null;
+        let _extra = extraDefaults ? Object.assign({}, extraDefaults) : {};
+        const _subs = [];
+
+        function _fp() {
+          return JSON.stringify(_cache.map(fpRow));
+        }
+
+        function _setCache(rows) {
+          _cache = Array.isArray(rows) ? rows : [];
+          if (keyField) {
+            _byKey = Object.create(null);
+            for (const r of _cache) if (r && r[keyField]) _byKey[r[keyField]] = r;
+          }
+          const firstLoad = !_loaded;
+          _loaded = true;
+          const fp = _fp();
+          if (firstLoad || fp !== _fingerprint) {
+            _fingerprint = fp;
+            _subs.forEach(function (cb) {
+              try {
+                cb(_cache);
+              } catch (_) {
+              }
+            });
+          }
+        }
+
+        function refresh(callOpts) {
+          if (_inflight) {
+            if (callOpts && callOpts.force) {
+              _pending =
+                _pending ||
+                _inflight.then(function () {
+                  _pending = null;
+                  return refresh();
+                });
+              return _pending;
+            }
+            return _inflight;
+          }
+          _inflight = authFetch(url)
+            .then(function (r) {
+              if (r.ok) return r.json();
+              _lastError = r.status;
+              if (resetExtraOnError && extraDefaults) {
+                _extra = Object.assign({}, extraDefaults);
+              }
+              console.warn(name + ": GET " + url + " -> " + r.status);
+              return null;
+            })
+            .then(function (data) {
+              if (data) {
+                _lastError = null;
+                if (captureExtra) _extra = captureExtra(data);
+                _setCache(data[dataKey] || []);
+              }
+              return _cache;
+            })
+            .catch(function (e) {
+              _lastError = 0;
+              if (resetExtraOnError && extraDefaults) {
+                _extra = Object.assign({}, extraDefaults);
+              }
+              console.warn(name + ": refresh failed", e);
+              return _cache;
+            })
+            .finally(function () {
+              _loaded = true;
+              _inflight = null;
+            });
+          return _inflight;
+        }
+
+        return {
+          refresh: refresh,
+          get: function () {
+            return _cache;
+          },
+          getByKey: function (k) {
+            return (k && _byKey[k]) || null;
+          },
+          loaded: function () {
+            return _loaded;
+          },
+          error: function () {
+            return _lastError;
+          },
+          extra: function () {
+            return _extra;
+          },
+          onChange: function (cb) {
+            if (typeof cb === "function" && _subs.indexOf(cb) < 0) _subs.push(cb);
+          },
+        };
+      }
+  assert:
+    - *not_narration
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) refresh never rejects - a failed refresh keeps the last-known rows, records the status
+              on error(), and resolves with the cache, so callers can chain a bare .then.
+          (b) a non-OK status is not an empty result set; the cache is deliberately kept rather than
+              blanked on a 403 or a 5xx.
+          (c) a forced refresh chains one trailing refetch after an in-flight request instead of
+              coalescing onto a response that may predate the change, and the pending slot is
+              cleared before the recursive call so a force landing during the trailing fetch
+              chains a new one.
+          (d) the key index is null-prototype so a row keyed "__proto__" cannot swap the map's
+              prototype and a lookup for an absent key cannot resolve an inherited
+              Object.prototype member as a row.
+
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that says refresh "fetches the list and updates the cache" carries none.
+
+        Ignore comment placement, length and syntax.
 - description: python public API - client method with a clamp and an error contract
   vars:
     lang: python
@@ -786,177 +1072,70 @@
       value: file://assertions/comment.cjs:docstringOnFunctions
       config: { functions: [search, iter_all] }
       metric: doc_placement_floor
-
-
-- description: java security plus deferred work - webhook signature check
+- description: python security plus deferred work - a compare-and-swap on a rotating credential
   vars:
-    lang: java
+    lang: python
     ask: |
-      Last thing before this goes out: verify() is all that stands between a
-      forged payload and a dispatched run, and callers have to hand it the raw
-      body bytes - if anyone re-serialises the JSON first the digest won't match
-      and they'll waste a day on it. Also, that .equals() is not constant time and
-      leaks a timing signal; we can't move to MessageDigest.isEqual until the
-      platform crypto upgrade lands, which is PLAT-4417 on Priya's board. I don't
-      want either of those to be tribal knowledge, so please comment it.
+      Before this goes out I want two things off my whiteboard and into the file.
+      The compare-and-swap in update_oidc_credential_after_redeem is the whole point
+      of the method: the write only lands when the STORED credential still decrypts
+      to what the mint read before it redeemed, which is what stops a stale rotated
+      token from clobbering a credential that a concurrent login capture just
+      refreshed. It has to decrypt the current row to do that - the cipher is
+      non-deterministic, so comparing ciphertext would never match. The mint holds
+      the per-issuer credential lock, so the only racer left is the unlocked capture
+      and the window is down to this method's own read-then-write gap. That window is
+      accepted, not missed: it self-heals on the user's next login, and actually
+      closing it needs a SELECT FOR UPDATE or a version column on the row - it is
+      recorded as an accepted finding from the round-12 review. Please comment it.
     code: |
-      package com.quack.webhooks;
+      from __future__ import annotations
 
-      import java.nio.charset.StandardCharsets;
-      import java.security.GeneralSecurityException;
-      import java.util.HexFormat;
+      from typing import TypedDict
 
-      import javax.crypto.Mac;
-      import javax.crypto.spec.SecretKeySpec;
+      class OIDCCredentialPlain(TypedDict):
 
-      public final class WebhookVerifier {
+          user_id: str
+          issuer: str
+          refresh_token: str
+          created: str
+          last_refreshed: str
 
-          private static final String ALGORITHM = "HmacSHA256";
-          private static final String PREFIX = "sha256=";
+      class MCPTokenStore:
+          def __init__(self, storage, cipher) -> None:
+              self._storage = storage
+              self._cipher = cipher
 
-          private final byte[] secret;
+          def get_oidc_credential(self, user_id: str, issuer: str) -> OIDCCredentialPlain | None:
+              row = self._storage.get_oidc_user_credential(user_id, issuer)
+              if row is None:
+                  return None
+              try:
+                  refresh_pt = self._cipher.decrypt(row["refresh_token_ct"]).decode("utf-8")
+              except MCPTokenDecryptError as exc:
+                  self._audit_decrypt_failure(f"oidc:{issuer}", exc.key_fingerprints_attempted)
+                  raise
+              return OIDCCredentialPlain(
+                  user_id=row["user_id"],
+                  issuer=row["issuer"],
+                  refresh_token=refresh_pt,
+                  created=row["created"],
+                  last_refreshed=row["last_refreshed"],
+              )
 
-          public WebhookVerifier(String secret) {
-              this.secret = secret.getBytes(StandardCharsets.UTF_8);
-          }
+          def update_oidc_credential_after_redeem(
+              self, user_id: str, issuer: str, *, refresh_token: str, expected_current: str
+          ) -> bool:
+              current = self.get_oidc_credential(user_id, issuer)
+              if current is None or current["refresh_token"] != expected_current:
+                  return False
+              refresh_ct = self._cipher.encrypt(refresh_token.encode("utf-8"))
+              return self._storage.update_oidc_user_credential_refresh(
+                  user_id, issuer, refresh_token_ct=refresh_ct
+              )
 
-          @Deprecated
-          public boolean verify(String body, String signatureHeader) {
-              return verify(body.getBytes(StandardCharsets.UTF_8), signatureHeader);
-          }
-
-          public boolean verify(byte[] rawBody, String signatureHeader) {
-              if (signatureHeader == null || !signatureHeader.startsWith(PREFIX)) {
-                  return false;
-              }
-              String provided = signatureHeader.substring(PREFIX.length());
-              return sign(rawBody).equals(provided);
-          }
-
-          private String sign(byte[] body) {
-              try {
-                  Mac mac = Mac.getInstance(ALGORITHM);
-                  mac.init(new SecretKeySpec(secret, ALGORITHM));
-                  return HexFormat.of().formatHex(mac.doFinal(body));
-              } catch (GeneralSecurityException e) {
-                  throw new IllegalStateException("HMAC unavailable: " + ALGORITHM, e);
-              }
-          }
-      }
-  assert:
-    - *not_narration
-    - type: llm-rubric
-      metric: fact_transfer
-      threshold: 0.6
-      value: |
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the byte[] overload requires the raw request body exactly as received -
-              re-serialising the JSON before calling changes the bytes and the digest will not
-              match.
-          (b) this check is the only thing between a forged payload and a dispatched run.
-          (c) the string comparison of computed and provided digests is not constant time and
-              leaks a timing signal.
-          (d) that comparison is deferred work, not an oversight - it is tracked as PLAT-4417
-              on Priya's board, and it can be removed once the platform crypto upgrade lands
-              and MessageDigest.isEqual becomes available. Naming the ticket or the owner is
-              one half; naming the condition that retires the deferral is the other. A comment
-              that only says the comparison should be fixed later carries neither half.
-
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A comment saying the
-        method "verifies the HMAC signature" carries none. Do not score any marker keyword, its
-        casing, its bracket style, or its position.
-
-        Ignore comment placement, length and syntax.
-
-
-- description: go invariant - a startup-only sweep callers must not run late
-  vars:
-    lang: go
-    ask: |
-      Two landmines in here I'd like written down. ScanOrphanedRuns is table-wide
-      with no per-chat liveness check, so it is only safe before the Hub has
-      registered any run - call it later and it stamps a chat that is very much
-      alive. And it deliberately leaves pending_question alone: the node row owns
-      that question now, and the last time we blanked the chat's copy we destroyed
-      resume state for everyone mid-run. Comment it up, I'm handing this off.
-    code: |
-      package store
-
-      import (
-      	"context"
-      	"log/slog"
-      	"time"
-      )
-
-      const (
-      	RunStatusIdle        = "idle"
-      	RunStatusFailed      = "failed"
-      	RunStatusInterrupted = "interrupted"
-      	RunStatusPaused      = "paused"
-      )
-
-      func (s *Store) ScanOrphanedRuns(ctx context.Context) (paused, interrupted []string, err error) {
-      	var chats []Chat
-      	if err := s.db.WithContext(ctx).
-      		Where("active_turn_id <> ? OR run_status IN ?", "", []string{RunStatusInterrupted, RunStatusPaused}).
-      		Find(&chats).Error; err != nil {
-      		return nil, nil, err
-      	}
-      	suspended, err := s.chatsWithPausedNodes(ctx)
-      	if err != nil {
-      		return nil, nil, err
-      	}
-      	for _, c := range chats {
-      		status := RunStatusInterrupted
-      		if suspended[c.ID] {
-      			status = RunStatusPaused
-      			paused = append(paused, c.ID)
-      		} else {
-      			interrupted = append(interrupted, c.ID)
-      		}
-      		if err := s.stampRunStatusKeepingQuestion(ctx, c.ID, status); err != nil {
-      			slog.Warn("scan orphaned runs: stamp failed", "component", "store", "chat", c.ID, "err", err)
-      		}
-      	}
-      	return paused, interrupted, nil
-      }
-
-      func (s *Store) stampRunStatusKeepingQuestion(ctx context.Context, chatID, status string) error {
-      	return s.db.WithContext(ctx).Model(&Chat{}).Where("id = ?", chatID).Updates(map[string]any{
-      		"run_status":     status,
-      		"active_turn_id": "",
-      		"updated_at":     time.Now().UTC(),
-      	}).Error
-      }
-
-      func (s *Store) chatsWithPausedNodes(ctx context.Context) (map[string]bool, error) {
-      	nodes, err := s.ListPausedDagNodes(ctx)
-      	if err != nil {
-      		return nil, err
-      	}
-      	out := map[string]bool{}
-      	for _, n := range nodes {
-      		var p DagPlan
-      		if e := s.db.WithContext(ctx).Where("id = ?", n.PlanID).First(&p).Error; e == nil {
-      			out[p.ChatID] = true
-      		}
-      	}
-      	return out, nil
-      }
+          def delete_oidc_credential(self, user_id: str, issuer: str) -> bool:
+              return self._storage.delete_oidc_user_credential(user_id, issuer)
   assert:
     - *not_narration
     - type: llm-rubric
@@ -981,23 +1160,130 @@
         than saying something about the declaration it sits on, carries no facts. Facts must be
         stated as claims about this code.
 
-          (a) the sweep is table-wide with no per-chat liveness check, so it is only safe to
-              call before any run has been registered; calling it later stamps a chat that is
-              still running.
-          (b) pending_question is deliberately left untouched because the node row owns that
-              question, and blanking the chat's copy destroyed resume state for in-flight runs.
+          (a) the write lands only when the stored credential still decrypts to the value the mint
+              read before redeeming, which is what stops a stale rotated token from clobbering a
+              credential a concurrent login capture just refreshed.
+          (b) the comparison decrypts the current row because the cipher is non-deterministic, so
+              ciphertext cannot be compared directly.
+          (c) the per-issuer credential lock held by the mint leaves the unlocked capture as the only
+              racer, narrowing the exposure to this method's own read-then-write gap.
+          (d) that remaining window is deferred work, not an oversight - it self-heals on the user's
+              next login, and closing it properly needs a SELECT FOR UPDATE or a version column
+              on the row. Saying the window is known and tolerated is one half; naming what
+              would retire it is the other. A comment that only says the race "should be fixed
+              later" carries neither half.
 
-        Score from 0 to 1, never above 1: award 0.5 per fact carried and 0.25 per fact half carried. Naming the helper "keeps
-        the question" in prose does not carry (b) - the reason and the consequence must both be
-        stated.
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment saying the method "persists the rotated refresh token" carries none. Do not score
+        any marker keyword, its casing, its bracket style, or its position.
 
         Ignore comment placement, length and syntax.
-    # Placement only, a conformance floor - see the note on case 5.
-    - type: regex
-      value: '(?:^|\n)(?://[^\n]*\n)+func \(s \*Store\) ScanOrphanedRuns\('
+- description: python invariant - a boot-only sweep callers must not run late
+  vars:
+    lang: python
+    ask: |
+      Two landmines in here I want written down before I hand it off.
+      prepare_pem_runtime_dir wipes every lacme-pem-* directory under the root, so it
+      is a boot-only call - run it after the live dir has been written and you have
+      just deleted the cert the container healthcheck presents. It also assumes one
+      node per PEM root: two processes sharing a root clear each other's live dirs,
+      which is why bare metal has to set TURNSTONE_TLS_PEM_DIR per node. The symlink
+      and ownership refusal is not paranoia either - the default root is in shared
+      /tmp, where a local user can pre-create it and redirect where the key material
+      lands. And refresh_runtime_pems writes the new directory before removing the old
+      one on purpose, so a probe that lands mid-renewal always finds at least one
+      complete dir. Comment it up.
+    code: |
+      from __future__ import annotations
+
+      from pathlib import Path
+
+      def tls_pem_runtime_dir() -> Path:
+          import os
+          import tempfile
+
+          env = os.environ.get("TURNSTONE_TLS_PEM_DIR")
+          return Path(env) if env else Path(tempfile.gettempdir()) / "turnstone-tls"
+
+      def prepare_pem_runtime_dir() -> Path:
+          import os
+          import shutil
+          import stat
+
+          root = tls_pem_runtime_dir()
+          try:
+              st = os.lstat(root)
+          except FileNotFoundError:
+              st = None
+          if st is not None and (stat.S_ISLNK(st.st_mode) or st.st_uid != os.geteuid()):
+              raise RuntimeError(
+                  f"PEM runtime dir {root} exists but is a symlink or not owned by this process"
+              )
+          root.mkdir(mode=0o700, parents=True, exist_ok=True)
+          os.chmod(root, 0o700)
+          for stale in root.glob("lacme-pem-*"):
+              shutil.rmtree(stale, ignore_errors=True)
+          return root
+
+      def refresh_runtime_pems(
+          bundle: CertBundle,
+          *,
+          ca_pem: bytes | None,
+          previous: Path | None,
+      ) -> PemPaths:
+          import shutil
+
+          from lacme.mtls import write_pem_files
+
+          new_paths = write_pem_files(bundle, ca_pem=ca_pem, directory=tls_pem_runtime_dir())
+          if previous is not None and previous != new_paths.cert.parent:
+              shutil.rmtree(previous, ignore_errors=True)
+          return new_paths
+  assert:
+    - *not_narration
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the sweep removes every runtime PEM directory under the root, so it is safe only
+              before the live directory is written; calling it later deletes the cert the
+              healthcheck presents.
+          (b) it assumes one node per PEM root - two processes sharing a root clear each other's live
+              directories, which is why a bare-metal deployment sets the root per node.
+          (c) the symlink and ownership refusal exists because the default root sits in shared /tmp,
+              where a local user could pre-create it and redirect where key material lands.
+          (d) the renewal writes the new directory before removing the old one so a concurrent probe
+              always finds at least one complete directory.
+
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that only says the function "clears stale directories" carries none of them.
+
+        Ignore comment placement, length and syntax.
+    # Placement only, and a conformance floor - see the note on the TypeScript case.
+    # Decided by Python's own parser: only the first statement string in a def
+    # becomes __doc__, so a docstring placed anywhere else is not one.
+    - type: javascript
+      value: file://assertions/comment.cjs:docstringOnFunctions
+      config: { functions: [prepare_pem_runtime_dir, refresh_runtime_pems] }
       metric: doc_placement_floor
-
-
 - description: negative control - plain unexported Go list helpers
   vars:
     lang: go
@@ -1122,8 +1408,6 @@
 
         Score from 0 to 1, never above 1: 1 - (U / D), floored at 0. Adding no comments at
         all scores 1. State D, U and the arithmetic in your reason.
-
-
 - description: negative control - self-evident TypeScript view helpers
   vars:
     lang: ts
@@ -1173,7 +1457,6 @@
       }
   assert:
     - *restraint
-
 - description: negative control - unexported Go table-rendering helpers
   vars:
     lang: go
@@ -1224,8 +1507,6 @@
       }
   assert:
     - *restraint
-
-
 - description: negative control - internal TypeScript settings helpers
   vars:
     lang: ts
@@ -1266,8 +1547,6 @@
       }
   assert:
     - *restraint
-
-
 - description: negative control - unexported Go flag usage rendering
   vars:
     lang: go
