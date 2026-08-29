@@ -27,6 +27,15 @@ function result(pass, score, reason) {
 // count can't pair up cleanly, including when there is no second marker at
 // all (first === last, covered by the same odd-count check: one marker is
 // always an odd count).
+//
+// Deliberately NOT lib/strip-reasoning.js's shared unwrapFence, which the
+// other suites use. That one ends at the first fence that closes the opener,
+// which is right for format-markdown (two offered variants must unwrap to the
+// first) but wrong here: an AGENTS.md wraps directory trees and command blocks
+// in UNLABELLED fences, and an unlabelled inner fence is indistinguishable
+// from the outer close. Measured on the stored run: unwrapFence truncates 8 of
+// 72 rows, worst 22342 -> 9781 and 7895 -> 3853 characters. Last-marker wins
+// here; first-close wins there.
 function content(output) {
   const text = stripReasoning(String(output));
   const first = text.indexOf('```');

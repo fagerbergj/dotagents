@@ -390,4 +390,22 @@ if (process.env.SKIP_NETWORK_TESTS) {
   console.log(`restapi assertions: ${cases.length} cases, ${carriedBy.size} metrics, smallest n=${Math.min(...[...carriedBy.values()].map((s) => s.size))}`);
 }
 
+{
+  // Fence extraction is lib/strip-reasoning.js's fenceBlocks. source() picks
+  // the block by content, so it must see every yaml/json block: an example
+  // request emitted ahead of the contract cannot shadow it, and a contract
+  // inside a wrapper is not cut short at a fence nested in it.
+  const spec = { openapi: '3.1.0', info: { title: 'T', version: '1' }, paths: {} };
+  const example = '```json\n{"id": "abc"}\n```\n\n';
+  assert.strictEqual(JSON.parse(g.source(example + wrap(spec))).openapi, '3.1.0',
+    'an example payload ahead of the contract shadowed it');
+  assert.strictEqual(JSON.parse(g.source('````markdown\n' + wrap(spec) + '\n````')).openapi, '3.1.0',
+    'a wrapped contract was truncated');
+  // OpenAPI descriptions are markdown and routinely quote a fenced example.
+  // That is not a closing fence: a marker only counts at the start of a line.
+  const quoting = { ...spec, info: { ...spec.info, description: 'Post a ```json body' } };
+  assert.strictEqual(JSON.parse(g.source(wrap(quoting))).info.description, quoting.info.description,
+    'a fence quoted inside the contract cut it short');
+}
+
 console.log('restapi assertions: ok');

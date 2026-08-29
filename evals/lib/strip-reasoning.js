@@ -24,9 +24,9 @@ function stripReasoning(output) {
 
 module.exports = { stripReasoning, TELL };
 
-// Returns the body of the first fence whose language tag satisfies `infoAllowed`,
-// or null if there is none. A non-greedy regex stopped at the first closing
-// fence, so an answer containing a code block of its own was cut there and the
+// Fence extraction, shared by every suite that reads a fenced answer. A
+// non-greedy regex stopped at the first closing fence, so an answer containing
+// a code block of its own was cut there and the
 // grader scored the fragment; fence parity does not catch it either, since a
 // wrapper plus one inner block is an even number of fences. Track depth instead
 // and end at the fence that closes the opening one - which also keeps the
@@ -38,27 +38,42 @@ function fenceAt(line) {
   return match ? { char: match[1][0], len: match[1].length, info: match[2].trim() } : null;
 }
 
-function unwrapFence(text, infoAllowed) {
+// Every matching block, in order, each ending at the fence that closes its own
+// opener - the depth-safe replacement for `matchAll(/```lang\n([\s\S]*?)```/g)`.
+// Graders that pick a block by its *content* (the OpenAPI document among the
+// example payloads, the card among the snippets) need all of them, so they
+// cannot be written on unwrapFence alone. `info` comes back with the body
+// because a commit answer glues its header to the fence.
+function fenceBlocks(text, infoAllowed) {
   const lines = String(text).split('\n');
+  const blocks = [];
   for (let start = 0; start < lines.length; start += 1) {
     const open = fenceAt(lines[start]);
     if (!open || !infoAllowed.test(open.info)) continue;
     const stack = [open];
-    for (let i = start + 1; i < lines.length; i += 1) {
+    let i = start + 1;
+    for (; i < lines.length; i += 1) {
       const fence = fenceAt(lines[i]);
       if (!fence) continue;
       const top = stack[stack.length - 1];
       if (!fence.info && fence.char === top.char && fence.len >= top.len) {
         stack.pop();
-        if (!stack.length) return lines.slice(start + 1, i).join('\n');
+        if (!stack.length) break;
       } else {
         stack.push(fence);
       }
     }
-    // Unterminated wrapper: the rest of the answer beats returning nothing.
-    return lines.slice(start + 1).join('\n');
+    // Unterminated wrapper: the rest of the answer beats returning nothing,
+    // and there is nothing after it to scan.
+    blocks.push({ info: open.info, body: lines.slice(start + 1, i).join('\n') });
+    start = i;
   }
-  return null;
+  return blocks;
+}
+
+function unwrapFence(text, infoAllowed) {
+  const [first] = fenceBlocks(text, infoAllowed);
+  return first ? first.body : null;
 }
 
 // format-markdown's graders diff the output against the input document, so a
@@ -75,3 +90,4 @@ function stripAndUnwrap(output) {
 
 module.exports.stripAndUnwrap = stripAndUnwrap;
 module.exports.unwrapFence = unwrapFence;
+module.exports.fenceBlocks = fenceBlocks;

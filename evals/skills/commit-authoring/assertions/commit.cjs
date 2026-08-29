@@ -4,6 +4,8 @@
 // §14), case-insensitive units (§15), the `!` marker (§11), and git-trailer
 // footers including BREAKING CHANGE / BREAKING-CHANGE (§16).
 
+const { fenceBlocks } = require('../../../lib/strip-reasoning.js');
+
 // The conventionalcommits preset's own patterns, tightened only to require a
 // non-empty type and description - the parser's default `\w*` accepts `: x`.
 const PARSER_OPTIONS = {
@@ -23,14 +25,16 @@ function result(pass, reason) {
   return { pass, score: pass ? 1 : 0, reason };
 }
 
-// Fenced blocks if the answer used them, else the whole text. The info string
-// is only a language tag when it is a bare word: models emit
-// ```refactor: use the upstream helper with the header glued to the fence, and
-// that content must reach the parser, not be eaten as a tag.
+// Fenced blocks if the answer used them, else the whole text. Any info string
+// opens one, because the info string is only a language tag when it is a bare
+// word: models emit ```refactor: use the upstream helper with the header glued
+// to the fence, and that content must reach the parser, not be eaten as a tag.
+// fenceBlocks hands back the info alongside the body for exactly that, and
+// tracks depth, so a message quoting a fence of its own is no longer cut there.
 function blocks(output) {
   const fenced = [];
-  for (const [, info, content] of String(output).matchAll(/```([^\n]*)\r?\n([\s\S]*?)```/g)) {
-    const text = /^[\w+#-]*[^\S\r\n]*$/.test(info) ? content.trim() : `${info}\n${content}`.trim();
+  for (const { info, body } of fenceBlocks(String(output), /^/)) {
+    const text = /^[\w+#-]*$/.test(info) ? body.trim() : `${info}\n${body}`.trim();
     if (text) fenced.push(text);
   }
   return fenced.length ? fenced : [String(output).trim()];

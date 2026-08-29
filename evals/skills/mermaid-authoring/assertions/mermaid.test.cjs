@@ -70,4 +70,16 @@ for (const grader of graders) {
 assert.ok(graders.some((g) => g.metric === 'no_invented_elements'),
   'no_invented_elements is gone; invention would have nowhere to be scored');
 
+// Fence extraction is lib/strip-reasoning.js's fenceBlocks, which agrees with
+// mermaid-lint on what a fence is. An unclosed ```mermaid runs to the end of
+// the answer - the old regex found no block at all and scored a complete
+// diagram 0 for the missing backticks.
+assert.equal(checks.usesDiagramType('```mermaid\nflowchart TD\n    A --> B\n',
+  { config: { allowed: ['flowchart'] } }).pass, true, 'an unclosed fence lost the diagram');
+// A backtick run glued to the end of a sentence is inline code, not an opener,
+// so a restated diagram does not become a second block for the quantifier.
+assert.equal(checks.usesDiagramType(
+  '```mermaid\npie title T\n    "a" : 1\n```\n\nHere it is again.```mermaid\nflowchart TD\n    A --> B\n```',
+  { config: { allowed: ['pie'] } }).pass, true, 'a mid-line backtick run opened a second block');
+
 console.log(`mermaid assertions: ok (${graders.length} shared graders)`);

@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
+const { fenceBlocks } = require('../../../lib/strip-reasoning.js');
 
 const REDOCLY = process.env.REDOCLY_PACKAGE || '@redocly/cli@2.47.0';
 const YAML = process.env.YAML_PACKAGE || 'js-yaml@4.1.0';
@@ -41,8 +42,12 @@ function config(context) {
   return context?.config || {};
 }
 
+// All of them, not the first: source() below picks the block by its content, so
+// an example request body emitted ahead of the contract must not shadow it.
+// Shared with every other suite's extractor - a non-greedy regex here would end
+// the document at a fence nested inside it (evals/AGENTS.md).
 function fences(output) {
-  return [...String(output).matchAll(/```(?:ya?ml|json|openapi)?[^\S\r\n]*\r?\n([\s\S]*?)```/gi)].map((match) => match[1].trim());
+  return fenceBlocks(String(output), /^(?:ya?ml|json|openapi)?$/i).map((block) => block.body.trim());
 }
 
 const isSpec = (text) => /^\s*['"]?openapi['"]?\s*[:=]\s*['"]?3\./m.test(text);
@@ -536,6 +541,8 @@ module.exports = {
   reusesSharedSchema,
   routeHasMethods,
   securityIsDeclaredAndApplied,
+  // exported for the self-test
+  source,
   sunsetDateMatches,
   validatesAsOpenApi,
 };
