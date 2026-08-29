@@ -5,6 +5,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const checks = require('./commit.cjs');
 
 // agent-researcher 628a67f, the human-authored message for the case 1 diff.
@@ -82,6 +83,54 @@ async function main() {
   assert.equal(breaking.pattern.test('```\nfix(config): reject unknown keys\n\nBREAKING-CHANGE: configs with stray keys now fail to load.\n```'), true);
   assert.equal(breaking.pattern.test('```\nfix(config): reject unknown keys\n\nbreaking change: configs now fail to load.\n```'), false, 'the footer MUST be uppercase');
   assert.equal(breaking.pattern.test(real), false);
+
+  // --- the judged rubrics ----------------------------------------------------
+  // Parsed, not regexed: a config is a structured file, and PyYAML is already
+  // a dependency of the python gates next door.
+  const load = (f) => JSON.parse(execFileSync('python3', ['-c', 'import json,sys,yaml;print(json.dumps(yaml.safe_load(open(sys.argv[1]))))', path.join(suite, f)], { encoding: 'utf8' }));
+  const cfg = load('promptfooconfig.yaml');
+  const cases = load('tests/cases.yaml');
+  const rubrics = cfg.defaultTest.assert.filter((a) => a.type === 'llm-rubric');
+  const byMetric = Object.fromEntries(rubrics.map((a) => [a.metric, a]));
+  assert.deepEqual(
+    rubrics.map((a) => a.metric),
+    ['why_quality', 'no_invented_claims'],
+    'the two judged properties of a message - is the reason there, and is it true - are two metrics',
+  );
+
+  // A rubric only sees what is interpolated into it (evals/AGENTS.md): a clause
+  // about "the diff" in a rubric that is never given the diff is inert, and the
+  // judge guesses rather than complaining. Every var every rubric names has to
+  // exist on every case.
+  for (const a of rubrics) {
+    for (const [, v] of a.value.matchAll(/\{\{\s*(\w+)\s*\}\}/g)) {
+      if (v === 'output' || v === 'rubric') continue;
+      for (const c of cases) {
+        assert.ok(c.vars && c.vars[v] !== undefined, `${a.metric} interpolates {{${v}}}, which "${c.description}" does not define - the clause would be inert`);
+      }
+    }
+  }
+
+  // why_quality grades one property: whether the reason is there and concrete.
+  // Three items, no free ones, no subtraction.
+  const whyItems = [...byMetric.why_quality.value.matchAll(/^(\d)\. /gm)].map((m) => m[1]);
+  assert.deepEqual(whyItems, ['1', '2', '3'], 'why_quality grades exactly items 1-3; body length (a second property, pointing against 1 and 2) and flagging a mixed diff (splits_mixed_change owns it) are cut');
+  // An item a judge may mark N/A and still be paid for is not a measurement -
+  // it is a free point whose size depends on which sub-population the case is
+  // in. 64 of 90 stored rows took that point.
+  assert.ok(!/N\/A/i.test(byMetric.why_quality.value), 'no item in why_quality may be satisfied as N/A');
+  assert.ok(!/unrelated pieces of work|recommending a split/i.test(byMetric.why_quality.value), 'flagging a mixed diff belongs to splits_mixed_change, which runs only on the cases where it applies');
+  assert.ok(!/subtract/i.test(byMetric.why_quality.value), 'why_quality must not subtract - fabrication is scored by no_invented_claims');
+
+  // no_invented_claims is yes/no, and it is the metric that needs the diff.
+  assert.ok(byMetric.no_invented_claims.value.includes('{{diff}}'), 'no_invented_claims judges claims against the diff, so it has to be given the diff');
+  assert.ok(/no partial credit/i.test(byMetric.no_invented_claims.value), 'invention is a yes/no property');
+  assert.equal(byMetric.no_invented_claims.threshold, 1, 'a binary metric passes only at 1');
+
+  // No metric is scored in two places at once.
+  for (const n of new Set(cfg.defaultTest.assert.map((a) => a.metric))) {
+    assert.ok(!cases.some((c) => (c.assert || []).some((a) => a.metric === n)), `${n} is defined in defaultTest and again on a case`);
+  }
 
   console.log('commit assertions: ok');
 }

@@ -63,6 +63,31 @@ defaultTest:
     # against the diff. An overlap-with-the-diff heuristic was tried and cut: a
     # body that correctly explains why necessarily reuses the diff's nouns, so
     # the proxy scored real commit bodies below fluent narration.
+    #
+    # Three of the original six items are gone, because a metric scores one
+    # property and no two criteria score one behaviour with opposite signs:
+    #
+    # - Item 6 (flag a mixed diff) is `splits_mixed_change`'s job, and that
+    #   metric runs only on the cases where it applies. Here it was a free 0.2
+    #   on every single-change case - credited on 64 of the 90 rows of
+    #   results/commit-authoring@1.0.json, more often to no-skill (34/45) than
+    #   to skill-current (30/45), so it padded the baseline and compressed the
+    #   delta. It was not even judgeable: this rubric never sees the diff, and
+    #   on 5 of the 24 genuinely mixed rows the judge wrote "N/A (single piece
+    #   of work)" and took the 0.2 anyway. One row totalled "6 x 0.2 = 1.2".
+    # - Item 4 (body length matched to the change) graded a second property,
+    #   size, and pointed against items 1 and 2. On the dependency-bump case
+    #   its "no body where the change is a version bump" half PAYS for the
+    #   missing body that items 1 and 2 score NONE for - one behaviour, two
+    #   signs. Its other half is redundant: a body carrying a concrete why is
+    #   "matched to the change" by construction. It was awarded on 22 of the 57
+    #   parsable stored rows where items 1 and 2 were both NONE, i.e. it paid
+    #   0.2 for a body those items had just rejected as content-free. Cut
+    #   rather than re-scoped: the harmful direction, padding a trivial change
+    #   with reasons nobody has, is what `no_invented_claims` below catches,
+    #   and nothing else in the suite rewards length.
+    # - Item 5 was an unbounded subtraction sitting inside another metric's
+    #   score; it is now its own metric.
     - type: llm-rubric
       value: |
         The developer said this about the change:
@@ -74,8 +99,15 @@ defaultTest:
         the type, the scope, the `!`, the colon spacing - which a parser checks
         separately.
 
-        Answer each of the six below with a quote from the message, or NONE. Answer all six
-        before scoring.
+        Two things are graded elsewhere and must not move this score. Length: a short
+        message carrying the reason and a long one carrying it score the same, and
+        brevity is never a deduction. Truth: take the message's factual claims at face
+        value here - whether the diff and the developer's note support them is a
+        separate question with its own score. Judge only whether the reason is present
+        and concrete.
+
+        Answer each of the three below with a quote from the message, or NONE. Answer all
+        three before scoring.
 
         1. Something the diff does not already show: what prompted the change, the constraint
            that forced it, the incident behind it, the option rejected, or what breaks without
@@ -87,20 +119,58 @@ defaultTest:
            different diff, answer NONE.
         3. A first line that describes what this change does specifically, such that a reader
            could tell it from a generic or wrong one only by checking it against the diff.
-        4. Body length matched to the change: a body where a reviewer needs telling, or no
-           body where the change is a version bump or a typo. Quote either the body or the
-           subject you are counting.
-        5. Nothing invented: list every cause, actor, number, or identifier the message states
-           that the diff and the developer's note do not support, or answer NONE.
-        6. Where the diff holds two or more unrelated pieces of work, the text that says so -
-           flagging the mix or recommending a split. If the diff holds one piece of work,
-           answer N/A and count this item as satisfied.
 
-        Score from 0 to 1, never above 1: award 0.2 for each of items 1, 2, 3, 4 and 6 you
-        answered with a quote (or N/A), then subtract 0.2 for each distinct invention listed
-        under item 5, floored at 0. Award nothing for an item you could not quote for.
+        Score from 0 to 1, never above 1: 0.4 for item 1, 0.3 for item 2, 0.3 for item 3.
+        Item 1 carries the most because it is the property being measured. Award nothing
+        for an item you could not quote for. State the arithmetic.
       threshold: 0.7
       metric: why_quality
+    # Split out of why_quality, where it was an open-ended subtraction from a
+    # total earned by unrelated items: two inventions took 0.4 off, and one
+    # stored row records "Score: 0.2 for item 6, minus 0.4 for two inventions,
+    # floored at 0" - a message scored 0.00 whose only credit was an item that
+    # was N/A. Fabrication is its own property and gets its own number.
+    #
+    # Yes/no, like fix-bug's `no_invented_file_refs`: a message either made
+    # something up or it did not, and a fraction over "how many" would rank a
+    # message that invented one cause above one that invented two while both
+    # are unusable. This is the only metric here that judges whether a claim is
+    # TRUE; why_quality judges whether a reason is present and concrete, so a
+    # fabricated-but-concrete why scores well there and 0 here - two different
+    # questions about one sentence, not two signs on one property.
+    #
+    # Unlike why_quality this one is given the diff. A rubric only sees what is
+    # interpolated into it (evals/AGENTS.md), so "the diff does not support it"
+    # was inert where this criterion used to sit, and the judge guessed.
+    - type: llm-rubric
+      value: |
+        The developer said this about the change:
+        "{{context}}"
+
+        The diff the message describes:
+        {{diff}}
+
+        Judge the commit message as delivered. Do not reward or penalise how it was
+        built, how long it is, whether it explains the change well, or its Conventional
+        Commits formatting - all of that is scored separately. The single question here
+        is whether the message asserts anything that is not there.
+
+        List every cause, actor, number, identifier, issue or ticket reference, version,
+        date, or consequence the message states that neither the diff nor the developer's
+        note supports. Then score.
+
+        Not an invention, and must not be listed: anything the diff shows or the note
+        says, however differently worded; a plain description of what the diff does; a
+        judgement about the change ("this is a breaking change", "the old behaviour was
+        wrong") that follows from the diff; or a recommendation about how to commit it.
+        A message that asserts nothing beyond the diff at all lists nothing and scores 1.
+
+        Score from 0 to 1, never above 1: 1 if your list is empty, 0 if it is not.
+        There is no partial credit - a message that invented one cause and one that
+        invented three are both unusable for the same reason. State the list, or
+        say it is empty.
+      threshold: 1
+      metric: no_invented_claims
     # Loading a SKILL.md costs tokens and wall time; that overhead is part of
     # what is being measured. Needs `--no-cache` to mean anything.
     - type: latency
