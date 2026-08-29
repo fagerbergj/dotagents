@@ -59,44 +59,19 @@ defaultTest:
     - type: javascript
       value: file://assertions/issue.cjs:noInventedFacts
       metric: no_invented_facts
-    # 2. The four properties the description claims, shared across every case.
-    #    Case-specific grading is the separate case_fidelity rubric below, so
-    #    a scope property is not scored on the context axis at quarter weight.
-    - type: llm-rubric
-      value: |
-        The write-up below was produced from this raw report:
-        "{{report}}"
-
-        Judge the issue as delivered. Do not reward or penalise how it was
-        built, which features it used, or whether it followed any particular
-        authoring convention. Score from 0 to 1, never above 1.
-
-        Answer each of the four below with a quote from the write-up, or NONE. Answer all
-        four before scoring.
-
-        1. Clear outcome: quote the sentence a reader could restate as what will be true when
-           this is done, and quote the title. A title naming a category rather than an
-           outcome, or a write-up that only restates the complaint, is NONE.
-        2. Bounded scope: quote the text that keeps this to what the report raised - or,
-           where something a reader might assume is excluded, the text saying so. A write-up
-           that fans one report into unrelated work is NONE.
-        3. Sufficient context: quote the facts an engineer who has never seen the report would
-           need to start. Separately, list every cause, frequency, count of affected users,
-           environment, timing, or reproduction step in the write-up that the report above
-           does not contain. A detail offered as an explicitly marked assumption, hypothesis,
-           or open question does not go on this list.
-        4. Testable completion: quote a completion condition someone could settle by observing
-           the system - an event, a count, a state, a message. A condition needing someone's
-           opinion to settle ("satisfied", "improved", "works properly") is NONE. A condition
-           naming an observable result counts even when it contains ordinary words like "no
-           errors across 20 consecutive runs".
-
-        Score from 0 to 1, never above 1: award 0.25 for each of the four you answered with a
-        quote, then subtract 0.25 for each invention listed under item 3, floored at 0.
-      threshold: 0.7
-      metric: semantic_quality
+    # 2. semantic_quality is NOT here. It grades a write-up against the four
+    #    properties the description claims, which is the wrong question to ask of
+    #    the Jira negative control, where the right answer is to refuse to write
+    #    a ticket at all. Sitting in defaultTest it graded that control anyway:
+    #    one skill row scored semantic_quality=1.00 ("clear outcome ... bounded
+    #    scope ... testable completion conditions") and case_fidelity=0.00
+    #    ("fabricates a product area ... never states that the report is
+    #    insufficient") - full marks and zero for the same output. It now rides
+    #    on the ten positive cases, anchored in tests/cases.yaml; the control is
+    #    graded by case_fidelity, which was written for it.
+    #
     # 3. The case's own property, scored on its own axis rather than folded
-    #    into one of the four above.
+    #    into one of the three above.
     - type: llm-rubric
       value: |
         The reply below was produced from this raw report:

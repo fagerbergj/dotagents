@@ -67,6 +67,22 @@ for (const testCase of cases) {
   }
 }
 
+// One metric, one property. Only no_invented_specifics may subtract, and its
+// entire score is that subtraction - every other rubric awards and never fines,
+// so a missed criterion and a fabrication can no longer produce the same number.
+// Matched on the arithmetic word rather than on what is being penalised: the
+// phrasings differ per suite ("each INVENTED cancels one satisfied criterion",
+// "subtract 0.2 for each system, number or team the review names") and a pattern
+// keyed to "invent" walks straight past the second one.
+const FABRICATION = new Set(['no_invented_specifics']);
+for (const grader of graders) {
+  if (grader.type !== 'llm-rubric' || FABRICATION.has(grader.metric)) continue;
+  assert.doesNotMatch(grader.value, /\b(subtract|subtracts|subtracting|cancel|cancels|cancelling|deduct|deducts)\b/i,
+    `${grader.metric} subtracts inside its own score; only no_invented_specifics may, and its whole score is that subtraction`);
+}
+const grounded = cases.filter((c) => c.assert.some((g) => FABRICATION.has(g.metric)));
+assert.equal(grounded.length, 8, `no_invented_specifics rides on ${grounded.length} cases, not all 8 proposals`);
+
 // The whole point of the control expansion: a metric riding on two cases moves
 // by more than any delta it can report.
 const controls = cases.filter((c) => c.assert.some((g) => g.metric === 'control_quality'));

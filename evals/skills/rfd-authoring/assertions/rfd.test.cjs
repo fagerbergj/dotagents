@@ -70,4 +70,33 @@ for (const [metric, floor] of [['control_quality', 5], ['finds_the_decision', 5]
   assert.ok(n >= floor, `${metric} rides on only ${n} cases`);
 }
 
+// One metric name, one rubric. framing_quality used to cover both the seven
+// authored RFDs and the single review of someone else's draft - two questions
+// over two populations averaged into one n=8 cell under one reliability band.
+const rubricsFor = (metric) => new Set(cases.flatMap((c) => c.assert)
+  .filter((g) => g.metric === metric).map((g) => g.value));
+for (const metric of new Set(cases.flatMap((c) => c.assert).map((g) => g.metric))) {
+  assert.equal(rubricsFor(metric).size, 1, `${metric} carries more than one rubric`);
+}
+const exploratory = cases.filter((c) => c.assert.some((g) => g.metric === 'framing_quality'));
+assert.ok(exploratory.every((c) => !/^review/.test(c.description)),
+  'framing_quality grades an authored RFD; a review case needs review_framing');
+
+// One metric, one property. Only no_invented_specifics may subtract, and its
+// entire score is that subtraction - every other rubric awards and never fines,
+// so a missed criterion and a fabrication can no longer produce the same number.
+// Matched on the arithmetic word rather than on what is being penalised: the
+// phrasings differ per suite ("each INVENTED cancels one satisfied criterion",
+// "subtract 0.2 for each system, number or team the review names") and a pattern
+// keyed to "invent" walks straight past the second one.
+for (const grader of graders) {
+  if (grader.type !== 'llm-rubric' || grader.metric === 'no_invented_specifics') continue;
+  assert.doesNotMatch(grader.value, /\b(subtract|subtracts|subtracting|cancel|cancels|cancelling|deduct|deducts)\b/i,
+    `${grader.metric} subtracts inside its own score; only no_invented_specifics may, and its whole score is that subtraction`);
+}
+const judged = cases.filter((c) => !/negative control/.test(c.description));
+const grounded = cases.filter((c) => c.assert.some((g) => g.metric === 'no_invented_specifics'));
+assert.equal(grounded.length, judged.length,
+  `no_invented_specifics rides on ${grounded.length} of the ${judged.length} cases judged against a source`);
+
 console.log(`rfd config: ok (${cases.length} cases, ${graders.length} assertions)`);

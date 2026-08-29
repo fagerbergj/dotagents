@@ -47,6 +47,48 @@
       type: javascript
       value: file://assertions/issue.cjs:oneBoundedIssue
       metric: bounded_scope
+    # The properties the description claims, on the ten cases where a ticket is
+    # the right answer. It used to live in defaultTest.assert and so also graded
+    # the Jira negative control, where writing a plausible ticket is the failure.
+    #
+    # Three items, not four. The old item 2 restated `bounded_scope` above, which
+    # already counts work items against a per-case window - a judge guessing at
+    # the same property for a quarter of an unrelated score. The old item 3
+    # carried a list of inventions and subtracted 0.25 for each, so a write-up
+    # quoting all four properties could still report 0.00: recall and fabrication
+    # in one number, cancelling. Token-level invention is `no_invented_facts`,
+    # computed against the report itself; prose-shaped invention is scored by the
+    # per-case `case_fidelity` rubric. Neither belongs in this number.
+    - &semantic
+      type: llm-rubric
+      value: |
+        The write-up below was produced from this raw report:
+        "{{report}}"
+
+        Judge the issue as delivered. Do not reward or penalise how it was
+        built, which features it used, or whether it followed any particular
+        authoring convention. Score from 0 to 1, never above 1.
+
+        Answer each of the three below with a quote from the write-up, or NONE. Answer all
+        three before scoring.
+
+        1. Clear outcome: quote the sentence a reader could restate as what will be true when
+           this is done, and quote the title. A title naming a category rather than an
+           outcome, or a write-up that only restates the complaint, is NONE.
+        2. Sufficient context: quote the facts an engineer who has never seen the report would
+           need to start. Judge only whether those facts are present and enough to start on;
+           whether the write-up also added anything the report did not contain is graded by
+           other metrics and must not move this score in either direction.
+        3. Testable completion: quote a completion condition someone could settle by observing
+           the system - an event, a count, a state, a message. A condition needing someone's
+           opinion to settle ("satisfied", "improved", "works properly") is NONE. A condition
+           naming an observable result counts even when it contains ordinary words like "no
+           errors across 20 consecutive runs".
+
+        Score from 0 to 1, never above 1: award one third for each of the three you answered
+        with a quote, and nothing for each NONE. State the arithmetic.
+      threshold: 0.7
+      metric: semantic_quality
 
 - description: Jira - crash pasted from a forwarded support ticket
   vars:
@@ -88,7 +130,7 @@
 
       Score from 0 to 1, never above 1: score the case requirements above, then subtract
       0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
-  assert: [*bounded]
+  assert: [*bounded, *semantic]
 
 - description: Linear - feature wish written as the solution
   vars:
@@ -122,7 +164,7 @@
 
       Score from 0 to 1, never above 1: score the case requirements above, then subtract
       0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
-  assert: [*bounded]
+  assert: [*bounded, *semantic]
 
 - description: Azure DevOps - performance gripe with no numbers in it
   vars:
@@ -156,7 +198,7 @@
 
       Score from 0 to 1, never above 1: score the case requirements above, then subtract
       0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
-  assert: [*bounded]
+  assert: [*bounded, *semantic]
 
 - description: GitHub - one braindump that is really three unrelated asks
   vars:
@@ -194,6 +236,7 @@
       value: file://assertions/issue.cjs:oneBoundedIssue
       config: { min: 2, max: 3 }
       metric: bounded_scope
+    - *semantic
 
 - description: Jira - NEGATIVE CONTROL, nothing here to write an issue from
   vars:
@@ -258,7 +301,7 @@
 
       Score from 0 to 1, never above 1: score the case requirements above, then subtract
       0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
-  assert: [*bounded]
+  assert: [*bounded, *semantic]
 
 - description: Azure DevOps - open question nobody has looked into yet
   vars:
@@ -294,7 +337,7 @@
 
       Score from 0 to 1, never above 1: score the case requirements above, then subtract
       0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
-  assert: [*bounded]
+  assert: [*bounded, *semantic]
 
 - description: GitHub - install docs send a real user down the wrong path
   vars:
@@ -326,7 +369,7 @@
 
       Score from 0 to 1, never above 1: score the case requirements above, then subtract
       0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
-  assert: [*bounded]
+  assert: [*bounded, *semantic]
 
 - description: Jira - a wish that came out of a daily annoyance
   vars:
@@ -359,7 +402,7 @@
 
       Score from 0 to 1, never above 1: score the case requirements above, then subtract
       0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
-  assert: [*bounded]
+  assert: [*bounded, *semantic]
 
 - description: Linear - flaky test everyone has learned to rerun
   vars:
@@ -392,4 +435,4 @@
 
       Score from 0 to 1, never above 1: score the case requirements above, then subtract
       0.25 for each of the I inventions, floored at 0. State I and the arithmetic.
-  assert: [*bounded]
+  assert: [*bounded, *semantic]

@@ -77,4 +77,27 @@ assert.equal(checks.carriesTaskSpecifics(good, { vars }).pass, true);
 assert.equal(checks.carriesTaskSpecifics('We picked a database. It has upsides and downsides.', { vars }).pass, false);
 assert.equal(checks.carriesTaskSpecifics('Postgres and Dynamo were compared.', { vars, config: { minimum: 2 } }).pass, true);
 
-console.log('adr assertions: ok');
+// --- config shape -----------------------------------------------------------
+// One metric, one property. Only no_invented_specifics may subtract, and its
+// entire score is that subtraction - every other rubric awards and never fines,
+// so a missed criterion and a fabrication can no longer produce the same number.
+// Matched on the arithmetic word rather than on what is being penalised: the
+// phrasings differ per suite ("each INVENTED cancels one satisfied criterion",
+// "subtract 0.2 for each system, number or team the review names") and a pattern
+// keyed to "invent" walks straight past the second one.
+const { execFileSync } = require('node:child_process');
+const cases = JSON.parse(execFileSync('python3', ['-c',
+  'import json,sys,yaml; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)',
+  path.join(__dirname, '..', 'tests/cases.yaml')], { encoding: 'utf8' }));
+const graders = cases.flatMap((c) => c.assert || []);
+
+for (const grader of graders) {
+  if (grader.type !== 'llm-rubric' || grader.metric === 'no_invented_specifics') continue;
+  assert.doesNotMatch(grader.value, /\b(subtract|subtracts|subtracting|cancel|cancels|cancelling|deduct|deducts)\b/i,
+    `${grader.metric} subtracts inside its own score; only no_invented_specifics may, and its whole score is that subtraction`);
+}
+const grounded = cases.filter((c) => (c.assert || []).some((g) => g.metric === 'no_invented_specifics'));
+assert.equal(grounded.length, cases.length,
+  `no_invented_specifics rides on ${grounded.length} of ${cases.length} cases`);
+
+console.log(`adr assertions: ok (${cases.length} cases, ${graders.length} graders)`);

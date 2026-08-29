@@ -91,21 +91,43 @@
         rollback plan that would not actually recover the part the document itself called
         irreversible.
 
-        Nothing invented: every system, team, person, version, figure and identifier the
-        document presents as established fact appears in what the engineer said. List any
-        that do not, or answer NONE. An unsourced specific that is explicitly labelled an
-        assumption or an estimate does not count against it; one presented as fact does,
-        and each one lowers the score.
-
-        Score from 0 to 1, never above 1: award 0.34 for The case against and 0.34 for
-        Reversibility where you answered with a quote, and 0.32 for Nothing invented where
-        you answered NONE. Then subtract 0.34 for each unsourced specific you listed as
-        presented in fact, floored at 0. State the list and the arithmetic.
+        Score from 0 to 1, never above 1: award 0.5 for The case against and 0.5 for
+        Reversibility where you answered with a quote, and nothing for each NONE. State
+        the arithmetic.
 
         Judge the document as delivered. Do not reward or penalise its length, its
-        headings, or which sections it contains.
+        headings, or which sections it contains. Whether the document invents anything is
+        graded elsewhere and must not move this score in either direction.
       threshold: 0.7
       metric: honest_tradeoffs
+    # Fabrication on its own axis. It used to be the third item inside
+    # honest_tradeoffs AND the subtraction applied to it, so one invention cost
+    # 0.66 of the same number that measured recall: a document satisfying all
+    # three graded properties reported 0.00 (idx 6, skill-current: "1.0 - 1.36 =
+    # -0.36, floored at 0.0"), indistinguishable from one that satisfied none.
+    # The two halves are both real; separated, neither can cancel the other.
+    - type: llm-rubric
+      value: |
+        An engineer described this situation to a colleague - "{{task}}" - and received
+        the document below. Score from 0 to 1, never above 1.
+
+        Every system, team, person, version, figure and identifier the document presents
+        as established fact must appear in what the engineer said. List each one that does
+        not, quoting it, or answer NONE. A specific explicitly labelled an assumption, an
+        estimate, a placeholder or an open question does not go on the list; one presented
+        as fact does. A figure the document proposes as a target, a deadline to agree, or
+        an acceptance threshold is not an invention either - it is being set, not claimed.
+        Nor is a published standard, specification or process the document cites as an
+        authority: that is a citation, not a claim about the engineer's own systems.
+
+        Score from 0 to 1, never above 1: start at 1.00 and subtract 0.25 for each
+        unsourced specific on your list, floored at 0. State the list and the arithmetic.
+
+        Judge the document as delivered. Do not reward or penalise its length, its
+        headings, which sections it contains, or how well it argues - a document that is
+        weak on every other axis but invents nothing scores 1.00 here.
+      threshold: 1
+      metric: no_invented_specifics
 - description: cross-team infrastructure - self-hosted Kafka to a managed service
   vars:
     task: |
