@@ -189,4 +189,47 @@ assert.equal(
 assert.equal(stripAndUnwrap(doc), doc, 'no fence is left alone');
 assert.equal(stripAndUnwrap('# Title\n\n```bash\nls\n```'), '# Title\n\n```bash\nls\n```', 'a code fence is not a wrapper');
 
-console.log('format assertions: ok');
+// --- the partition itself ----------------------------------------------------
+// readability and unchanged_when_clean grade opposite answers on the same
+// behaviour - one pays for restructuring, the other fines it - so which cases
+// carry which is the load-bearing fact, and nothing else in the repo would
+// notice it silently regressing. PyYAML, not a regex: the aliases have to be
+// resolved before anything can be asserted about an assertion list.
+const { execFileSync } = require('node:child_process');
+const path = require('node:path');
+const loadYaml = (file) => JSON.parse(execFileSync('python3', ['-c',
+  'import json,sys,yaml; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)',
+  path.join(__dirname, '..', file)], { encoding: 'utf8' }));
+
+const config = loadYaml('promptfooconfig.yaml');
+const cases = loadYaml('tests/cases.yaml');
+const metricsOn = (c) => new Set((c.assert || []).map((a) => a.metric));
+const defaultMetrics = new Set((config.defaultTest.assert || []).map((a) => a.metric));
+
+assert.ok(!defaultMetrics.has('readability'),
+  'readability in defaultTest grades the negative controls, whose right answer is to change nothing');
+
+const controls = cases.filter((c) => c.description.startsWith('negative control'));
+const dirty = cases.filter((c) => !c.description.startsWith('negative control'));
+assert.equal(controls.length, 3, 'expected three already-clean controls');
+assert.equal(dirty.length, 9, 'expected nine dirty cases');
+
+for (const c of controls) {
+  assert.ok(metricsOn(c).has('unchanged_when_clean'), `${c.description}: control is not graded for restraint`);
+  assert.ok(!metricsOn(c).has('readability'), `${c.description}: readability pays for the restructuring unchanged_when_clean fines`);
+}
+for (const c of dirty) {
+  assert.ok(metricsOn(c).has('readability'), `${c.description}: dirty case is not graded for readability`);
+  assert.ok(!metricsOn(c).has('unchanged_when_clean'), `${c.description}: a dirty document is not meant to come back unchanged`);
+}
+
+// Item 5 duplicated the computed `preserved`; cutting it rescaled the other
+// four. A rubric awarding 0.2 an item has five of them again.
+const readability = dirty[0].assert.find((a) => a.metric === 'readability');
+assert.match(readability.value, /award 0\.25 for each of the four/,
+  'readability no longer scores four items at 0.25 - did item 5 come back?');
+assert.doesNotMatch(readability.value, /still the same document/,
+  'item 5 duplicates the computed `preserved` metric and must stay cut');
+assert.ok(defaultMetrics.has('preserved'), '`preserved` is what replaced item 5; it has to still be there');
+
+console.log(`format assertions: ok (${dirty.length} dirty cases graded for readability, ${controls.length} controls for restraint)`);

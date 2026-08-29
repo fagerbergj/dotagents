@@ -14,18 +14,31 @@
 # `src/requests/__init__.py`). Stays wired to catch those regressions again
 # regardless of whether n=3 lets it clear a noise floor as a discriminator.
 #
-# discoverability_filter (defined on the first case below, reused via *alias
-# on the other two) was originally two separate, differently-worded rubrics:
-# one on this file's case (n=1, sign-unstable across --repeat 3:
-# -0.30/-0.15/+0.35) and a second, "resists_invention", living only on the
-# third case (n=1, -0.10 sd 0.17). Per evals/AGENTS.md's steer to merge thin
-# per-case metrics into one metric at higher n rather than reword each in
-# isolation (precedent: review-code's verifies_rather_than_trusts +
-# severity_restraint -> review_quality), they are now ONE uniformly-worded
-# rubric spanning all three cases (n=3), with each case supplying its own
-# <Evidence> (what's actually true, gathered independently) and <Obvious>
-# (what one glance at the repo already gives an agent for free) - the
-# wording never changes, only the ground truth it is judged against.
+# states_critical_fact and says_nothing_else (defined on the first case
+# below, reused via *alias on every other) are the recall and precision
+# halves of one judgement, and they are two metrics because they move
+# independently: a file can name the fact that would break a build AND carry
+# a "Useful links" section. They were one rubric, discoverability_filter,
+# weighted 0.4 recall / 0.3+0.3 precision, so 0.6 of a row turned
+# all-or-nothing on the judge finding a single offending sentence - it docked
+# 12 of 36 baseline and 6 of 36 skill rows that way. Worse, the precision
+# half pulled against cited_facts_exist, which scores 0 when the file cites
+# nothing checkable (requireCitation defaults true): one metric demanded
+# concrete facts while the other fined any passage beyond the bare minimum
+# needed to state them. Split, each scores one property and the two agree on
+# sign - state the load-bearing fact, and nothing else.
+#
+# The merge that produced the shared wording still holds: it began as two
+# differently-worded rubrics, one on this file's case (n=1, sign-unstable
+# across --repeat 3: -0.30/-0.15/+0.35) and a second, "resists_invention",
+# on the third case (n=1, -0.10 sd 0.17). Per evals/AGENTS.md's steer to
+# merge thin per-case metrics into one metric at higher n rather than reword
+# each in isolation (precedent: review-code's verifies_rather_than_trusts +
+# severity_restraint -> review_quality), the wording spans every case, with
+# each case supplying its own <Evidence> (what's actually true, gathered
+# independently) and <Obvious> (what one glance at the repo already gives an
+# agent for free). The split is along the property axis, not the case axis:
+# both halves still ride every case at the same n.
 #
 # Grounded in two independent sources, neither cited by the skill itself:
 # - agents.md, the community convention this file format is named for
@@ -77,13 +90,12 @@
         repo: requests
       metric: cited_facts_exist
 
-    # Claim: "discoverability-first rubric" (see the file-level comment
-    # above for full grounding and the merge that produced this shared
-    # rubric). Judges whether <Output> holds only what an agent could not
-    # quickly get by reading the repo's own files, and omits what it could -
-    # against this case's own <Evidence>/<Obvious>, reused unchanged by the
-    # other two cases via *discoverability_filter.
-    - &discoverability_filter
+    # Claim: "discoverability-first rubric", RECALL half (see the file-level
+    # comment above for the grounding and for why this is no longer one
+    # metric with the precision half). Does the file state the one fact whose
+    # absence causes the mistake - judged against this case's own <Evidence>,
+    # and aliased unchanged onto every other case.
+    - &states_critical_fact
       type: llm-rubric
       # A custom rubricPrompt replaces promptfoo's default JSON-format system
       # message wholesale (loadRubricPrompt in graders-*.cjs returns the
@@ -92,6 +104,53 @@
       # reproduced on this exact suite, matched against adr-authoring's
       # tests/cases.yaml, which carries this same system message and scored
       # 120/120 llm-rubric rows with zero extraction failures historically.
+      # <Obvious> is deliberately not passed here: what an agent already gets
+      # for free has no bearing on whether the load-bearing fact is stated,
+      # and handing the judge a clutter list while asking a recall question is
+      # how the two halves got entangled in the first place.
+      rubricPrompt:
+        - role: system
+          content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else:
+            {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
+        - role: user
+          content: |
+            <Output>{{output}}</Output>
+            <Evidence>{{evidence}}</Evidence>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> is a candidate AGENTS.md (or a section of one, for a nested
+        file) for a real repository. <Evidence> lists facts about the
+        repository gathered independently - treat it as ground truth, not
+        as a list <Output> must quote verbatim.
+
+        Answer with a quote from <Output>, or NONE - a holistic impression is
+        not an answer. The item is not satisfied until you can point to the
+        specific words that satisfy it.
+
+        If <Evidence> names a fact serious enough that missing it would cause
+        a real mistake (a broken build or test run, a violated policy, a
+        wasted debugging session), does <Output> state it and say how to
+        actually avoid the mistake - not just gesture at the topic? Quote the
+        sentence(s) that do this, or NONE if it is missing or only gestured
+        at. If <Evidence> says no such fact exists for this repo, score 1
+        automatically.
+
+        Length, tidiness, and whether <Output> also says things it did not
+        need to say are graded elsewhere and are not your concern here. A
+        file that states the fact and rambles still scores 1 on this.
+
+        Score from 0 to 1, never above 1: 1 if you can quote the sentence,
+        0 if you answered NONE.
+      threshold: 0.5
+      metric: states_critical_fact
+
+    # Claim: "pruning stale or redundant guidance" / "whether a rule earns
+    # permanent context" - the PRECISION half. Two ways of saying something
+    # that did not earn its place: restating what one glance already gives,
+    # and padding beyond what the facts require. Same sign, so they stay one
+    # metric; the recall half above has the opposite failure mode and does not.
+    - &says_nothing_else
+      type: llm-rubric
       rubricPrompt:
         - role: system
           content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else:
@@ -105,10 +164,9 @@
       value: |
         <Output> is a candidate AGENTS.md (or a section of one, for a nested
         file) for a real repository. <Evidence> lists facts about the
-        repository gathered independently - treat it as ground truth, not
-        as a list <Output> must quote verbatim. <Obvious> lists what one
-        glance at the repo's own files already gives an agent for free -
-        restating any of it is clutter, not content.
+        repository gathered independently - treat it as ground truth.
+        <Obvious> lists what one glance at the repo's own files already gives
+        an agent for free - restating any of it is clutter, not content.
 
         Answer every item with a quote from <Output>, or NONE - a holistic
         impression is not an answer. A live failure on this exact rubric
@@ -117,35 +175,38 @@
         false against the text being judged. An item is not satisfied until
         you can point to the specific words that satisfy or violate it.
 
-        1. If <Evidence> names a fact serious enough that missing it would
-           cause a real mistake (a broken build or test run, a violated
-           policy, a wasted debugging session), does <Output> state it and
-           say how to actually avoid the mistake - not just gesture at the
-           topic? Quote the sentence(s) that do this, or NONE if it is
-           missing or only gestured at. If <Evidence> says no such fact
-           exists for this repo, score this item 1 automatically.
-        2. Does <Output> restate anything in <Obvious> (a dependency list,
+        1. Does <Output> restate anything in <Obvious> (a dependency list,
            a directory/file tour, license text, a boilerplate contribution
            template, or generic software-engineering advice not specific to
            this repo)? Quote the specific offending passage, or NONE if
            none appears. Score 1 for NONE, 0 for a quote.
-        3. Does <Output> contain any passage that is not grounded in
+        2. Does <Output> contain any passage that is not grounded in
            <Evidence> and not needed to state <Evidence>'s facts - padding
            such as a "Useful links" section, an invented checklist, restated
            ceremony, or elaboration beyond what the fact requires? Quote the
            specific offending passage, or NONE if none appears. Score 1 for
            NONE, 0 for a quote.
 
-        Score from 0 to 1, never above 1: 0.4 for the first, 0.3 for the
-        second, 0.3 for the third. Award nothing for any item where you
-        cannot produce the quote it requires (unless <Evidence> says item 1
-        doesn't apply).
-      threshold: 0.5
-      metric: discoverability_filter
+        Stating an <Evidence> fact concretely - naming the actual command,
+        flag, path, or policy, and what goes wrong without it - is never
+        padding, however specific it gets. A concrete command is the content;
+        only what surrounds it can be clutter.
 
-    # Deterministic backstop for item 3 above, computed against this case's
-    # own vars.evidence rather than a fixed word count (assertions/agentsmd.cjs
-    # comment has the full rationale for why item 3 needed one).
+        Score from 0 to 1, never above 1: 0.5 for the first, 0.5 for the
+        second. Award nothing for any item where you cannot produce the quote
+        it requires.
+      threshold: 0.5
+      metric: says_nothing_else
+
+    # Deterministic backstop for says_nothing_else's item 2, computed against
+    # this case's own vars.evidence rather than a fixed word count
+    # (assertions/agentsmd.cjs comment has the full rationale for why that
+    # item needed one). KEPT at the split, not cut: it is not at the ceiling
+    # in both arms - 4 of 36 baseline rows scored under 1.00 (0.91/0.90/0.76/
+    # 0.58) against 36 of 36 skill rows at 1.00 - it costs no judge call and
+    # no tokens, and narrowing the judge's precision item into its own metric
+    # is the worst moment to remove the only padding check that is not the
+    # judge, given the 1.0-on-a-directory-tree failure above.
     - &length_proportionate
       type: javascript
       value: file://assertions/agentsmd.cjs:lengthProportionateToEvidence
@@ -210,7 +271,8 @@
         cwd: docs
       metric: cited_facts_exist
 
-    - *discoverability_filter
+    - *states_critical_fact
+    - *says_nothing_else
     - *length_proportionate
 
     # REINSTATED: nested_not_redundant was cut here after a --repeat 3 run
@@ -305,7 +367,8 @@
         requireCitation: false
       metric: cited_facts_exist
 
-    - *discoverability_filter
+    - *states_critical_fact
+    - *says_nothing_else
     - *length_proportionate
 
 # --- New repos below: dtolnay/semver (Rust/cargo) and jqlang/jq (C/autotools),
@@ -353,7 +416,8 @@
         repo: semver
       metric: cited_facts_exist
 
-    - *discoverability_filter
+    - *states_critical_fact
+    - *says_nothing_else
     - *length_proportionate
 
 - description: nested AGENTS.md for semver/fuzz - not part of cargo test at all
@@ -404,7 +468,8 @@
         cwd: fuzz
       metric: cited_facts_exist
 
-    - *discoverability_filter
+    - *states_critical_fact
+    - *says_nothing_else
     - *length_proportionate
 
     - type: javascript
@@ -458,7 +523,8 @@
         cwd: tests
       metric: cited_facts_exist
 
-    - *discoverability_filter
+    - *states_critical_fact
+    - *says_nothing_else
     - *length_proportionate
 
     - type: javascript
@@ -507,7 +573,8 @@
         repo: jq
       metric: cited_facts_exist
 
-    - *discoverability_filter
+    - *states_critical_fact
+    - *says_nothing_else
     - *length_proportionate
 
 - description: nested AGENTS.md for jq/docs - the manual build degrades silently, not loudly
@@ -564,7 +631,8 @@
         cwd: docs
       metric: cited_facts_exist
 
-    - *discoverability_filter
+    - *states_critical_fact
+    - *says_nothing_else
     - *length_proportionate
 
     - type: javascript
@@ -610,7 +678,8 @@
         repo: zerolog
       metric: cited_facts_exist
 
-    - *discoverability_filter
+    - *states_critical_fact
+    - *says_nothing_else
     - *length_proportionate
 
 - description: nested AGENTS.md for zerolog/journald - the test file only runs on Linux
@@ -658,7 +727,8 @@
         cwd: journald
       metric: cited_facts_exist
 
-    - *discoverability_filter
+    - *states_critical_fact
+    - *says_nothing_else
     - *length_proportionate
 
     - type: javascript
@@ -711,7 +781,8 @@
         cwd: cmd/lint
       metric: cited_facts_exist
 
-    - *discoverability_filter
+    - *states_critical_fact
+    - *says_nothing_else
     - *length_proportionate
 
     - type: javascript
@@ -765,7 +836,8 @@
         cwd: benches
       metric: cited_facts_exist
 
-    - *discoverability_filter
+    - *states_critical_fact
+    - *says_nothing_else
     - *length_proportionate
 
     - type: javascript

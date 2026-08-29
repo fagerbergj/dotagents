@@ -383,7 +383,7 @@ const GO_SUBCOMMANDS = new Set([
 // tool accepts all four - against the repo's own `//go:build <name>` /
 // `// +build <name>` comments via repoContains, the only way a static checkout
 // can corroborate a build tag it does not compile. Module-boundary claims
-// ("cmd/lint is its own module") are left to discoverability_filter; a
+// ("cmd/lint is its own module") are left to states_critical_fact; a
 // static per-directory check can't tell a nested go.mod is authoritative
 // without walking the module graph, which is more machinery than this
 // grader's other checks take on for any other ecosystem either.
@@ -645,7 +645,7 @@ function nestedDoesNotRepeatRoot(output, context) {
 
 // --- proportionality guard --------------------------------------------------
 
-// Deterministic backstop for discoverability_filter's item 3 (proportionality),
+// Deterministic backstop for says_nothing_else's padding item (proportionality),
 // which a judge scored 1.0 on an output padded with a directory tree and an
 // invented "Release checklist", reasoning "length is proportionate to the
 // real signal" - false against the text it was judging. Holistic

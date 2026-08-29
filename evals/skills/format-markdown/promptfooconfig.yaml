@@ -67,53 +67,18 @@ defaultTest:
       value: file://assertions/format.cjs:noHeadingSkips
       metric: heading_hierarchy
 
-    # 3. "scannability" and "clean visual rendering" - the part no parser
-    #    settles. Five countable items, each quoted before it is scored: bands
-    #    ("one soft spot", "largely as it arrived") wandered between identical
-    #    runs. The one zero-gate left is "no document came back at all", which
-    #    is how the baseline arm most often fails.
-    - type: llm-rubric
-      value: |
-        The reader below handed over a Markdown document and asked for it back in better
-        shape. Score the document they received.
-
-        Judge the document as delivered. Do not reward or penalise how it was built, which
-        features it used, or whether it followed any particular authoring convention. Which
-        bullet character or emphasis delimiter it uses, and how its blank lines fall, are
-        graded elsewhere and are not your concern. What a reader sees is.
-
-        Answer each of the five below by quoting the part of the delivered document that
-        supports it, or answer NONE. Answer all five before scoring.
-
-        1. The longest run of unbroken prose in the delivered document is shorter than the
-           longest run in the document the reader handed over. Quote the first line of each.
-           If the document handed over held no run of prose a reader would want broken up,
-           answer N/A and count this item as satisfied.
-        2. At least one piece of content that was prose in the original is now carried by a
-           heading, list, or table. Quote it in both forms, or answer NONE if nothing moved.
-           If the original already carried its content in headings, lists, tables or code,
-           answer N/A and count this item as satisfied.
-        3. Every heading in the delivered document names what is under it, so a reader
-           choosing where to jump does not have to read the section to find out. Quote the
-           one that names its content least well.
-        4. Nothing would render broken: quote any fence, table, link definition, or inline
-           HTML that a renderer would not handle, or answer NONE - NONE satisfies this item.
-        5. It is still the same document: no section, sentence, or fact was added,
-           summarised away, or reworded into something the reader did not hand over. List
-           anything added or lost, or answer NONE - NONE satisfies this item.
-
-        Score from 0 to 1, never above 1: award 0.2 for each of the five satisfied, where
-        N/A counts as satisfied. If no document was delivered at all - advice, or a list of
-        suggested changes instead of the document - score 0 regardless of the five.
-
-        The restraint the reader is entitled to, specifically: {{rubric}}
-      threshold: 0.7
-      metric: readability
-      rubricPrompt:
-        - role: system
-          content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else: {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
-        - role: user
-          content: "<Original>\n{{document}}\n</Original>\n<Delivered>\n{{output}}\n</Delivered>\n<Rubric>\n{{rubric}}\n</Rubric>"
+    # 3. readability lives in tests/cases.yaml, on the nine cases that hand over
+    #    a messy document, not here. Its items pay for shortening prose runs and
+    #    for moving prose into headings and lists - which is precisely what the
+    #    three "already clean" controls are right NOT to do, and what
+    #    unchanged_when_clean fines them for doing. Graded over all twelve it
+    #    docked the skill arm 0.40 on the fenced-commands control for leaving a
+    #    prose run it should have left alone, in the same row where
+    #    unchanged_when_clean scored the identical behaviour 1.00. The items
+    #    carry N/A escape hatches and the judge did not reliably reach for them,
+    #    so the fix is scope, not wording: readability and unchanged_when_clean
+    #    now partition the suite instead of grading the same behaviour with
+    #    opposite signs.
 
 tests:
   - file://tests/*.yaml

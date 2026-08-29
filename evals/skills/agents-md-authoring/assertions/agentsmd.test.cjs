@@ -358,3 +358,61 @@ assert.equal(goPass('run `go test --tags=made_up_tag ./...`'), false, 'the doubl
 assert.equal(goPass('run `go build -tags=binary_log,made_up_tag ./...`'), false, 'a comma list in the joined form checks every tag');
 
 console.log('ok   checkGo / checksForSpan go (synthetic Go fixture)');
+
+// --- one property per metric -------------------------------------------------
+// The recall half (is the load-bearing fact stated) and the precision half (is
+// anything else stated) move independently, so a single weighted rubric turned
+// 0.6 of a row all-or-nothing on one offending sentence and pulled against
+// cited_facts_exist. Nothing else in the repo notices them recombining, and the
+// aliases have to be resolved before an assertion list can be read at all -
+// PyYAML, not a regex.
+{
+  const { execFileSync } = require('node:child_process');
+  const loadYaml = (file) => JSON.parse(execFileSync('python3', ['-c',
+    'import json,sys,yaml; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)',
+    path.join(__dirname, '..', file)], { encoding: 'utf8' }));
+  const cases = loadYaml('tests/cases.yaml');
+  const graders = cases.flatMap((c) => c.assert || []);
+  const ridesEvery = (metric) => cases.filter((c) => (c.assert || []).some((a) => a.metric === metric)).length;
+
+  assert.equal(graders.filter((g) => g.metric === 'discoverability_filter').length, 0,
+    'discoverability_filter scored recall and precision on one 0.4/0.3/0.3 scale; it is split, not renamed');
+  for (const metric of ['states_critical_fact', 'says_nothing_else', 'cited_facts_exist', 'length_proportionate']) {
+    assert.equal(ridesEvery(metric), cases.length, `${metric} rides ${ridesEvery(metric)} of ${cases.length} cases`);
+  }
+
+  const byMetric = (m) => graders.find((g) => g.metric === m);
+  const recall = byMetric('states_critical_fact');
+  const precision = byMetric('says_nothing_else');
+
+  // The split is only real if the recall rubric cannot see the clutter list.
+  const recallText = recall.value + JSON.stringify(recall.rubricPrompt);
+  assert.doesNotMatch(recallText, /obvious/i,
+    'states_critical_fact must not be handed <Obvious> - that is the precision half\'s ground truth');
+  assert.match(recall.value, /graded elsewhere and are not your concern/,
+    'states_critical_fact must tell the judge not to mark down for saying more than the minimum');
+
+  // ...and the precision rubric must not re-award the fact the recall half scores,
+  // nor fine the concrete citation cited_facts_exist pays for.
+  assert.doesNotMatch(precision.value, /serious enough that missing it/,
+    'says_nothing_else must not also score whether the load-bearing fact is present');
+  assert.match(precision.value, /is never\s+padding/,
+    'says_nothing_else must exempt concrete commands, or it fines what cited_facts_exist requires');
+
+  // A custom rubricPrompt replaces promptfoo's whole grading prompt. Without the
+  // system half the judge answers in prose and every row scores 0 as "Could not
+  // extract JSON" - indistinguishable from a genuine zero.
+  const vars = new Set([...Object.keys(cases[0].vars), 'output', 'rubric']);
+  for (const g of graders) {
+    if (!g.rubricPrompt) continue;
+    const system = g.rubricPrompt.find((m) => m.role === 'system');
+    assert.ok(system && /reason.+pass.+score/s.test(system.content),
+      `${g.metric}: custom rubricPrompt drops the JSON-contract system message`);
+    for (const m of g.rubricPrompt) {
+      for (const [, name] of m.content.matchAll(/\{\{\s*(\w+)\s*\}\}/g)) {
+        assert.ok(vars.has(name), `${g.metric}: rubricPrompt interpolates undefined var {{${name}}}`);
+      }
+    }
+  }
+  console.log(`ok   metric split (${cases.length} cases, ${new Set(graders.map((g) => g.metric)).size} metrics)`);
+}

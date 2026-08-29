@@ -212,4 +212,40 @@ if (process.env.SKIP_NETWORK_TESTS) {
   ok('name need not match the harness directory', g.validatesWithSkillsRef(g.normalizeToFiles(wrap({ 'SKILL.md': mismatchNamed }))));
 }
 
+// --- which graders ride the negative controls --------------------------------
+// skill_validates and spec_budget_and_refs both demand a valid, complete,
+// cross-referenced package. On a control whose right answer is no package (or a
+// single short SKILL.md), they score correct behaviour 0 while control_quality
+// scores it 1 - the same behaviour with opposite signs. Nothing else would
+// notice them being aliased back on, and the aliases have to be resolved before
+// an assertion list can be read at all, so PyYAML rather than a regex.
+{
+  const { execFileSync } = require('node:child_process');
+  const path = require('node:path');
+  const cases = JSON.parse(execFileSync('python3', ['-c',
+    'import json,sys,yaml; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)',
+    path.join(__dirname, '..', 'tests', 'cases.yaml')], { encoding: 'utf8' }));
+
+  const controls = cases.filter((c) => c.description.startsWith('negative control'));
+  assert.strictEqual(controls.length, 3, 'expected three negative controls');
+  const PACKAGE_GRADERS = ['skill_validates', 'spec_budget_and_refs', 'skill_quality'];
+  for (const c of controls) {
+    const metrics = (c.assert || []).map((a) => a.metric);
+    assert.ok(metrics.includes('control_quality'), `${c.description}: no control_quality`);
+    for (const m of PACKAGE_GRADERS) {
+      assert.ok(!metrics.includes(m),
+        `${c.description}: ${m} demands a full package where the right answer is not to build one`);
+    }
+  }
+  // The other side of the partition: cutting them from a control must not cut
+  // them from the cases they were written for.
+  for (const c of cases.filter((c) => !c.description.startsWith('negative control'))) {
+    const metrics = (c.assert || []).map((a) => a.metric);
+    for (const m of PACKAGE_GRADERS) {
+      assert.ok(metrics.includes(m), `${c.description}: lost ${m}`);
+    }
+  }
+  console.log(`ok   control partition (${controls.length} controls on control_quality alone, ${cases.length - controls.length} package cases)`);
+}
+
 console.log('skillauth assertions: ok');
