@@ -5,6 +5,7 @@
 // checks that schema cannot express - computed against the case's own input -
 // live here.
 const fs = require('node:fs');
+const { fenceBlocks } = require('../../../lib/strip-reasoning.js');
 
 function result(pass, reason) {
   return { pass, score: pass ? 1 : 0, reason };
@@ -14,8 +15,12 @@ function config(context) {
   return context?.config || {};
 }
 
+// All of them, not the first: source() picks the block by its content, so an
+// example payload emitted ahead of the card must not shadow it. Shared with
+// every other suite's extractor - a non-greedy regex here would end a card at
+// a fence nested inside it (evals/AGENTS.md).
 function fences(output) {
-  return [...String(output).matchAll(/```(?:json)?[^\S\r\n]*\r?\n([\s\S]*?)```/gi)].map((m) => m[1].trim());
+  return fenceBlocks(String(output), /^(?:json)?$/i).map((block) => block.body.trim());
 }
 
 // An agent card is always JSON (never YAML) per the A2A spec, so unlike

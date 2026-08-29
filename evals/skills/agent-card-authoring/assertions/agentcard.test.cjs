@@ -146,4 +146,21 @@ const oauthCardKeyOnly = { ...card, securitySchemes: { oauth2AuthCode: { oauthSe
   assert.throws(() => g.securitySchemeDeclares(JSON.stringify(oauthCard), { config: {} }), /needs config.family/);
 }
 
+{
+  // Fence extraction is lib/strip-reasoning.js's fenceBlocks. Two properties
+  // source() depends on: it sees EVERY json block, so an example payload
+  // emitted first cannot shadow the card, and a card inside a wrapper is not
+  // cut short at a fence nested in it.
+  const example = '```json\n{"jsonrpc": "2.0", "method": "message/send"}\n```\n\n';
+  assert.strictEqual(JSON.parse(g.source(example + wrap(card))).name, card.name,
+    'an example payload ahead of the card shadowed it');
+  assert.strictEqual(JSON.parse(g.source('````markdown\n' + wrap(card) + '\n````')).name, card.name,
+    'a wrapped card was truncated');
+  // A skill description that quotes a fence is ordinary for an agent card, and
+  // it is not a fence: a closing marker only counts at the start of a line.
+  const quoting = { ...card, skills: [{ id: 's', name: 's', description: 'Replies with a ```json payload', tags: ['x'] }] };
+  assert.strictEqual(JSON.parse(g.source(wrap(quoting))).skills[0].description, quoting.skills[0].description,
+    'a fence quoted inside the card cut it short');
+}
+
 console.log('agentcard.cjs: all assertions passed');

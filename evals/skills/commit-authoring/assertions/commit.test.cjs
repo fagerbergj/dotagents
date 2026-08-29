@@ -178,6 +178,20 @@ async function main() {
     assert.ok(!cases.some((c) => (c.assert || []).some((a) => a.metric === n)), `${n} is defined in defaultTest and again on a case`);
   }
 
+  // Fence extraction is lib/strip-reasoning.js's fenceBlocks, which hands back
+  // the info string so a header glued to the fence still reaches the parser.
+  assert.deepEqual(checks.blocks('```refactor(log): drop the duplicate guard\n\nbody\n```'),
+    ['refactor(log): drop the duplicate guard\n\nbody'],
+    'a header glued to the fence was eaten as a language tag');
+  assert.deepEqual(checks.blocks('```sh\ngit log\n```'), ['git log'],
+    'a bare language tag leaked into the message');
+  // An unclosed fence yields the message, not the fence line. The old fallback
+  // handed the parser the whole answer, whose first line was "```", and scored
+  // a conforming message 0 for the missing backticks.
+  assert.deepEqual(checks.blocks('```\nfix(api): reject empty ids\n\nbody\n'),
+    ['fix(api): reject empty ids\n\nbody'],
+    'an unclosed fence lost the message');
+
   console.log('commit assertions: ok');
 }
 

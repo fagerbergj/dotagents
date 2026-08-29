@@ -3,6 +3,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
+const { fenceBlocks } = require('../../../lib/strip-reasoning.js');
 
 // Pinned so the oracle cannot drift under the suite; the package has no
 // --version flag, so this is the published version verified against fixtures.
@@ -130,8 +131,14 @@ function result(pass, reason) {
   return { pass, score: pass ? 1 : 0, reason };
 }
 
+// Every ```mermaid block, because usesDiagramType below quantifies over all of
+// them. Shared with every other suite's extractor, which also puts this in step
+// with mermaid-lint: both now require the opener at the start of a line (a
+// backtick run glued to the end of a prose sentence is inline code, not a
+// fence), and both read an unclosed fence as running to the end of the answer
+// rather than as no diagram at all.
 function blocks(output) {
-  return [...String(output).matchAll(/```mermaid[^\S\r\n]*\r?\n([\s\S]*?)```/gi)].map((match) => match[1].trim());
+  return fenceBlocks(String(output), /^mermaid$/i).map((block) => block.body.trim());
 }
 
 // The type is the first line that is not YAML front matter, an `%%{init}%%`

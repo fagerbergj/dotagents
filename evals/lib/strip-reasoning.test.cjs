@@ -4,7 +4,7 @@
 // survive a wrapped answer that contains code fences of its own (a non-greedy
 // regex cut at the inner fence and the grader scored the fragment).
 const assert = require('node:assert');
-const { stripAndUnwrap, stripReasoning } = require('./strip-reasoning.js');
+const { stripAndUnwrap, stripReasoning, fenceBlocks, unwrapFence } = require('./strip-reasoning.js');
 
 const wrap = (lang, body) => '```' + lang + '\n' + body + '\n```';
 
@@ -72,4 +72,52 @@ assert.strictEqual(stripReasoning(doc), doc, 'a clean answer was rewritten');
 // The wrapper still comes off after a leak, without losing the inner block.
 assert.strictEqual(stripAndUnwrap('Let me draft that.\n\n' + wrap('markdown', nested)), nested, 'leak plus wrapper');
 
-console.log('ok   strip-reasoning (nested fence, two variants, unterminated, no fence)');
+// --- fenceBlocks: every match, which unwrapFence returns the first of --------
+// Four suites pick their block by its content, so they need all of them.
+
+const two = wrap('json', '{"a": 1}') + '\n\ntext\n\n' + wrap('json', '{"b": 2}');
+assert.deepStrictEqual(
+  fenceBlocks(two, /^(?:json)?$/i).map((b) => b.body),
+  ['{"a": 1}', '{"b": 2}'],
+  'the second block was lost',
+);
+// Scanning resumes AFTER the close, so a closed block is never re-entered and
+// its own body never yields a second block. (An empty info string is a legal
+// opener for most callers, so this uses one that is not, to isolate the point.)
+assert.deepStrictEqual(
+  fenceBlocks(wrap('json', '{"a": 1}\n```sh\nls\n```') + '\n\n' + wrap('json', '{"c": 3}'), /^json$/i)
+    .map((b) => b.body),
+  ['{"a": 1}\n```sh\nls\n```', '{"c": 3}'],
+  'a nested fence split the first block or hid the second',
+);
+// Depth, not parity: the nested block belongs to the body, not to the list.
+assert.deepStrictEqual(
+  fenceBlocks(wrap('markdown', nested), /^markdown$/).map((b) => b.body),
+  [nested],
+  'a nested code block truncated or split the block',
+);
+// The info string comes back, because commit-authoring parses it as content.
+assert.deepStrictEqual(
+  fenceBlocks('```refactor: use the upstream helper\n\nbody\n```', /^/),
+  [{ info: 'refactor: use the upstream helper', body: '\nbody' }],
+  'the info string was dropped',
+);
+// A run of backticks glued to the end of a sentence is inline code, not a
+// fence, which is what mermaid-lint and every other markdown reader thinks.
+assert.deepStrictEqual(
+  fenceBlocks('Here it is again.```json\n{"a": 1}\n```', /^json$/i),
+  [],
+  'a mid-line backtick run opened a block',
+);
+// Unterminated: the rest of the answer, and nothing after it to find.
+assert.deepStrictEqual(
+  fenceBlocks('```json\n{"a": 1}', /^(?:json)?$/i).map((b) => b.body),
+  ['{"a": 1}'],
+  'an unterminated block returned the wrong body',
+);
+assert.deepStrictEqual(fenceBlocks('no fences here', /^/), [], 'found a block in plain prose');
+// unwrapFence is exactly the first of these, and null when there are none.
+assert.strictEqual(unwrapFence(two, /^json$/i), '{"a": 1}', 'unwrapFence drifted from fenceBlocks[0]');
+assert.strictEqual(unwrapFence(two, /^rust$/i), null, 'unwrapFence invented a block');
+
+console.log('ok   strip-reasoning (nested fence, two variants, unterminated, no fence, fenceBlocks)');
