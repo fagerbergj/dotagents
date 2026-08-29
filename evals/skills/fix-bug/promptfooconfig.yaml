@@ -82,9 +82,24 @@ defaultTest:
     # from scratch costs more of them than reviewing a diff does. No `cost`
     # assertion: this gateway declares no per-token price, so it would read
     # zero and pass trivially.
+    #
+    # Deliberately UNNAMED - a run-shape guard, not a scored metric, which is
+    # what check-suite.py's NO_METRIC_NEEDED already assumes latency to be.
+    # Named, it charged slowness twice. A row that hits this 300s wall is a row
+    # the completion cap truncated mid-sentence, and the quality graders then
+    # fine that truncation a second time. Measured on
+    # results/fix-bug@1.0.1.json: no-skill 7/60 rows at the ceiling scored
+    # root_cause_depth 0.47 against 0.85 for the rest, proportionate_fix 0.14
+    # against 0.76, regression_proof 0.00 against 0.28; skill-current 15/60 at
+    # the ceiling scored 0.67/0.91, 0.47/0.88 and 0.47/0.80. The skill arm
+    # spends ~1.22M tokens on a ceiling row against ~513k on the rest and hits
+    # the wall at 2.1x the baseline's rate, so the -0.13 `latency` delta was
+    # the same truncation the other four metrics had already priced in.
+    # Nothing is lost from view: report.js prints `latency (s avg)` and
+    # rollup.js records `latency_s` and `latency max (s)` straight off
+    # latencyMs, with no assertion involved.
     - type: latency
       threshold: 300000
-      metric: latency
 
 tests:
   - file://tests/*.yaml

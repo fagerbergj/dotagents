@@ -81,6 +81,14 @@ defaultTest:
     #    and so is a false claim about a file that does exist; both are left to
     #    `restraint`, which fines them without this one paying for them. This
     #    suite's strongest grader, computed against input rather than judged.
+    #
+    #    Not a ceiling metric, despite reading 0.97/0.97 in the published table.
+    #    Identical arm MEANS are not sd=0: on results/pr-authoring@1.0.2.json it
+    #    fires on 2 of 60 rows, one in each arm (no-skill idx7 "mount/mount.md",
+    #    skill-current idx23 "1/8th"), so its within-arm sd is 0.183. Same for
+    #    `proportionality` in tests/cases.yaml - 3 of 60 rows below 1.00, all in
+    #    the skill arm. Read the row distribution before cutting either as
+    #    unmoving; the means coincide, the rows do not.
     - type: javascript
       value: file://assertions/pr.cjs:noFabricatedIdentifiers
       metric: no_invented_identifiers
@@ -95,9 +103,16 @@ defaultTest:
     #    of that. 300s, not the 180s the pre-fixture suite used: every case now
     #    hands both arms a real repository tree over `read_source`, which is
     #    the same overhead review-code's suite budgets 300s for.
+    #
+    #    Unnamed, so it guards without being graded. As `latency_ceiling` it
+    #    reported 1.00/1.00 on all 60 rows of results/pr-authoring@1.0.2.json -
+    #    a column that cannot move, taking a fifth of a five-metric table. The
+    #    guard itself is worth keeping: it costs no call, and the day it does
+    #    trip it will trip on a truncated row that `coverage` and `restraint`
+    #    are already failing, which is exactly the double charge fix-bug paid
+    #    for naming its latency metric.
     - type: latency
       threshold: 300000
-      metric: latency_ceiling
 
 tests:
   - file://tests/*.yaml

@@ -106,22 +106,65 @@
     # three graded properties reported 0.00 (idx 6, skill-current: "1.0 - 1.36 =
     # -0.36, floored at 0.0"), indistinguishable from one that satisfied none.
     # The two halves are both real; separated, neither can cancel the other.
+    #
+    # Uncapped and loosely scoped, this then saturated into a length penalty:
+    # four listed items was an automatic zero, and 26 of 48 rows of
+    # results/rfc-authoring@1.0.1.json sat at 0 with judge arithmetic reading
+    # "1.00 - 0.25 x 22 = -4.50, floored", "- 20 items", "- 15 items". A design
+    # proposal proposes specifics and a longer one proposes more, so the number
+    # measured length, not grounding. Two changes, both needed - the cap alone
+    # would still count the wrong things, and the scope alone would still let a
+    # long document out-fabricate a short one on volume:
+    #
+    # 1. The count is capped at 2. Not made binary like commit-authoring's
+    #    `no_invented_claims`: a commit message is three lines, so one invention
+    #    is the whole artifact, but a 2000-word proposal that invents one figure
+    #    is not the same object as one that invents freely, and binary would
+    #    have moved 32 of these 48 rows to 0 (mean 0.41 -> 0.33), deepening the
+    #    saturation it was meant to fix. `threshold: 1` already makes the
+    #    PASS/FAIL binary - any invention fails. The score's remaining job is to
+    #    say none / one / more than one, which is all a judge can count
+    #    reliably, and it stops being a ruler.
+    # 2. What counts as a specific is narrowed to a claim about the engineer's
+    #    own systems. The stored rows were fining ordinary vocabulary (`TLS`,
+    #    `IAM`, `VPC`, `CloudWatch`), the document's own proposed schema fields
+    #    (`event_id`, `timestamp`, `producer`, `data`), its section headings
+    #    (`Rationale and alternatives`, `Unresolved questions`), and target
+    #    dates the old carve-out already exempted but the judge counted anyway.
+    #    The carve-outs are now enumerated rather than described.
     - type: llm-rubric
       value: |
         An engineer described this situation to a colleague - "{{task}}" - and received
         the document below. Score from 0 to 1, never above 1.
 
-        Every system, team, person, version, figure and identifier the document presents
-        as established fact must appear in what the engineer said. List each one that does
-        not, quoting it, or answer NONE. A specific explicitly labelled an assumption, an
-        estimate, a placeholder or an open question does not go on the list; one presented
-        as fact does. A figure the document proposes as a target, a deadline to agree, or
-        an acceptance threshold is not an invention either - it is being set, not claimed.
-        Nor is a published standard, specification or process the document cites as an
-        authority: that is a citation, not a claim about the engineer's own systems.
+        An invented specific is a figure or identifier the document asserts as an
+        EXISTING FACT about the engineer's own systems, teams, people, vendors,
+        incidents or history, where what the engineer said supports no such fact. List
+        each one, quoting it, or answer NONE.
 
-        Score from 0 to 1, never above 1: start at 1.00 and subtract 0.25 for each
-        unsourced specific on your list, floored at 0. State the list and the arithmetic.
+        None of the following is an invented specific, and none of them goes on your
+        list, however many of them the document contains:
+
+        - Ordinary technical vocabulary, and the names of widely known protocols,
+          formats, services, tools and libraries - TLS, OIDC, IAM, VPC, CloudWatch,
+          Kafka, JSON. Naming a technology is not a claim that the engineer runs it;
+          only asserting that they already do is.
+        - Anything the document is itself PROPOSING rather than reporting: a field name
+          in a schema it defines, a phase or step in a plan it sets out, a threshold, an
+          acceptance criterion, a target date, a version to ship, a deadline to agree, a
+          label it introduces for something the engineer described unnamed. These are
+          being set, not claimed.
+        - The document's own section headings and structural labels.
+        - A published standard, specification or process cited as an authority.
+        - A specific the document explicitly marks as an assumption, an estimate, a
+          placeholder, an example, or an open question.
+
+        Score from 0 to 1, never above 1: count the items on your list, cap that count at
+        2, and subtract 0.25 for each counted item from a starting 1.00 - so 1.00 for an
+        empty list, 0.75 for one item, 0.50 for two or more. A long document is not worse
+        grounded than a short one for proposing more; the cap is there so this score
+        cannot become a measure of length. State the list, the capped count, and the
+        arithmetic.
 
         Judge the document as delivered. Do not reward or penalise its length, its
         headings, which sections it contains, or how well it argues - a document that is

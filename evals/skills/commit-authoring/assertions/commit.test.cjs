@@ -90,7 +90,7 @@ async function main() {
   const load = (f) => JSON.parse(execFileSync('python3', ['-c', 'import json,sys,yaml;print(json.dumps(yaml.safe_load(open(sys.argv[1]))))', path.join(suite, f)], { encoding: 'utf8' }));
   const cfg = load('promptfooconfig.yaml');
   const cases = load('tests/cases.yaml');
-  const defaultMetricNames = new Set(cfg.defaultTest.assert.map((a) => a.metric));
+  const defaultMetricNames = new Set(cfg.defaultTest.assert.map((a) => a.metric).filter(Boolean));
   const rubrics = cfg.defaultTest.assert.filter((a) => a.type === 'llm-rubric');
   const byMetric = Object.fromEntries(rubrics.map((a) => [a.metric, a]));
   assert.deepEqual(
@@ -161,6 +161,17 @@ async function main() {
   assert.ok(mixed.length >= 4, `splits_mixed_change rides on only ${mixed.length} cases`);
   assert.ok(defaultMetricNames.has('no_invented_claims'),
     'no_invented_claims runs on every case, the mixed ones included - which is why the exemption is needed');
+
+  // The latency assertion stays UNNAMED. Named, it is a graded column beside
+  // the quality metrics - and a message slow enough to trip 120s is one the
+  // completion cap cut off, which why_quality and conventional_header already
+  // fine. fix-bug paid that double charge on 22 of 120 rows; this suite never
+  // tripped it at all, so as `latency_overhead` it was a column that could only
+  // ever read 1.00/1.00. report.js prints the timing either way.
+  for (const a of [...cfg.defaultTest.assert, ...cases.flatMap((c) => c.assert || [])]) {
+    assert.ok(!(a && a.type === 'latency' && a.metric),
+      `latency carries metric "${a && a.metric}" - it must stay an unnamed run-shape guard, not a graded column`);
+  }
 
   // No metric is scored in two places at once.
   for (const n of defaultMetricNames) {
