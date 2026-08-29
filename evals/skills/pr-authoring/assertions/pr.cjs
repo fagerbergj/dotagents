@@ -1,3 +1,7 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const { specs, paths } = require('../../../lib/fixtures.js');
+
 // Two graders that need real computation. Everything else a promptfoo native
 // assertion already does (llm-rubric for judgement, latency for the overhead of
 // loading the skill at all).
@@ -44,9 +48,50 @@ const PASCAL = /^[A-Z][a-z0-9]+[A-Z]\w*$/;
 // no business being described as touching it.
 const TOOLCHAIN = new Set(['node_modules']);
 
-// `remove/delete` and `read/written` are prose, not paths: a slash form only
-// counts when some segment carries an extension, a dash, or an underscore.
-const PROSE_SLASH = /^[a-z]+(?:\/[a-z]+)+$/;
+// `remove/delete`, `Normal/Locked`, `PageScrollUp/Down`, `up/down/to-bottom`,
+// `/absolute/path/to/haystack`: a slash form joining plain words is prose or an
+// illustrative placeholder, whatever its capitalisation and however many
+// hyphens it carries. It only counts as a path when some segment carries an
+// extension, a digit, an underscore, or a dot. Six of the seven zeros this
+// grader scored on the stored run were this: one capital or one hyphen turned
+// an ordinary English list into a "fabricated path".
+//
+// The ceiling that buys: a hyphenated extensionless real path (`cmd/pi-acp/run`)
+// invented out of thin air now reads as prose. Prose lists are common in these
+// descriptions and that shape is not; penalising accurate specificity is the
+// defect that got develop-feature's noInventedCitations cut.
+const proseSlash = (span) => span.includes('/')
+  && span.replace(/^\//, '').split('/').every((seg) => /^[A-Za-z]+(?:-[A-Za-z]+)*$/.test(seg));
+
+// A file that exists in the tree BOTH arms were handed over `read_source` is
+// not invented - the author read it. `celmatcher_test.go`, a real neighbouring
+// test file, scored a zero on the stored run for being outside the diff.
+// Paths only, never file contents: a description names files, and putting a
+// whole repository's identifiers in the haystack would pass any symbol at all.
+// Memoised per process because the walk repeats across every row of a fixture;
+// the listing is derived from a read-only checkout, so it cannot leak between
+// arms. Missing cache (a test run before fetch-fixtures) degrades to the diff.
+const TREES = new Map();
+function treeNames(dir) {
+  const out = [];
+  const walk = (d, rel) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const next = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(path.join(d, e.name), next);
+      else out.push(next);
+    }
+  };
+  try { walk(dir, ''); } catch { return ''; }
+  return out.join('\n');
+}
+
+function fixtureTree(name) {
+  if (!TREES.has(name)) {
+    const spec = specs(path.resolve(__dirname, '..')).find((f) => f.name === name);
+    TREES.set(name, spec ? treeNames(paths(spec).tree) : '');
+  }
+  return TREES.get(name);
+}
 
 // Fabrication is this skill's real failure mode: a description that invents a
 // file, function, or flag the diff never touched reads fluently and sends the
@@ -59,10 +104,16 @@ const PROSE_SLASH = /^[a-z]+(?:\/[a-z]+)+$/;
 // structurally invisible here and is left to the judges. Links are stripped
 // before extraction rather than checked - a changelog URL is an invitation to
 // go read it, not an assertion about this repository - so a bogus link passes.
+//
+// It stays all-or-nothing. Naming a file, symbol, or flag that is in neither
+// the change nor the tree is one defect with one consequence - a reviewer sent
+// hunting for something that does not exist - and grading it by count would say
+// two fabrications are only twice as bad as one. What made 0-or-1 dangerous was
+// the extractor firing on prose; that is what the two rules above fix.
 function noFabricatedIdentifiers(output, context) {
   const vars = context?.vars || {};
   const allow = config(context).allow || [];
-  const haystack = `${vars.diff || ''}\n${vars.note || ''}\n${allow.join('\n')}`;
+  const haystack = `${vars.diff || ''}\n${vars.note || ''}\n${allow.join('\n')}\n${fixtureTree(vars.fixture)}`;
   const text = String(output).replace(/\[[^\]\n]*\]\([^)\s]*\)/g, ' ').replace(/\bhttps?:\/\/\S+/g, ' ');
 
   // `signalURL()` and signalURL are the same claim; the diff only ever shows
@@ -75,7 +126,7 @@ function noFabricatedIdentifiers(output, context) {
 
   const suspect = (span, backticked) => /[A-Za-z]/.test(span)
     && !TOOLCHAIN.has(span)
-    && !PROSE_SLASH.test(span)
+    && !proseSlash(span)
     && (IDENTIFIER.test(span) || (backticked && PASCAL.test(span)));
 
   const invented = [
@@ -84,8 +135,8 @@ function noFabricatedIdentifiers(output, context) {
   ].filter((span) => !haystack.includes(span));
 
   return invented.length
-    ? { pass: false, score: 0, reason: `Names not present in the diff or the author's note: ${[...new Set(invented)].slice(0, 6).join(', ')}.` }
-    : { pass: true, score: 1, reason: 'Every file, path, and identifier named in the description appears in the diff.' };
+    ? { pass: false, score: 0, reason: `Names present in neither the diff, the author's note, nor the tree: ${[...new Set(invented)].slice(0, 6).join(', ')}.` }
+    : { pass: true, score: 1, reason: 'Every file, path, and identifier named in the description appears in the change or the tree it lands in.' };
 }
 
-module.exports = { noFabricatedIdentifiers, proportionateLength };
+module.exports = { noFabricatedIdentifiers, proportionateLength, fixtureTree };

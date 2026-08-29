@@ -72,26 +72,33 @@
            substance somewhere - paraphrase is fine, exact wording is not
            required - or MISSING if it does not. Call the number marked
            COVERED C.
-        3. Compare <Output>'s overall length against <AuthorDescription>'s
-           own: write SHORTER, COMPARABLE, or LONGER.
-        4. Compute base = C / P.
-        5. If step 3 was LONGER, the final score is base * 0.85: spending more
-           words than the author did to cover the same or less ground is a
-           defect, not a neutral choice - this is the suite's own house
-           calibration, not conformance to any published standard. Otherwise
-           (SHORTER or COMPARABLE) the final score is base, unchanged:
-           matching or beating the author's length earns no separate bonus,
-           only the absence of this penalty.
+        3. Compute C / P.
 
-        Score from 0 to 1, never above 1, equal to the number computed in step 5.
+        Length is not scored here in any form. It belongs to `proportionality`,
+        which measures the description against a stated per-case word ceiling;
+        charging it again against the author's own word count would fine the
+        same words twice, and would fine covering more of the author's points -
+        which is the only thing this criterion is for.
+
+        Score from 0 to 1, never above 1, equal to C / P.
       threshold: 0.6
       metric: coverage
 
     - &restraint
       type: llm-rubric
-      # Step 2 marks each claim against the diff or the note, so the judge
-      # needs both - without this it sees neither and every claim collapses
-      # to NEITHER.
+      # The property: a claim a description makes has to be backed by something.
+      # Source, fetched: the kernel's submitting-patches - "If you claim
+      # improvements in performance, memory consumption, stack footprint, or
+      # binary size, include numbers that back them up."
+      # (https://www.kernel.org/doc/html/latest/process/submitting-patches.html)
+      #
+      # Step 2 marks each claim against the diff, the note, or the author's own
+      # description, so the judge needs all three - without them it sees nothing
+      # and every claim collapses to NEITHER. <AuthorDescription> is here for one
+      # reason: `coverage` PAYS for conveying the author's points, and those
+      # points live nowhere in the diff or the one-line note, so without it the
+      # same sentence earned +coverage and -restraint. A claim the real author
+      # independently made is not an invention.
       rubricPrompt:
         - role: system
           content: |
@@ -103,42 +110,62 @@
           content: |
             <AuthorNote>{{note}}</AuthorNote>
             <Diff>{{diff}}</Diff>
+            <AuthorDescription>{{author_description}}</AuthorDescription>
             <Output>{{output}}</Output>
             <Rubric>{{rubric}}</Rubric>
       value: |
-        The developer's own note is in <AuthorNote> above and the change
-        itself is in <Diff>. Judge <Output> as delivered: do not reward or
+        The developer's own note is in <AuthorNote> above, the change itself is
+        in <Diff>, and the description this change's real author wrote is in
+        <AuthorDescription>. Judge <Output> as delivered: do not reward or
         penalise how it was built or which authoring convention it followed.
 
         Work through these in order, then score.
 
-        1. List every claim <Output> makes, one per line, each quoted. A claim
-           is any statement about what the change does, why it was made, what
-           it affects, what was run, or what the reader should expect. The
-           title is always at least one claim. Write the total as T.
+        1. List every claim <Output> makes that ASSERTS A CHECKABLE FACT, one
+           per line, each quoted. A checkable fact is one a reader could
+           confirm or refute against the code or the world: what the change
+           does, what it affects, what was run and what came back, a
+           measurement, or a named file, symbol, or flag. Framing, restatement,
+           and a reading of the diff that the diff itself bears out are not
+           separate claims - they assert nothing beyond what is already in
+           front of the reviewer. Skip the issue-reference slot in the title
+           line - "(closes #<n>)", "#???", "Fixes #NNN" - a placeholder for a
+           number the author fills in against the tracker is a template slot,
+           not an assertion about the change. That exemption is this suite's
+           own house position, not conformance to any published standard;
+           Google's eng-practices asks only that a description "include
+           background information such as bug numbers" where relevant, and
+           says nothing about an unfilled one
+           (https://google.github.io/eng-practices/review/developer/cl-descriptions.html).
         2. Against each quoted claim write exactly one of:
-             DIFF    - the diff shows it
+             DIFF    - the diff shows it, or it follows directly from what the
+                       diff shows
              NOTE    - the developer's note says it
-             NEITHER - neither the diff nor the note contains it. An invented
-                       risk, a design rationale this change does not have, a
-                       test command or a test result the author cannot have
-                       run, or a file, symbol, or identifier absent from the
-                       change all count as NEITHER.
+             AUTHOR  - <AuthorDescription> says it
+             NEITHER - none of those three supports it. An invented risk, a
+                       design rationale this change does not have, a test
+                       command, a test result, or a measurement the author
+                       cannot have run, or a file, symbol, or identifier absent
+                       from the change all count as NEITHER.
         3. Write the number of claims marked NEITHER as U.
 
         Score from 0 to 1, never above 1: max(0, 1 - U / 4). Each unsupported
-        claim costs a fixed 0.25 regardless of how many total claims the
-        description makes. A ratio score - (T - U) / T - lets padding dilute
-        an invention's cost by inflating T, which rewards verbosity; this
-        fixed cost is this suite's own house calibration, chosen so one slip
-        is tolerated and two are not, not conformance to any published
-        standard: no widely cited guidance on change descriptions specifies a
-        tolerance for unsupported claims.
+        claim costs a fixed 0.25 regardless of how many claims the description
+        makes in total. A ratio score - supported claims over total claims -
+        lets padding dilute an invention's cost by inflating the denominator,
+        which rewards verbosity; this fixed cost is this suite's own house
+        calibration, chosen so one slip is tolerated and two are not, not
+        conformance to any published standard:
+        no widely cited guidance on change descriptions specifies a tolerance
+        for unsupported claims. What keeps the fixed cost from fining breadth
+        is step 1: a true statement about the change lands DIFF, NOTE, or
+        AUTHOR and adds nothing to U, so only inventions accumulate.
 
-        Headings, sections, and formatting are not scored. Overall length is
-        not scored here either - that is `coverage`'s job - so a two-sentence
-        answer and a five-paragraph answer face exactly the same arithmetic
-        for this criterion alone, and brevity is never itself a deduction.
+        Headings, sections, and formatting are not scored. Length is not scored
+        here at all - that is `proportionality`'s job, against a stated word
+        ceiling - so a two-sentence answer and a five-paragraph answer face
+        exactly the same arithmetic for this criterion alone, and neither
+        brevity nor breadth is itself a deduction.
       threshold: 0.7
       metric: restraint
 

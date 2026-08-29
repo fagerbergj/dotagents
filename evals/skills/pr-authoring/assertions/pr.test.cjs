@@ -1,5 +1,21 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const checks = require('./pr.cjs');
+
+// Tripwires on the two judged rubrics, which no unit test can otherwise reach:
+// one criterion, one property, and no two criteria scoring one behaviour with
+// opposite signs. A text scan rather than a parse - the suite ships no YAML
+// parser and this is not worth a dependency; it fails if either fix is reverted.
+const cases = fs.readFileSync(path.join(__dirname, '..', 'tests', 'cases.yaml'), 'utf8');
+// `coverage` must not read length: `proportionality` owns it, against a stated
+// per-case ceiling rather than the author's own word count.
+assert.equal(/SHORTER, COMPARABLE, or LONGER|\* 0\.85/.test(cases), false, 'coverage is scoring length again');
+// Both judges must see the author's description, or the points `coverage` pays
+// for are unsupported inventions to `restraint`.
+assert.equal((cases.match(/{{author_description}}/g) || []).length, 2, 'restraint cannot see what coverage rewards');
+// Only `proportionality` carries a word ceiling.
+assert.equal((cases.match(/maxWords/g) || []).length, 10, 'a word ceiling moved off proportionality');
 
 const vars = {
   diff: 'diff --git a/internal/dag/control.go b/internal/dag/control.go\n-\tif !m.Delivered {\n+\tif m.Status == MsgQueued {\n',
@@ -45,7 +61,29 @@ assert.equal(checks.noFabricatedIdentifiers('t\n\nThe remove/delete path is unch
 assert.equal(checks.noFabricatedIdentifiers('t\n\nSame for values read/written by the store.', { vars, config: {} }).pass, true);
 // A real path still is one - the extension keeps it a candidate.
 assert.equal(checks.noFabricatedIdentifiers('t\n\nTouches internal/dag/scheduler.go too.', { vars, config: {} }).pass, false);
-// ...and so does a dash or an underscore in a segment with no extension.
-assert.equal(checks.noFabricatedIdentifiers('t\n\nSee cmd/pi-acp/runner for the rest.', { vars, config: {} }).pass, false);
+// ...and so does an underscore in a segment with no extension.
+assert.equal(checks.noFabricatedIdentifiers('t\n\nSee cmd/pi_acp/runner for the rest.', { vars, config: {} }).pass, false);
+
+// Prose does not stop being prose for carrying a capital or a hyphen. Each of
+// these was a live zero on the stored run.
+assert.equal(checks.noFabricatedIdentifiers('t\n\nBinds up/down/page/clear/to-bottom.', { vars, config: {} }).pass, true);
+assert.equal(checks.noFabricatedIdentifiers('t\n\nSwitches between `Normal/Locked` and `PageScrollUp/Down`.', { vars, config: {} }).pass, true);
+assert.equal(checks.noFabricatedIdentifiers('t\n\nA rule like `/haystack` misses `/absolute/path/to/haystack`.', { vars, config: {} }).pass, true);
+assert.equal(checks.noFabricatedIdentifiers('t\n\nAbsolute paths like `/Users/user/project/foo`.', { vars, config: {} }).pass, true);
+// The exemption is bounded: an extension, a digit, or an underscore anywhere in
+// the span still makes it a path claim.
+assert.equal(checks.noFabricatedIdentifiers('t\n\nSee `internal/dag/state_machine`.', { vars, config: {} }).pass, false);
+assert.equal(checks.noFabricatedIdentifiers('t\n\nSee `docs/v2/setup.md`.', { vars, config: {} }).pass, false);
+
+// A file that exists in the tree both arms could read is not invented. Needs the
+// fixture cache; run.sh materialises it before every eval.
+const treeCase = { vars: { ...vars, fixture: 'caddy-7872' }, config: {} };
+if (checks.fixtureTree('caddy-7872')) {
+  assert.equal(checks.noFabricatedIdentifiers('t\n\nTests in `celmatcher_test.go` stay green.', treeCase).pass, true);
+  // Still only the tree's paths, not its contents: a symbol it never names fails.
+  assert.equal(checks.noFabricatedIdentifiers('t\n\nAdds `AttachToClientWithPaneId`.', treeCase).pass, false);
+} else {
+  console.log('pr assertions: tree haystack unchecked - run lib/fetch-fixtures.js');
+}
 
 console.log('pr assertions: ok');
