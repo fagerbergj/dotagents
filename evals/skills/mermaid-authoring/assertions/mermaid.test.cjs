@@ -45,4 +45,29 @@ const clean = 'LABELS: Start | Done\nCLIPPED: NONE\nOVERLAP: NONE\nARTIFACTS: NO
 // Markdown bolding and bullets are the common reply shape and must still parse.
 const dirty = '**LABELS:** Start | Deplo\n**CLIPPED:** "Deplo" runs outside its box\n**OVERLAP:** NONE\n**ARTIFACTS:** NONE\n**SCORE:** 2/5';
 
-console.log('mermaid assertions: ok');
+// --- config shape -----------------------------------------------------------
+// One metric, one property. Only no_invented_elements may subtract, and its
+// entire score is that subtraction - every other rubric awards and never fines.
+// semantic_quality used to score "no invented element" as one of four items AND
+// let each invented element cancel one of the others, so an invention cost the
+// same number twice: "Three invented elements ... cancel item 1, leaving 0
+// satisfied items", on a row whose item 1 the judge had just quoted as
+// satisfied. Matched on the arithmetic word rather than on what is penalised;
+// the phrasing differs per suite and a pattern keyed to "invent" misses half of
+// them.
+const { execFileSync } = require('node:child_process');
+const nodePath = require('node:path');
+const config = JSON.parse(execFileSync('python3', ['-c',
+  'import json,sys,yaml; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)',
+  nodePath.join(__dirname, '..', 'promptfooconfig.yaml')], { encoding: 'utf8' }));
+const graders = config.defaultTest.assert;
+
+for (const grader of graders) {
+  if (grader.type !== 'llm-rubric' || grader.metric === 'no_invented_elements') continue;
+  assert.doesNotMatch(grader.value, /\b(subtract|subtracts|subtracting|cancel|cancels|cancelling|deduct|deducts)\b/i,
+    `${grader.metric} subtracts inside its own score; only no_invented_elements may, and its whole score is that subtraction`);
+}
+assert.ok(graders.some((g) => g.metric === 'no_invented_elements'),
+  'no_invented_elements is gone; invention would have nowhere to be scored');
+
+console.log(`mermaid assertions: ok (${graders.length} shared graders)`);

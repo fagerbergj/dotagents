@@ -79,22 +79,53 @@ defaultTest:
         keyword, classDef, subgraphs, styling, or which mermaid features were used
         are all out of scope.
 
-        Work through these four in order. For each, quote the exact diagram text or
+        Work through these three in order. For each, quote the exact diagram text or
         name the exact visual element that supports your answer, or answer NONE.
 
         1. Every fact stated in the request appears in the diagram.
-        2. No figure, date, identifier, or named system appears in the diagram that
-           the request never states, and nothing contradicts the request.
-        3. {{rubric}}
-        4. A reader who has not seen the request could say what each element and each
+        2. {{rubric}}
+        3. A reader who has not seen the request could say what each element and each
            connector represents from its own label alone.
 
-        Score from 0 to 1, never above 1: the number of the four genuinely satisfied
-        and evidenced by a quote, divided by four. An item you could not quote for
-        scores as absent. Each invented element found under 2 cancels one otherwise
-        satisfied item.
+        Score from 0 to 1, never above 1: the number of the three genuinely satisfied
+        and evidenced by a quote, divided by three. An item you could not quote for
+        scores as absent. Whether the diagram carries anything the request never
+        stated is graded by no_invented_elements and must not move this score in
+        either direction.
       threshold: 0.7
       metric: semantic_quality
+    # 4. Fabrication on its own axis. It used to be item 2 of the four above AND
+    # a cancellation applied to the rest, so an invented element cost the same
+    # number twice and a diagram that answered the request could report 0.00 -
+    # "Three invented elements (OrderService, Warehouse, ShippingView as named
+    # systems) cancel item 1, leaving 0 satisfied items", on a row whose item 1
+    # the same judge had just quoted as satisfied.
+    - type: llm-rubric
+      value: |
+        Someone asked for a diagram with this request:
+        "{{task}}"
+
+        Judge the diagram as a reader sees it rendered. Never credit or penalise how
+        the source is written: node id names, indentation, comments, the direction
+        keyword, classDef, subgraphs, styling, or which mermaid features were used
+        are all out of scope - a node id is not an element a reader sees.
+
+        List every figure, date, identifier, quantity, named system, actor or step
+        that a reader sees on the rendered diagram and that the request never states,
+        quoting each label. A structural element the chosen diagram type requires -
+        a start or end marker, an axis, a lane - is not on the list. Answer NONE if
+        there are none. Then say whether anything on the diagram contradicts the
+        request, quoting it.
+
+        Score from 0 to 1, never above 1: start at 1.00, subtract 0.25 for each item
+        on your list and 0.25 for each contradiction, floored at 0. State the list
+        and the arithmetic.
+
+        Do not reward or penalise whether the diagram answers the request, is
+        readable, or is the right type - a diagram that is wrong on every other axis
+        but adds nothing the request did not state scores 1.00 here.
+      threshold: 1
+      metric: no_invented_elements
     # Loading a SKILL.md costs wall time; this flags a pathological arm rather
     # than a normal one. Token overhead is read from the results JSON - promptfoo
     # has no token assertion, and `cost` is 0 on a self-hosted gateway.
