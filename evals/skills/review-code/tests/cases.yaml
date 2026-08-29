@@ -16,6 +16,26 @@
 # that may run the same skill - and called that output `HumanFindings`. Every
 # review here is `user.type == "User"`, and one approving review was still dropped
 # because its body opened by saying an agent wrote it on the maintainer's behalf.
+#
+# The eight CHANGES_REQUESTED cases and the eight APPROVED ones are graded on
+# DIFFERENT metrics, not one metric with a branch inside it. The old
+# `review_quality` item 1 read "It raises a concern the maintainer raised ...
+# Where the maintainer raised nothing blocking, a review that raises no defect
+# satisfies this" - two opposite properties (find the defect / do not invent
+# one) averaged under one name. That is the fault that faked develop-feature's
+# null: splitting `recognizes_existing` out of `plan_quality` there turned +0.03
+# into +0.29 and +0.54 with opposite signs. Here the split is structural, by
+# which cases carry which assertion, so neither half can mask the other.
+#
+# Cut with `review_quality`: its item 3, verdict-matches-maintainer. It read
+# 0.95 in BOTH arms across 96 rows - at the ceiling, discriminating nothing, and
+# evals/AGENTS.md says cut what sits at the ceiling in both arms. It was not
+# made deterministic instead: deciding "did this review block?" from free prose
+# means a wordlist over natural language, drawn from the vocabulary the skill
+# under test prescribes, which is the tautological delta AGENTS.md bans outright
+# ("Never pattern-match prose"). The substance survives where it is not
+# saturated - `no_false_blocker` item 2 grades the same call on the eight cases
+# where getting it wrong is the expensive direction.
 
 - description: "caddy#7916 - reverseproxy: isolate active health-check stat"
   vars:
@@ -24,21 +44,149 @@
     verdict: "CHANGES_REQUESTED"
     expected: "Each handler still writes `caddy_reverse_proxy_upstreams_healthy` using only `upstream.Dial`. Distinct health-check states therefore race to update the same Prometheus series so the reported value depends on which updater ran last. The metric identity needs to match the newly separated health-state identity + comment"
   assert:
-    - type: javascript
+    # Kept although it sat at 1.00/0.98 - at the ceiling in both arms, which
+    # evals/AGENTS.md would normally cut. It stays as a guard, the call
+    # pr-authoring made for `no_invented_file_refs`, for two reasons. It is
+    # deterministic and local, so it costs no judge call and no tokens: a metric
+    # at the ceiling that is free reports "still no regression" for nothing. And
+    # what it guards is the largest not-useful class in the literature - Bosu,
+    # Greiler & Bird (MSR 2015): "most of the 'Not useful' comments are either
+    # false positives (e.g., when a reviewer incorrectly indicates a problem in
+    # the code, perhaps due to lack of expertise)". The arm under test is the
+    # only one that cites `path:line` at all (2.0 citations per row against the
+    # baseline's 0.0), so it is the only arm that CAN fail this; dropping it
+    # removes the one check that the reading it does is real.
+    - &citations
+      type: javascript
       value: file://assertions/review.cjs:noInventedCitations
       metric: no_invented_citations
-    # Anchored so all sixteen cases are judged in identical words; only the case's
-    # own ground truth differs. Uniform wording keeps rubric variance out of the
-    # measurement - rewriting it per case adds noise that is not the skill.
-    - &review_quality
+    # New, and unmeasured - no prior run separated the arms on it. It is here
+    # because nothing in this suite checked whether a review's assertions are
+    # TRUE. `no_invented_citations` above checks the pointer: a citation to a
+    # real line that says something false about that line passes it clean.
+    # `no_false_blocker` asks whether the review blocked, not whether what it
+    # said was so.
+    #
+    # That gap is the largest documented failure of code review. Rigby & Bird,
+    # "Convergent Contemporary Software Peer Review Practices" (FSE 2013), on
+    # inspection data from Lucent - fetched and quoted verbatim from the primary
+    # PDF: "At Lucent there is a median of 3 true defects found per review. An
+    # additional 4 defects per review were found to be false positives." More
+    # false positives than true defects.
+    #
+    # A judge that never sees the repository cannot separate a true claim from a
+    # confident invention - that is the blind oracle evals/AGENTS.md bans, and it
+    # is why an earlier "is this claim grounded" rubric was rejected. So the code
+    # goes in front of the judge. The `transform` reads the cited lines out of
+    # the SAME materialised tree `read_source` serves the model and appends them
+    # to the review. DETERMINISTIC: which anchors are extracted, which file and
+    # line each resolves to, the order they appear in, and what code is shown.
+    # JUDGED: only whether each claim holds against the code shown.
+    #
+    # Anchors are `path:line` citations AND backticked identifiers resolved in
+    # the files the change touches. Citations alone would have made this an arm
+    # detector: over the 96 stored rows of the last run, no baseline row cited a
+    # single `path:line` and 34 of 48 skill-arm rows did, so a citation-only
+    # anchor would have graded one arm and handed the other a vacuous pass on
+    # every row. With symbol anchors, 92 of those 96 rows carry something
+    # checkable (45/48 baseline, 47/48 skill).
+    #
+    # House position on the 4 rows that carry nothing: they score 1. A review
+    # that asserts nothing about the code asserts nothing false, and scoring it 0
+    # would fold "made no checkable claim" into "made a false one" - the two
+    # opposite properties under one name that this PR exists to separate. The
+    # vagueness that rewards is bounded by the anchor rate: 4.2% of real rows,
+    # near-symmetric across arms (3 baseline, 1 skill). If that rate climbs, this
+    # metric is drifting toward rewarding vagueness and the extraction, not the
+    # rubric, is what needs widening.
+    - &no_false_claims
+      type: llm-rubric
+      transform: file://assertions/review.cjs:citedCode
+      value: |
+        <Output> is a review of a real pull request, followed by a section headed
+        "CODE FROM THE REPOSITORY". That section was appended by the grader, not
+        written by the reviewer. Each numbered passage is real code, read from
+        the repository at the commit under review, at a line the review points
+        to, with three lines either side and the line itself marked ">>".
+
+        Grade only whether what the review ASSERTS about that code is true.
+        Ignore tone, structure, length, severity labels, and whether the review
+        found enough. A three-sentence review that says three true things scores
+        1.
+
+        Work through the numbered passages in order. For each, quote the
+        review's assertion about that code, then answer exactly one of:
+
+          CONTRADICTED - the code shown makes the assertion false as stated.
+          HELD - the code shown bears the assertion out.
+          UNSETTLED - the assertion turns on runtime behaviour, on another
+            file, or on the design of the change, and these lines neither
+            confirm nor refute it.
+
+        Three rules bind that count.
+
+        1. Only a flat assertion of fact can be CONTRADICTED. A question, a
+           possibility raised for the author to check, a suggestion, or a claim
+           the review itself hedges as uncertain is never CONTRADICTED. Bosu,
+           Greiler & Bird, "Characteristics of Useful Code Reviews: An Empirical
+           Study at Microsoft" (MSR 2015): "most of the 'Not useful' comments are
+           either false positives (e.g., when a reviewer incorrectly indicates a
+           problem in the code, perhaps due to lack of expertise) or don't fall
+           into a predefined category". What is being counted is the reviewer
+           indicating a problem that is not there.
+        2. UNSETTLED is not a fault and costs nothing. House position: this item
+           counts false claims, not unverifiable ones. Google's Code Review
+           Developer Guide, on Context: "Sometimes you have to look at the whole
+           file to be sure that the change actually makes sense." A review
+           reasoning about a caller, an invariant, or a runtime interaction that
+           seven lines cannot settle is doing the job, and is not marked down
+           here for it.
+        3. A passage outside the lines this pull request changed is not a fault
+           either. Reading the surrounding code is the point; an assertion about
+           unchanged code is graded exactly as one about changed code.
+
+        Score from 0 to 1, never above 1: start at 1 and subtract 0.34 for each
+        CONTRADICTED assertion, with a floor of 0. Three false assertions score
+        0. Brevity is never a deduction. House position: the deduction is a
+        count, not a proportion, because the source's own unit is a count - "4
+        defects per review were found to be false positives" - so a review does
+        not earn back a false assertion by surrounding it with true ones.
+
+        If the appended section reads NO-ANCHORS, this review names nothing that
+        resolves to code and there is nothing to check: score 1 and say so.
+
+        If it reads NO-REVIEW, the model produced nothing and the row is dead,
+        not clean: score 0 and say so.
+
+        State the count and the arithmetic.
+      threshold: 0.5
+      metric: no_false_claims
+    # Was item 1 of `review_quality`, at weight 0.5 inside a collapsed number.
+    # Restricted to the eight cases where the maintainer actually withheld
+    # approval, so "raises a real concern" means one thing and not also its
+    # opposite. Item 2 folds in actionability, which the old rubric never asked
+    # for at all.
+    - &finds_the_defect
       type: llm-rubric
       rubricPrompt:
+        # The system half of promptfoo's own DEFAULT_GRADING_PROMPT, restated
+        # verbatim. A custom rubricPrompt replaces the WHOLE grading prompt, so
+        # omitting this drops the JSON-response contract and the judge answers in
+        # prose - "Could not extract JSON from llm-rubric response"
+        # (evals/AGENTS.md, Harness facts).
         - role: system
           content: |
-            You are grading output according to a user-specified rubric. If the
-            statement in the rubric is true, then the output passes the test. You
-            respond with a JSON object with this structure:
-            {reason: string, pass: boolean, score: number}
+            You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}
+
+            Examples:
+
+            <Output>Hello world</Output>
+            <Rubric>Content contains a greeting</Rubric>
+            {"reason": "the content contains the word 'Hello'", "pass": true, "score": 1.0}
+
+            <Output>Avast ye swabs, repel the invaders!</Output>
+            <Rubric>Does not speak like a pirate</Rubric>
+            {"reason": "'avast ye' is a common pirate term", "pass": false, "score": 0.0}
         - role: user
           content: |
             <MaintainerReview>{{expected}}</MaintainerReview>
@@ -46,37 +194,172 @@
             <Output>{{output}}</Output>
             <Rubric>{{rubric}}</Rubric>
       value: |
-        <Output> is a review of a real pull request. <MaintainerReview> is what the
-        project's maintainer wrote about that same change, and <MaintainerVerdict>
-        is what they decided: APPROVED, or CHANGES_REQUESTED meaning they withheld
-        approval until something was fixed.
+        <Output> is a review of a real pull request. <MaintainerReview> is what
+        the project's maintainer wrote about that same change, and
+        <MaintainerVerdict> is CHANGES_REQUESTED - they withheld approval until
+        something was fixed.
 
         The maintainer is the ground truth for what mattered in this change, not
-        for how a review should read. Do not reward matching their tone, structure
-        or length - only whether the same substance is there.
+        for how a review should read. Do not reward matching their tone,
+        structure or length - only whether the same substance is there.
+
+        Answer each with a quote from <Output>, or NONE. A quote must be text
+        that appears inside <Output>; quoting <MaintainerReview> back is not
+        evidence about the review.
+
+        1. It raises a concern the maintainer raised, OR another specific defect
+           in this change of comparable seriousness. Specific means a reader
+           could go and confirm it against the code. Bacchelli & Bird,
+           "Expectations, Outcomes, and Challenges of Modern Code Review" (ICSE
+           2013), quoting an interviewed developer on what a weak review looks
+           like: "[Some reviewers] focus on formatting mistakes because they are
+           easy [...], but it doesn't really help. [...] In some ways it's kind
+           of embarrassing if someone asks you to do a code review and all you
+           can find are formatting mistakes when there are real mistakes to be
+           found." A general call for more tests, more error handling or more
+           documentation is NONE, and so is a naming, formatting or style point.
+        2. Its most serious finding is actionable - it names the specific code
+           it is about and says what is wrong with it, or what to do instead.
+           Bosu, Greiler & Bird, "Characteristics of Useful Code Reviews: An
+           Empirical Study at Microsoft" (MSR 2015), on how they classified
+           comments: "if the author pointed out a valid defect and a suggested
+           fix, we classified it as useful, whereas a question about how the
+           changed component was tested was termed not useful." Google's Code
+           Review Developer Guide draws the line further back - "In general it
+           is the developer's responsibility to fix a CL, not the reviewer's.
+           You are not required to do detailed design of a solution or write
+           code for the developer" - so a written fix is NOT required here, only
+           that the author can tell which code is meant and what is wrong with
+           it. A finding that says something "may need attention" or "should be
+           reviewed carefully" without saying what is wrong is NONE.
+
+        Score from 0 to 1, never above 1: 0.6 for the first, 0.4 for the second.
+        Award nothing for an item you cannot quote for. Brevity is never a
+        deduction. State the arithmetic.
+      threshold: 0.5
+      metric: finds_the_defect
+    # Was item 2 of `review_quality` at weight 0.25, where its measured +0.12
+    # contributed +0.03 and vanished into a 0.35 noise band. Standalone and on
+    # all sixteen cases: this is the property the skill's description leads with
+    # ("read the diff AND the surrounding code") and the one the literature ties
+    # most directly to review value.
+    #
+    # An OUTCOME measure, not a process one. It grades what the review reasons
+    # ABOUT, so a review that names a caller correctly scores whether or not it
+    # opened a file, and a review that read twenty files and then wrote only
+    # about the hunks does not. Tool calls and files-read separate the arms far
+    # more cleanly (90% of baseline rows made zero tool calls against the skill
+    # arm's 2%; 0.56 files read against 8.21) and are deliberately NOT metrics
+    # here: they measure the harness affordance and the procedure, not the
+    # review, and report.js has no column that would keep them apart from the
+    # quality numbers beside them.
+    #
+    # No rubricPrompt: this rubric interpolates no case var, so promptfoo's
+    # default grading prompt - which already carries the JSON contract - is both
+    # correct and safer than restating it.
+    - &reasons_beyond_diff
+      type: llm-rubric
+      value: |
+        <Output> is a review of a real pull request. The reviewer was given the
+        diff; the full files it touches were available to open.
+
+        Grade only how far beyond the changed lines the review's reasoning goes.
+        Do not reward structure, headings, length or tone. Judge the review as
+        text: an item is satisfied by what the review says, never by how it was
+        produced or how much was read to produce it.
 
         Answer each with a quote from <Output>, or NONE.
 
-        1. It raises a concern the maintainer raised, OR another specific defect in
-           this change of comparable seriousness. Specific means a reader could go
-           and confirm it against the code; a general call for more tests, more
-           error handling or more documentation is NONE. Where the maintainer
-           raised nothing blocking, a review that raises no defect satisfies this.
-        2. It reasons about code the diff does not show - a caller, an adjacent
-           function, an existing test, an invariant elsewhere - rather than only
-           about the lines in the hunks.
-        3. Its verdict matches <MaintainerVerdict>. Google's standard for code
-           review is that a reviewer approves once the change definitely improves
-           overall code health even if it is not perfect, and withholds approval
-           only for something that must change first. Blocking a change the
-           maintainer approved is wrong, and approving one they blocked is wrong.
+        1. It reasons about specific code the diff's hunks do not show - a
+           caller, an adjacent function, an existing test, a sibling
+           implementation, an invariant declared elsewhere - and identifies that
+           code by name or by path. Google's Code Review Developer Guide, on
+           Context: "Sometimes you have to look at the whole file to be sure
+           that the change actually makes sense. For example, you might see only
+           four new lines being added, but when you look at the whole file, you
+           see those four lines are in a 50-line method that now really needs to
+           be broken up into smaller methods." Bacchelli & Bird (ICSE 2013),
+           quoting a surveyed developer: "big-picture impact analysis requires
+           contextual understanding. When reviewing a small, unfamiliar change,
+           it is often necessary to read through much more code than that being
+           reviewed." A remark that unnamed callers or unnamed tests might be
+           affected is NONE - the code reasoned about has to be identified.
+        2. At least one of its points is conceptual rather than superficial: it
+           turns on the change's design, its runtime behaviour, or how it
+           interacts with another part of the system, rather than on naming,
+           formatting, or the shape of the changed lines read on their own.
+           Bacchelli & Bird (ICSE 2013), on how reviewers who know the files
+           differ from those who do not: "Comments reflect their deeper
+           understanding -- more likely to find subtle defects, feedback is more
+           conceptual (better ideas, approaches) instead of superficial (naming,
+           mechanical style, etc.)." House position: the source reports this as
+           a difference of degree between familiar and unfamiliar reviewers, not
+           as a bar a review passes or fails; one conceptual point is where this
+           suite puts the bar.
 
-        Score from 0 to 1, never above 1: 0.5 for the first, 0.25 for the second,
-        0.25 for the third. Award nothing for an item you cannot quote for.
-        Brevity is never a deduction. State the arithmetic.
+        Score from 0 to 1, never above 1: 0.6 for the first, 0.4 for the second.
+        Award nothing for an item you cannot quote for. Brevity is never a
+        deduction. State the arithmetic.
       threshold: 0.5
-      metric: review_quality
+      metric: reasons_beyond_diff
+    # New, and unmeasured - no prior run separated the arms on it, so read the
+    # first numbers as a hypothesis under test rather than a result. It is here
+    # because "categorize each finding by severity" is a claim of the skill's
+    # own frontmatter description that nothing in the old suite graded, and
+    # because Google's guide justifies it by an outcome (the author misreads
+    # optional comments as mandatory) rather than by style.
+    #
+    # Deliberately NOT a regex for "blocking:" / "nit:". Those words come from
+    # the skill under test, so matching them would score the arm for reciting
+    # its own vocabulary - the tautological delta evals/AGENTS.md records for
+    # `criteria_present` and `SETTLED`. The rubric grades whether the
+    # required/optional distinction lands, in whatever words. The residual risk
+    # is a judge treating a label as sufficient on its own; the preamble says it
+    # is not.
+    - &severity_discipline
+      type: llm-rubric
+      value: |
+        <Output> is a review of a real pull request, delivered as one written
+        message.
 
+        Grade only whether the change's author could tell what they are obliged
+        to do. Reward no particular vocabulary: "blocking", "nit",
+        "non-blocking", "required", "optional", or plain prose that draws the
+        same line all count equally, and a label whose own text contradicts it
+        ("nit: this will corrupt the database") counts for nothing.
+
+        For each item, quote the passage in <Output> that decides it, or answer
+        NONE if there is none, then say whether the item holds.
+
+        1. A reader can tell, for every finding in the review, whether it must
+           be fixed before merge or is optional. Google's Code Review Developer
+           Guide, on labelling comment severity: "This makes review intent
+           explicit and helps authors prioritize the importance of various
+           comments. It also helps avoid misunderstandings; for example, without
+           comment labels, authors may interpret all comments as mandatory, even
+           if some comments are merely intended to be informational or
+           optional." A review with no findings at all holds this item - there
+           is nothing to misread.
+        2. Nothing that rests only on the reviewer's taste is presented as
+           required. Google, The Standard of Code Review: "On matters of style,
+           the style guide is the absolute authority. Any purely style point
+           (whitespace, etc.) that is not in the style guide is a matter of
+           personal preference", and "Don't block CLs from being submitted based
+           only on personal style preferences." A demand to rename, reformat, or
+           restructure code the reviewer merely prefers differently fails this
+           item; the same demand backed by a defect, a security risk, a stated
+           design principle, or the project's own style guide does not.
+
+        House position: Google writes "Consider labeling the severity of your
+        comments" - a suggestion rather than a rule, and written for inline
+        comments in a review tool rather than for a review delivered as a single
+        message. This suite treats required-versus-optional legibility as
+        something the review must carry however it is written.
+
+        Score from 0 to 1, never above 1: 0.5 for each. Brevity is never a
+        deduction. State the arithmetic.
+      threshold: 0.5
+      metric: severity_discipline
 - description: "caddy#7898 - caddyconfig: Register nested named-route invok"
   vars:
     fixture: caddy-7898
@@ -84,11 +367,11 @@
     verdict: "CHANGES_REQUESTED"
     expected: "The implementation seems reasonable but this needs adapter regression coverage before merge with direct nesting, multiple transitive levels, an undefined nested target and a cycle. The tests should demonstrate the original missing-route failure and confirm that cycles terminate without dropping required routes."
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *finds_the_defect
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "caddy#7858 - caddyhttp: fix path_regexp (MatchPathRE) Windo"
   vars:
     fixture: caddy-7858
@@ -96,11 +379,11 @@
     verdict: "CHANGES_REQUESTED"
     expected: "I think this still needs one more pass before merge. The same Windows normalisation should probably be shared by `path` and `path_regexp` and it should handle trailing dots/spaces per path component, not only at the end of the whole path. Could you also add the required AI disclosure to your PR body."
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *finds_the_defect
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "caddy#7807 - reverseproxy: validate on weighted_round_robin"
   vars:
     fixture: caddy-7807
@@ -108,11 +391,11 @@
     verdict: "CHANGES_REQUESTED"
     expected: "One remaining JSON-config gap is that Caddyfile parsing rejects negative weights but direct JSON config can still set them because `Validate()` only checks `totalWeight == 0`. Since this is now the module-level validation path, it should also reject any weight `< 0` while still allowing `0` when at least one other weight is positive."
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *finds_the_defect
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "caddy#7782 - caddyhttp: add {http.request.proto_name} place"
   vars:
     fixture: caddy-7782
@@ -120,11 +403,11 @@
     verdict: "CHANGES_REQUESTED"
     expected: "I think this should also update the placeholder table in `modules/caddyhttp/app.go` since the original issue was at least a documentation gap. Please document both placeholders there `{http.request.proto}` as Go\u2019s raw `http.Request.Proto` value which may be `HTTP/2.0` or `HTTP/3.0` and `{http.request.proto_name}` as the spec-style protocol name."
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *finds_the_defect
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "cli#14136 - Add worktree checkout to `gh issue develop`"
   vars:
     fixture: cli-14136
@@ -132,11 +415,11 @@
     verdict: "CHANGES_REQUESTED"
     expected: "Thanks for putting this together, @sergiou87! :pray: Heads up that I haven't gone through the tests yet. I suspect the implementation will shift based on the points below, and the tests will follow, so I'll hold off reviewing them until things settle. A few things I'd like us to address: - **Replicate the worktree safety checks from `pr checkout`:** The symlink and other target safety validations that `pr checkout` performs (rejecting leaf symlinks, non-directory targets, paths inside a different repository, paths inside an existing worktree, etc.) aren't present here. We should replicate them. Rather than duplicating, I think we should extract that logic from `pr checkout` into a shared package, probably `pkg/cmd/pr/shared`, since there's already precedent for sharing logic between PRs and issues there. @tidy-dev did a great job in `pr checkout` for worktrees covering various use cases and security related concerns. I think the big lift here is to just extract them into the shared package and happily reuse them here. - **Match `pr checkout`'s worktree reuse behavior:** I think users will expect `issue develop` and `pr checkout` to behave the same way around worktrees, in particular the existing worktree reuse behavior that `pr checkout` provides. That's another reason to pull the `pr checkout` internals into a shared place so both commands stay consistent. - **Add acceptance t"
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *finds_the_defect
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "cli#14178 - `--attach` stack 2/8: Describe and validate a "
   vars:
     fixture: cli-14178
@@ -144,11 +427,11 @@
     verdict: "CHANGES_REQUESTED"
     expected: "Thanks for putting this together! :pray: Nice, careful work here, especially the validation coverage and the attention to alt-text escaping. I left a handful of inline notes. Most are nitpicks, but two are worth a proper look: - The `UserAsset` abstraction leaks some mechanical/construction concerns (`file()` returning itself, `sizeLimit()` on the interface). I sketched a reshape that keeps `asset` as pure data and moves the accessors onto the concrete types. - Symlink handling: `os.Stat` follows links today, so a symlink to a regular file slips through. Switching to `os.Lstat` closes that. I also floated an idea around hardening the alt-text escaping with a compose-and-verify parse. Not blocking, just something to consider. Nothing here is a hard blocker, happy to talk through any of it."
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *finds_the_defect
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "rclone#9714 - vfs: fix VFS instance leaks on mount/serve fai"
   vars:
     fixture: rclone-9714
@@ -156,11 +439,11 @@
     verdict: "CHANGES_REQUESTED"
     expected: "Thank you for coming back to this with the decentralized approach - this is much closer to what I had in mind than #9473, and the mountlib part with the `sync.Once` guarded `shutdownVFS()` is great :-) However I found some correctness problems in the serve half, and I think there is a neater way of implementing it which would remove most of the repetition. 1. The proxy cache finalizer will shut down VFSes still in use `libcache` entries expire after 5 minutes of disuse and `cacheExpire` calls the finalizer. Nothing pins the proxy cache entries, and sftp/ftp call `proxy.Call` once at auth then hold the returned VFS for the whole session. So an sftp session which is idle for more than 5 minutes will have its VFS shut down underneath it - we've traded a leak for a use-after-shutdown, which is worse! This is OK for http/webdav/s3 (every request goes through `Call`/`Get` which refreshes the timer), but sftp/ftp would need to `Pin` the cache entry when the connection opens and `Unpin` it when it closes. That's the correct fix here I think, though it does make the change bigger. 2. Double shutdown in serve/nfs `VFS.Shutdown()` is a refcount decrement, and VFS instances are shared via the active cache (`vfs.New` reuses an existing VFS for the same fs + options), so decrementing twice can kill a VFS out from under another user. The rule needs to be: whoever calls `vfs.New` calls `Shutdo"
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *finds_the_defect
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "caddy#7920 - caddyhttp: shield specific hostnames from a co"
   vars:
     fixture: caddy-7920
@@ -168,11 +451,84 @@
     verdict: "APPROVED"
     expected: "Change itself LGTM. Separately, while I am thankful for your PRs recently; in the future respond to review comments in your own words rather than passing them directly through an AI. I need to know that the contributor understands the code and can discuss the reasoning behind it. The assistance disclosure **must** be truthful as well."
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
+    - *citations
+    - *no_false_claims
+    # The other half of the old item 1, on the eight cases the maintainer
+    # approved. Here the failure is the opposite one - manufacturing a blocker -
+    # and it is the failure the literature says dominates. Grading it under the
+    # same name as `finds_the_defect` would average a skill that finds more
+    # defects against a skill that invents more of them and report the sum.
+    - &no_false_blocker
+      type: llm-rubric
+      rubricPrompt:
+        # The system half of promptfoo's own DEFAULT_GRADING_PROMPT, restated
+        # verbatim. A custom rubricPrompt replaces the WHOLE grading prompt, so
+        # omitting this drops the JSON-response contract and the judge answers in
+        # prose - "Could not extract JSON from llm-rubric response"
+        # (evals/AGENTS.md, Harness facts).
+        - role: system
+          content: |
+            You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}
 
+            Examples:
+
+            <Output>Hello world</Output>
+            <Rubric>Content contains a greeting</Rubric>
+            {"reason": "the content contains the word 'Hello'", "pass": true, "score": 1.0}
+
+            <Output>Avast ye swabs, repel the invaders!</Output>
+            <Rubric>Does not speak like a pirate</Rubric>
+            {"reason": "'avast ye' is a common pirate term", "pass": false, "score": 0.0}
+        - role: user
+          content: |
+            <MaintainerReview>{{expected}}</MaintainerReview>
+            <MaintainerVerdict>{{verdict}}</MaintainerVerdict>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> is a review of a real pull request. <MaintainerReview> is what
+        the project's maintainer wrote about that same change, and
+        <MaintainerVerdict> is APPROVED - they merged it without requiring any
+        change first. Anything they suggested, they suggested as optional.
+
+        House position: this suite treats one maintainer's approval as the
+        ground truth for whether the change was fit to merge as it stood.
+        Google's Code Review Developer Guide states the standard in terms of the
+        system's code health, not in terms of agreeing with a particular
+        reviewer, and takes no position on who is right when two reviewers
+        disagree.
+
+        For each item, quote the passage in <Output> that decides it, or answer
+        NONE if there is none, then say whether the item holds.
+
+        1. It does not assert, as a fact about this change, a defect that is not
+           there - a bug, race, deadlock, security hole, data loss or breakage
+           it claims this code will cause. Bosu, Greiler & Bird (MSR 2015):
+           "most of the 'Not useful' comments are either false positives (e.g.,
+           when a reviewer incorrectly indicates a problem in the code, perhaps
+           due to lack of expertise) or don't fall into a predefined category".
+           Rigby & Bird, "Convergent Contemporary Software Peer Review
+           Practices" (FSE 2013), on inspection data from Lucent: "At Lucent
+           there is a median of 3 true defects found per review. An additional 4
+           defects per review were found to be false positives." A question, or
+           a concern stated as a possibility for the author to check, is not an
+           assertion and does not fail this item. Score this item 0 only for a
+           flat claim that this change is broken.
+        2. It does not require any change before merge. Google's Code Review
+           Developer Guide, The Standard of Code Review: "In general, reviewers
+           should favor approving a CL once it is in a state where it definitely
+           improves the overall code health of the system being worked on, even
+           if the CL isn't perfect." Suggestions and nits do not fail this item
+           as long as the review says they need not be done first. Score this
+           item 0 for anything demanded as a precondition for merging.
+
+        Score from 0 to 1, never above 1: 0.5 for each. Brevity is never a
+        deduction - a review that is two sentences long and approves outright
+        scores 1. State the arithmetic.
+      threshold: 0.5
+      metric: no_false_blocker
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "caddy#7780 - httpcaddyfile: fix incorrect error message on "
   vars:
     fixture: caddy-7780
@@ -180,11 +536,11 @@
     verdict: "APPROVED"
     expected: "Looks good to me now. This keeps the fix at the matcher extraction layer and lets the existing duplicate definition check handle the error naturally. Verified the repeated-import shape from #7774 now reports `matcher is defined more than once: @html_br`. Nice to see some more human interaction in our PRs \ud83d\ude0a"
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *no_false_blocker
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "caddy#7727 - caddytls: Fix client auth (fix #7724)"
   vars:
     fixture: caddy-7727
@@ -192,11 +548,11 @@
     verdict: "APPROVED"
     expected: "Approved. I verified this with a direct red/green regression test against the `LeafCertClientAuth` path; current master fails with `no client certificate provided` while this PR passes the same test because it restores passing raw peer cert bytes from `tls.ConnectionState.PeerCertificates` into the configured `ClientCertificateVerifier`. *issue was behaviour drift introduced by 1fbb28720b5d20d54074593b3c5d12f3549f371b*"
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *no_false_blocker
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "cli#14261 - Document attachment support in `gh` skill"
   vars:
     fixture: cli-14261
@@ -204,11 +560,11 @@
     verdict: "APPROVED"
     expected: "Thanks for capping off the stack with the docs, @bagtoad! :books: The attachment section reads clearly and covers the important edges: supported file types, alt text syntax and shell quoting, the reference-rewrite versus append behavior, the video limitations, the per-command conflicts, and the partial-upload exit semantics. Nice and thorough. I left one small suggestion: it would help to spell out that the filesystem paths in the body markdown and in `--attach` resolve either as absolute paths or relative to the directory where `gh` runs. Non-blocking. Nice work landing the whole stack! :tada:"
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *no_false_blocker
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "cli#14191 - Adapt spinner output for invoking agents"
   vars:
     fixture: cli-14191
@@ -216,11 +572,11 @@
     verdict: "APPROVED"
     expected: "Thanks for tackling this, @niik! :sparkles: Really nice, focused change. Collapsing agent detection down to a single `Detect()` call at startup and threading that one value through IOStreams, telemetry, and the factory is a clean improvement over the previous repeated detection. The spinner precedence (env override, then detected agent, then config) reads well, and I appreciate the acceptance test covering the full startup path. I only have a couple of minor comments inline, nothing blocking."
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *no_false_blocker
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "cli#14244 - Reject non-empty worktree targets before branc"
   vars:
     fixture: cli-14244
@@ -228,11 +584,11 @@
     verdict: "APPROVED"
     expected: "Thanks for the thorough follow-up here, @tidy-dev! :pray: The fix looks solid. Putting the emptiness check in the shared `ResolveWorktreeTarget` keeps `issue develop` and `pr checkout` consistent, and gating it on `!reuse` correctly leaves existing linked worktrees reusable. Verifying that validation runs before `CreateLinkedBranch` (so no orphan linked branch is left behind) is exactly the right thing to prove, and the unit test that registers no branch mutation nails it. The only thing I felt was missing is acceptance coverage for the non-empty target case. I'm going to push a couple of acceptance tests for that shortly (one under `issue develop`, one under `pr checkout`), so no action needed on your end there. Once those land I think this is good to go. :rocket:"
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *no_false_blocker
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "rclone#9786 - yandex: fix truncated files being uploaded suc"
   vars:
     fixture: rclone-9786
@@ -240,11 +596,11 @@
     verdict: "APPROVED"
     expected: "Nice fix - thank you. The FsPutShortEOF integration test against a real Yandex remote and the fix behaves exactly as intended: the upload now fails with \"expected 10240 bytes in input, but got 5120: unexpected EOF\" instead of succeeding"
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
-
+    - *citations
+    - *no_false_claims
+    - *no_false_blocker
+    - *reasons_beyond_diff
+    - *severity_discipline
 - description: "rclone#9785 - box: fix truncated files being uploaded succes"
   vars:
     fixture: rclone-9785
@@ -252,7 +608,8 @@
     verdict: "APPROVED"
     expected: "Thank you, nice fix. I checked the integration tests === RUN TestIntegration/FsMkdir/FsPutShortEOF/Simple fstests.go:2596: Put returned an error (acceptable): expected 10240 bytes in input, but got 5120: unexpected EOF :+1:"
   assert:
-    - type: javascript
-      value: file://assertions/review.cjs:noInventedCitations
-      metric: no_invented_citations
-    - *review_quality
+    - *citations
+    - *no_false_claims
+    - *no_false_blocker
+    - *reasons_beyond_diff
+    - *severity_discipline

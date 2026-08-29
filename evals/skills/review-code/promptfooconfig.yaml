@@ -8,8 +8,8 @@ description: review-code skill effectiveness
 # vars, and here the diff arrives from a fixture instead.
 #
 # Safe to take, but not for the reason first written here: tests/cases.yaml does
-# interpolate case vars, in the anchored rubricPrompt that carries {{expected}}
-# and {{verdict}}. That works only because graders are exempt from this flag -
+# interpolate case vars, in the two anchored rubricPrompts that carry
+# {{expected}} and {{verdict}}. That works only because graders are exempt -
 # promptfoo checks !isGrader - so the grading prompt still renders while the
 # model prompt, built in JavaScript, never goes through nunjucks at all. An
 # assertion *value* interpolating a case var would still arrive as a literal.
@@ -70,9 +70,14 @@ defaultTest:
     # cannot cross newlines, so a pretty-printed verdict is discarded and the row
     # records 0.00 where the judge wrote full marks.
     #
-    # No rubricPrompt anywhere here, and none needed: every rubric states its
-    # ground truth inline rather than interpolating a case var, so nothing can
-    # reach the judge as a literal placeholder.
+    # No rubricPrompt at THIS level - promptfoo's schema rejects anything but a
+    # string / string list / {role,content} list under defaultTest.options, and
+    # the two rubrics that need case vars (`finds_the_defect`,
+    # `no_false_blocker`) carry their own on the assertion instead. Each restates
+    # the system half of DEFAULT_GRADING_PROMPT; without it the judge answers in
+    # prose and the row dies as "Could not extract JSON". The other two rubrics
+    # (`reasons_beyond_diff`, `severity_discipline`) interpolate no case var, so
+    # they take promptfoo's default prompt untouched, which cannot drift from it.
     transform: file://../../lib/strip-reasoning.js:stripReasoning
     provider:
       id: openai:chat:deepseek/deepseek-v4-flash
