@@ -102,8 +102,10 @@
 # Python through its own. Rust was considered and left out - its lifetime
 # syntax (`&'a str`) confuses the scanner's quote handling.
 #
-# Metric counts after the rebalance, all unchanged: not_narration 9,
-# fact_transfer 9, restraint 5, doc_placement_floor 4 assertions over 3 cases.
+# Metric counts: not_narration 9, no_false_comments 9, fact_transfer 9,
+# restraint 5, doc_placement_floor 4 assertions over 3 cases. no_false_comments
+# is the F term lifted out of not_narration's numerator; it runs on the same
+# nine cases and nowhere else.
 # NOT RE-MEASURED. Every stored baseline for this suite was taken on a case set
 # that included eight quack files, and the revision before this one on a set
 # that was eight-ninths turnstone. Neither describes this one. All of it needs
@@ -188,12 +190,19 @@
   assert:
     # not_narration, enumerate-and-divide. The three-band holistic version had the
     # worst per-cell spread in the suite (0.568 over five identical runs) even at
-    # n=11, cells wandering [0, 0.5, 0, 1, 0.5] between runs. A false claim is
-    # counted as an F term instead of capping the row: a cap is a binary switch
-    # bolted onto a graded scale. Anchored here and aliased by the eight other
-    # cases that hide something. The negative controls do not carry it - scoring
-    # (K - F) / N would score a reply that correctly adds nothing at 0, so those
-    # are graded by restraint instead.
+    # n=11, cells wandering [0, 0.5, 0, 1, 0.5] between runs. Anchored here and
+    # aliased by the eight other cases that hide something. The negative controls
+    # do not carry it - K / N would score a reply that correctly adds nothing at
+    # 0, so those are graded by restraint instead.
+    #
+    # It scored (K - F) / N until now, which collapsed two independent failures:
+    # a comment that states the obvious and a comment that is FALSE about the
+    # code cost the row exactly the same, and F was buried in a numerator instead
+    # of reported. They are different properties - one is a comment not worth
+    # writing, the other is a comment that misleads the next reader - so F is now
+    # its own metric below. On the 18 stored rows of results/comment-authoring
+    # @2.0.1.json F was non-zero exactly once, so this split is a correction to
+    # what the number MEANS, not a change anyone should expect to see move.
     - &not_narration
       type: llm-rubric
       metric: not_narration
@@ -215,15 +224,56 @@
         be that count. For each numbered comment answer, in one line:
           - the constraint, cause, contract, or consequence it states, quoted; or NARRATION
             if a competent programmer in this language, reading only the identifiers and
-            statements it sits beside, would already know what it says; or FALSE if it makes
-            a claim that is not true of this code.
+            statements it sits beside, would already know what it says.
         Answer for every comment before scoring. Do not group them.
 
-        Let K be the number answered with a quoted constraint, cause, contract, or
-        consequence. Let F be the number answered FALSE.
+        Take each comment's claim at face value. Whether it is TRUE of this code is a
+        separate question with its own score: a comment that states a constraint counts
+        here even if you believe the constraint is wrong, and a comment that states the
+        obvious counts as NARRATION even if it is perfectly accurate.
 
-        Score from 0 to 1, never above 1: (K - F) / N, floored at 0. If N is 0, score 0.
-        State N, K, F and the arithmetic in your reason.
+        Let K be the number answered with a quoted constraint, cause, contract, or
+        consequence.
+
+        Score from 0 to 1, never above 1: K / N. If N is 0, score 0. State N, K and the
+        arithmetic in your reason.
+    # Split out of not_narration, where a FALSE comment was subtracted from the
+    # count of good ones: one false claim and one obvious remark moved the score
+    # by the same 1/N, and a reader of the number could not tell which had
+    # happened. A comment that lies about the code is a different defect from a
+    # comment not worth writing - it costs the next reader more than no comment
+    # at all - so it is reported rather than netted off.
+    #
+    # Yes/no, not a proportion: a file carrying one false claim is not "mostly
+    # accurate", it has a wrong statement in it that someone will act on. Same
+    # shape as fix-bug's no_invented_file_refs. N=0 scores 0 exactly as
+    # not_narration does, so the two never point opposite ways on a reply that
+    # added nothing - restraint owns that behaviour, on the controls.
+    - &no_false_comments
+      type: llm-rubric
+      metric: no_false_comments
+      threshold: 1
+      value: |
+        Judge only the comments the Reply added. Ignore where comments sit, their length,
+        their syntax, and their punctuation. Ignore whether a comment was worth writing at
+        all - a comment that states the obvious is not a fault here, and is scored
+        separately.
+
+        List every comment the Reply added, quoting each verbatim and numbering them. Let N
+        be that count. For each numbered comment answer, in one line, TRUE or FALSE:
+        answer FALSE only when the code beside it contradicts the comment - it names a
+        function, field, parameter, error, or branch that is not there; it states a
+        condition the code does not test; it describes behaviour this code does not have;
+        or it attributes the code to a cause or standard that does not apply to it. A
+        claim you cannot check against the code shown, and a judgement call you would
+        argue with, are both TRUE. Answer for every comment before scoring. Do not group
+        them.
+
+        Let F be the number answered FALSE.
+
+        Score from 0 to 1, never above 1: 1 if F is 0, and 0 if F is 1 or more. There is
+        no partial credit - one wrong statement about the code is the failure. If N is 0,
+        score 0. State N, F, which comments were FALSE and why, and the arithmetic.
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
@@ -352,6 +402,7 @@
       }
   assert:
     - *not_narration
+    - *no_false_comments
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
@@ -472,6 +523,7 @@
               prepared_request.method = method
   assert:
     - *not_narration
+    - *no_false_comments
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
@@ -581,6 +633,7 @@
               return None
   assert:
     - *not_narration
+    - *no_false_comments
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
@@ -761,6 +814,7 @@
       }
   assert:
     - *not_narration
+    - *no_false_comments
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
@@ -887,6 +941,7 @@
       });
   assert:
     - *not_narration
+    - *no_false_comments
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
@@ -979,6 +1034,7 @@
       }
   assert:
     - *not_narration
+    - *no_false_comments
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
@@ -1092,6 +1148,7 @@
                       break
   assert:
     - *not_narration
+    - *no_false_comments
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
@@ -1192,6 +1249,7 @@
           return new_paths
   assert:
     - *not_narration
+    - *no_false_comments
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
