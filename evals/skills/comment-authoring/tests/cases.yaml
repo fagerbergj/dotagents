@@ -15,7 +15,7 @@
 # has a second defensible answer - restraint scores adding nothing and adding
 # only an assumption-carrying comment the same, so both correct answers pass.
 #
-# PROVENANCE. The nine graded cases come from seven different projects, in six
+# PROVENANCE. The nine graded cases come from seven different projects, in five
 # languages, and no project supplies more than three of them. That spread is the
 # point: a suite drawn from one codebase measures how well the model fits that
 # codebase's idiom, not whether the skill works. `fagerbergj/quack` was removed
@@ -60,8 +60,9 @@
 #   - java public API - `google/gson`,
 #     `gson/src/main/java/com/google/gson/TypeAdapter.java` L122-214 at
 #     b3f4ca20, plus the class-closing brace from L323. Qualifies: null
-#     handling is the implementer's job, the checked exception is rewrapped
-#     unchecked, the tree form returns JsonNull rather than null, and the
+#     handling is the implementer's job, the checked exception reaches the
+#     caller from the Writer overload and is rewrapped unchecked by the String
+#     one, the tree form returns JsonNull rather than null, and the
 #     reader's default strictness accepts trailing data. This case restores the
 #     Java coverage the quack removal cost, and carries the third
 #     doc_placement_floor.
@@ -679,10 +680,11 @@
       to pass their own fetch wired to their runtime's agent; Content-Type is left
       off deliberately when form is set, because the runtime's fetch writes it along
       with the multipart boundary and setting it ourselves breaks the upload; a
-      non-2xx always arrives as a TurnstoneAPIError carrying the status, with the
-      message taken from error, then detail, then the raw body; and baseUrl has its
-      trailing slash stripped in the constructor, so every path they pass needs a
-      leading slash. Comment it up for them.
+      non-2xx always arrives as a TurnstoneAPIError carrying the status, and on the
+      request path the message is taken from error, then detail, then the raw body -
+      the SSE helper only reports which status it got; and baseUrl has its trailing
+      slash stripped in the constructor, so every path they pass needs a leading
+      slash. Comment it up for them.
     code: |
       import { TurnstoneAPIError } from "./errors.js";
       import { parseSSEStream } from "./sse.js";
@@ -841,8 +843,8 @@
               needing mTLS must supply a custom fetch configured with their runtime's agent.
           (b) Content-Type is deliberately omitted when a form body is sent, because the runtime's
               fetch sets it together with the multipart boundary.
-          (c) a non-2xx response always surfaces as a TurnstoneAPIError carrying the status, with the
-              message taken from error, then detail, then the raw body text.
+          (c) a non-2xx response always surfaces as a TurnstoneAPIError carrying the status, and on
+              the request path the message is taken from error, then detail, then the raw body text.
           (d) the constructor strips a trailing slash from baseUrl, so paths passed in are expected to
               start with one.
 
@@ -986,8 +988,10 @@
       This is the class everyone extends when they write their own adapter, and the
       same four questions come back on every review. write can be handed a null value
       and read is allowed to return null - an implementation has to deal with null
-      itself, we do not filter it out before calling. The toJson pair never lets an
-      IOException out: anything write throws comes back as JsonIOException, which is
+      itself, we do not filter it out before calling. The two toJson methods are not
+      the same on errors: toJson(Writer) is declared throws IOException and lets
+      whatever write throws go straight out to the caller, while the String one has no
+      way to do that, so it catches and rethrows as JsonIOException, which is
       unchecked. toJsonTree hands back JsonNull for a null value, not a Java null, so
       the return is never null. And fromJson(Reader) builds a reader with the default
       legacy-strict setting, which means it will not complain about several top-level
@@ -1059,8 +1063,8 @@
 
           (a) write may be given a null value and read may return null, so an implementation has
               to handle null itself.
-          (b) the toJson methods never surface an IOException from write - it is rethrown as the
-              unchecked JsonIOException.
+          (b) toJson(Writer) lets an IOException from write reach the caller, while toJson(T)
+              cannot and rethrows it as the unchecked JsonIOException.
           (c) toJsonTree returns JsonNull for a null value rather than a Java null, so its result
               is never null.
           (d) fromJson(Reader) reads with the default legacy-strict configuration and therefore
