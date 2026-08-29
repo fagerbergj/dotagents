@@ -190,11 +190,14 @@
 # Negative controls. Every case above rewards producing more; these three are
 # the only place the suite can see a skill over-applying itself, which for a
 # skill whose whole subject is "should this become a skill" is where its value
-# most shows. None of the three carries skill_quality: two ask for prose and
-# keep it via `transform: output` (bypassing the FILE:-block normalisation, the
-# same way rest-api-authoring's negative controls bypass its document
-# transform), and the third asks for a package but grades its restraint, not
-# its coverage of a request that was never made.
+# most shows. None of the three carries skill_quality, skill_validates or
+# spec_budget_and_refs, and all three are graded by control_quality alone: two
+# ask for prose and keep it via `transform: output` (bypassing the FILE:-block
+# normalisation, the same way rest-api-authoring's negative controls bypass its
+# document transform), and the third asks for a package but grades its
+# restraint, not its coverage of a request that was never made. A grader that
+# can only report "no skill package found" scores the right answer as a failure
+# here, whichever way the right answer is expressed.
 
 - description: negative control - one-off task, not a repeatable one
   vars:
@@ -242,8 +245,16 @@
     task: |
       small thing - we always want responses to use British spelling (colour, organise, not color/organize). can you make that a skill so it just always applies?
   assert:
-    - *skill_validates
-    - *spec_budget_refs
+    # CUT (were here): skill_validates and spec_budget_and_refs. Both require a
+    # valid, complete, cross-referenced package; on this control the right
+    # answer is a single short SKILL.md, or a note declining the scaffolding
+    # altogether, so they recorded correct behaviour as failure. Measured: both
+    # skill-arm rows that pushed back scored skill_validates=0.00
+    # spec_budget_and_refs=0.00, while every no-skill row that over-built scored
+    # spec_budget_and_refs=1.00 - the exact opposite sign to control_quality,
+    # which docked those same over-built rows to 0.50. Three of the 21
+    # skill_validates rows per arm were this case. control_quality is the metric
+    # written for it and is the only one that grades it.
     - type: llm-rubric
       metric: control_quality
       threshold: 0.7
