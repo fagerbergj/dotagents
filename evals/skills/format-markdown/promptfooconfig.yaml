@@ -25,8 +25,12 @@ providers:
 defaultTest:
   options:
     # The llm-swap gateway returns reasoning as message content; strip it so the
-    # graders see the document, not the leak. Unwrap a ```markdown wrapper first,
-    # then drop any preamble ahead of the document's first heading.
+    # graders see the document, not the leak. It removes the reasoning tells in
+    # lib/strip-reasoning.js and unwraps a ```markdown fence around the whole
+    # answer - nothing else. A "Here's a cleaned-up version:" preamble is NOT
+    # removed and reaches the graders: harmless to `preserved`, which only fines
+    # content that went MISSING, but it is an extra rendered block and
+    # unchanged_when_clean counts additions against the ratio.
     transform: file://../../lib/strip-reasoning.js:stripAndUnwrap
     provider:
       id: openai:chat:deepseek/deepseek-v4-flash

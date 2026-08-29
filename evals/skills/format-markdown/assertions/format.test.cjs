@@ -188,6 +188,11 @@ assert.equal(
 );
 assert.equal(stripAndUnwrap(doc), doc, 'no fence is left alone');
 assert.equal(stripAndUnwrap('# Title\n\n```bash\nls\n```'), '# Title\n\n```bash\nls\n```', 'a code fence is not a wrapper');
+// An unfenced preamble SURVIVES the transform - the config comment used to
+// claim it was dropped at the document's first heading. It reaches the graders,
+// where it is an extra rendered block that unchanged_when_clean fines.
+assert.equal(stripAndUnwrap("Here's a cleaned-up version:\n\n" + doc), "Here's a cleaned-up version:\n\n" + doc,
+  'an unfenced preamble is not stripped; the config comment must not claim it is');
 
 // --- the partition itself ----------------------------------------------------
 // readability and unchanged_when_clean grade opposite answers on the same

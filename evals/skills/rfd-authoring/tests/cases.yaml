@@ -183,6 +183,11 @@
       value: |
         A colleague wrote this to you: "{{task}}"
 
+        What you are grading is what the author would send to the people involved, which
+        need not be a message addressed back to that colleague. A document written for
+        those people IS the reply being graded - never score it as raw material for a
+        reply that is missing.
+
         Nothing in this situation is actually undecided. The correct answer is the compact
         thing the note calls for - a record, a decision request, a plan, an explanation -
         or a plain statement that an open-ended exploratory write-up is not needed here.

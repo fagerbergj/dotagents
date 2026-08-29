@@ -90,6 +90,7 @@ async function main() {
   const load = (f) => JSON.parse(execFileSync('python3', ['-c', 'import json,sys,yaml;print(json.dumps(yaml.safe_load(open(sys.argv[1]))))', path.join(suite, f)], { encoding: 'utf8' }));
   const cfg = load('promptfooconfig.yaml');
   const cases = load('tests/cases.yaml');
+  const defaultMetricNames = new Set(cfg.defaultTest.assert.map((a) => a.metric));
   const rubrics = cfg.defaultTest.assert.filter((a) => a.type === 'llm-rubric');
   const byMetric = Object.fromEntries(rubrics.map((a) => [a.metric, a]));
   assert.deepEqual(
@@ -127,8 +128,42 @@ async function main() {
   assert.ok(/no partial credit/i.test(byMetric.no_invented_claims.value), 'invention is a yes/no property');
   assert.equal(byMetric.no_invented_claims.threshold, 1, 'a binary metric passes only at 1');
 
+  // The skill's own prescribed footer slot is not a fabrication. Nine skill-arm
+  // zeros on the stored run quoted `#<issue>` / `#<TBD>` / `#<ticket-number>`
+  // back as "an invented reference"; the baseline, which emits no footer, took
+  // none. A slot asserts nothing, so the metric was reading the template rather
+  // than the message.
+  const invented = byMetric.no_invented_claims.value;
+  assert.match(invented, /unfilled placeholder slot asserts nothing/i,
+    'no_invented_claims fines the skill for the `Refs #<issue>` slot SKILL.md prescribes unless the slot is exempt');
+  // pr-authoring's restraint stops the same exemption at a real number, and so
+  // must this one, or `Refs #4471` invented out of nothing becomes free.
+  assert.match(invented, /A CONCRETE value in\s+that slot is judged normally/,
+    'the placeholder exemption must not cover a specific fabricated issue number');
+
+  // Two metrics, one behaviour, opposite signs is the thing this suite's own
+  // config forbids. splits_mixed_change PAYS for recommending a split; this
+  // metric fined it on the same rows. Naming the act alone was not enough - a
+  // stored zero says the recommendation "is explicitly excluded from
+  // consideration" and then fines a sentence the recommendation is made of -
+  // so the exemption has to reach the proposed messages and the rationale.
+  assert.match(invented, /recommendation about HOW TO COMMIT/i,
+    'recommending a split is not a claim about the code');
+  for (const part of [/proposing a boundary between commits/i, /writing out the\s+subject and body of each proposed commit/i, /the standing reasons for splitting/i]) {
+    assert.match(invented, part, `the split exemption has to name what the recommendation is made of: ${part}`);
+  }
+  // The exemption is scoped: a fabricated cause inside a proposed commit's body
+  // is still an invention, or splitting would launder any claim at all.
+  assert.match(invented, /a fabricated cause inside\s+it still counts/,
+    'exempting the proposal must not exempt what the proposed messages assert about the code');
+  // And it is only load-bearing because the same cases carry both metrics.
+  const mixed = cases.filter((c) => (c.assert || []).some((a) => a.metric === 'splits_mixed_change'));
+  assert.ok(mixed.length >= 4, `splits_mixed_change rides on only ${mixed.length} cases`);
+  assert.ok(defaultMetricNames.has('no_invented_claims'),
+    'no_invented_claims runs on every case, the mixed ones included - which is why the exemption is needed');
+
   // No metric is scored in two places at once.
-  for (const n of new Set(cfg.defaultTest.assert.map((a) => a.metric))) {
+  for (const n of defaultMetricNames) {
     assert.ok(!cases.some((c) => (c.assert || []).some((a) => a.metric === n)), `${n} is defined in defaultTest and again on a case`);
   }
 
