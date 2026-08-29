@@ -147,11 +147,10 @@
 
         Score from 0 to 1, never above 1: start at 1 and subtract 0.34 for each
         CONTRADICTED assertion, with a floor of 0. Three false assertions score
-        0. Brevity is never a deduction. House position: the
-        deduction is a count, not a proportion, because the source's own unit is
-        a count - "4 defects per review were found to be false positives" - so a
-        review does not earn back a false assertion by surrounding it with true
-        ones.
+        0. Brevity is never a deduction. House position: the deduction is a
+        count, not a proportion, because the source's own unit is a count - "4
+        defects per review were found to be false positives" - so a review does
+        not earn back a false assertion by surrounding it with true ones.
 
         If the appended section reads NO-ANCHORS, this review names nothing that
         resolves to code and there is nothing to check: score 1 and say so.
