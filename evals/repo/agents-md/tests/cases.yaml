@@ -47,62 +47,86 @@
 # is the prediction, recorded before the run.
 #
 # ---------------------------------------------------------------------------
-# The image and workspace contract, and what --network=none cost us
+# The image and workspace, and what --network=none cost us
 # ---------------------------------------------------------------------------
+# Built by ./prepare-workspace.sh; the image by the Dockerfile beside it. Both
+# are pinned to the SHAs below, and the image tag carries the repo SHA - a suite
+# naming an image is trusted and nothing checks its contents, so a stale image
+# would silently measure a stale dependency set against a current AGENTS.md.
+#
 # Commands run in a disposable container with NO network (lib/sandbox.js), so
-# everything must be in the image or in the workspace tar before the container
-# starts. Measured on quack at the pinned SHA, not estimated:
+# everything must be in the image or in the workspace before it starts. The
+# split is forced by two facts, both measured rather than assumed:
 #
-#   go mod vendor                     201 MB
-#   cold GOCACHE for ONE package      574 MB   (go build ./internal/dag/)
-#   cold build of that package         52 s    on a many-core host
+#   * The workspace is a tmpfs charged against --memory, so bytes there cost
+#     container RAM. The image is on disk and free at runtime. Everything that
+#     can be read-only belongs in the image.
+#   * A read-only GOCACHE fails on the first miss ("permission denied" on a
+#     cache write), and every row misses - the debug case edits source, and
+#     `make test` compiles test binaries. So the build cache CANNOT live in the
+#     image, even though it would be free there. GOMODCACHE can, and does.
 #
-# `--cpus=1.0` makes that 52 s several minutes, against a 60 s per-command
-# timeout and a 300 s wall clock. So a cold Go build cannot happen inside a row.
-# The workspace tar therefore has to ship a WARM cache, and the caps in
-# promptfooconfig.yaml are raised to hold it.
+#   IMAGE (free at runtime)              WORKSPACE (charged to --memory)
+#     Go 1.26.5, make, git                 tracked tree      40 MB
+#     GOMODCACHE            1.5 GB         plugin mirrors     3 MB
+#     warm GOCACHE seed     757 MB         warm GOCACHE     757 MB
+#     prebuilt `quack`                     prebuilt `quack`
+#                                          -------------------------
+#                                          total           ~900 MB
 #
-# ONE workspace, built like this (both arms get the identical copy):
-#   1. prepareRepo(quack, a19807d, ws)   tracked tree, AGENTS.md and its
-#                                        CLAUDE.md symlink removed, one commit.
-#   2. git checkout 8e81263^ -- internal/dag/admission.go
-#        The test from 8e81263 stays, its source fix does not. One workspace, so
-#        the buggy state is the state - it compiles, so it does not disturb the
-#        build cases, and it gives the report and debug cases a real failure.
-#   3. Bare mirrors at .plugin-mirror/{dotagents,ponytail}.git, and
-#      .agents/vendor/plugins.yaml rewritten to point `url:` at them.
+# 40 MB, not the 224 MB working tree: prepareRepo uses `git archive`, so the
+# untracked build artifacts in a developer's checkout never ship.
+#
+# Timing, warm, `go test -count=1 ./...` on quack: 71 s at 12 cores, 74 s at 4,
+# 162 s at 1. The shipped 1.0 CPU cannot finish the real workload inside any
+# sane timeout, so the suite asks for 4 - free, since concurrency is 1 on a
+# 12-core host. BECAUSE the cache is warm and shipped equally to both arms,
+# build TIMING measures the cache and not the file. Command and token counts
+# stay valid; wall-clock does not.
+#
+# THE WORKSPACE, in order (prepare-workspace.sh does all of this):
+#   1. prepareRepo(quack, a19807d, ws)  tracked tree, AGENTS.md and its
+#                                       CLAUDE.md symlink removed, committed
+#                                       AFTER the removal so the history cannot
+#                                       serve the treatment either.
+#   2. the test from 8e81263 in, its source fix reverted to 8e81263^.
+#        One workspace, so the buggy state IS the state. It compiles, so the
+#        build cases are undisturbed, and it gives the report and debug cases a
+#        real failure to find.
+#   3. bare mirrors at .plugin-mirror/, and .agents/vendor/plugins.yaml pointed
+#      at them.
 #        This is what keeps the fresh-clone state reproducible offline.
 #        scripts/plugins.sh does a `git clone`, which --network=none forbids
 #        against GitHub but permits against a local path. Seeding
 #        .agents/vendor/dotagents directly instead would make bare
-#        `go test ./...` work and delete the whole point of AGENTS.md line 2.
-#        The infidelity is the rewritten URL, and nothing else.
-#   4. go mod vendor, then `make plugins && GOCACHE=$ws/.cache/go-build go build
-#      ./...`, then DELETE .agents/vendor/{dotagents,ponytail} again.
-#        The cache stays valid for every package except the root embed package,
-#        which recompiles in seconds once the trees are restored.
-#   5. A prebuilt `quack` binary at the workspace root, for the L7 probe.
-#      HOME=/workspace, so GOCACHE and GOMODCACHE resolve inside the workspace
-#      with no env var to set, and vendor/ makes Go use -mod=vendor by itself.
+#        `go test ./...` succeed and delete the point of AGENTS.md line 2.
+#        The rewritten URL is the only infidelity in the workspace.
+#   4. one amended commit over all of it, so a case can verify itself with
+#      `git diff` against a tree that starts clean.
+#   5. the warm GOCACHE copied out of the image, after that commit.
 #
 # Per-case environment:
 #   tree     the tree and a shell. git, coreutils. Nothing else.
-#   go       + the Go toolchain in the image and the warm cache above.
-#   binary   + the prebuilt `quack` at the workspace root.
+#   go       + the Go toolchain and the warm caches above.
+#   binary   + a prebuilt `quack` at the workspace root.
 #
 # CUT for --network=none. Both would have failed identically in both arms,
 # which measures nothing:
-#   * "make a small change end to end" (openapi + make generate). Needs
-#     frontend/node_modules and oapi-codegen; `npm ci` cannot reach a registry,
-#     and node_modules on top of 800 MB does not fit the memory ceiling. This
-#     was the generic population's only end-to-end-change shape; the rename
-#     control is the nearest survivor, and it is a much smaller task.
-#   * probe L3, `npm --prefix scripts ci`. The command the AGENTS.md names is
-#     exactly the one the network ban forbids. Line 3 is now unmeasured.
+#   * "make a small change end to end" (openapi + make generate). `npm ci`
+#     cannot reach a registry at run time, and while frontend/node_modules
+#     could be baked into the image, the case also needs the model to RUN
+#     `npm run generate`, which shells out to a network-assuming toolchain.
+#     This was the generic population's only end-to-end-change shape; the
+#     rename control is the nearest survivor and is a much smaller task.
+#   * probe L3, `npm --prefix scripts ci`. The command the line names is
+#     exactly the one the ban forbids, so both arms fail it identically.
+#     Baking scripts/node_modules into the image would leave the instruction
+#     with nothing to do, which is the same dead case by another route.
+#     AGENTS.md line 3 is now unmeasured. node is not in the image at all.
 #
-# So the generic population is FOUR cases and every one of them leans on the
-# warm-cache workspace. If that workspace cannot be built, the suite collapses
-# to the three tree-only cases and is not worth running.
+# So the generic population is FOUR cases, three of which lean on the Go
+# toolchain. If the image cannot be built, the suite collapses to the three
+# tree-only cases and is not worth running.
 
 # ===========================================================================
 # A. GENERIC TASK CASES - the primary measurement
