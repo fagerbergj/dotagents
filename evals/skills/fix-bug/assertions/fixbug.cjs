@@ -42,18 +42,6 @@ function citesFile(tokens, sf) {
   return false;
 }
 
-// Distinct tokens in `text` that resolve to a real file inside the fixture's
-// tree - the model's actual file citations, as opposed to noise (a version
-// string, a URL fragment) that happens to look filename-shaped. Used as the
-// denominator for precision: how much of what got named was real.
-function citedRealFiles(text, dir) {
-  const real = new Set();
-  for (const tok of fileTokens(text)) {
-    if (fs.existsSync(path.join(dir, tok))) real.add(tok);
-  }
-  return real;
-}
-
 // A truncated stub and a correctly-argued decline both compute out to
 // "invented nothing" / "proposed no diff" against the graders below - so an
 // empty (or whitespace-only) answer has to be rejected before either grader
@@ -96,12 +84,31 @@ function noInventedFileRefs(output, context) {
   return { pass: false, score: 0, reason: `References to files not in the tree and not in the report: ${[...new Set(bad)].slice(0, 4).join(', ')}.` };
 }
 
-// Claim: did the proposed fix land where the real fix landed? Computed
-// against the withheld diff, never against wording in the model's output -
-// see the shared fixtures.js sibling for the same principle applied to a
-// review's citations. For the "not a bug" control there is no real fix to
-// match against; the question inverts to whether the model invented one.
-function touchesRealFix(output, context) {
+// Claim: did the answer land where the real fix landed? Computed against the
+// withheld fix's file/function list, never against wording in the model's
+// output - see the shared fixtures.js sibling for the same principle applied
+// to a review's citations. For the "not a bug" control there is no real fix
+// to match against; the question inverts to whether the model invented one.
+//
+// Recall alone. It shipped as `touches_real_fix` = recall x precision over
+// every real in-tree file named, and that product reported the opposite sign
+// from both its halves - -0.233 for the skill arm on recall of +0.111 - which
+// was twice read out as "the skill is worse at finding where the bug is".
+// Measured over the 105 non-control rows of results/fix-bug@1.0.1.json, the
+// precision half was mostly counting TEST files: the skill arm named 94 real
+// files to the baseline's 54 and 35 of the 40 extra were the file a
+// regression test goes in, so the term docked the arm for the behaviour
+// `regression_proof` scores +0.49 for (worst case: both flask-6096 files
+// named plus both test files, 2/4, a full-recall answer halved). Excluding
+// test files from the denominator it goes flat on those same rows, 0.937 vs
+// 0.923, against 0.909 vs 0.612 as shipped. And the scattergun it was built to
+// catch never happens - the most real files any of the 105 answers names is
+// 4. A denominator of files named AS THE PLACE TO CHANGE would be the honest
+// version; nothing deterministic separates that from "I read this file"
+// without prose-matching, the wall develop-feature's `noInventedCitations`
+// hit. Unified-diff headers dodge the prose rule but not the artifact: 12-13
+// rows carry one and it is usually the test file.
+function findsTheFix(output, context) {
   if (!hasSubstance(output)) return NO_SUBSTANCE;
   const spec = BY_NAME.get(context?.vars?.fixture);
   if (!spec) return { pass: true, score: 1, reason: 'No fixture: nothing to resolve against.' };
@@ -122,23 +129,16 @@ function touchesRealFix(output, context) {
   const fileHits = f.sourceFiles.filter((sf) => citesFile(tokens, sf));
   const funcHits = (f.functions || []).filter((fn) => new RegExp(`\\b${escapeRegExp(fn)}\\b`).test(text));
   const total = f.sourceFiles.length + (f.functions || []).length;
-  const hits = fileHits.length + funcHits.length;
-  const recall = total ? hits / total : fileHits.length ? 1 : 0;
+  const score = total ? (fileHits.length + funcHits.length) / total : fileHits.length ? 1 : 0;
+  // Threshold: naming a file the fix changed. A function name alone still
+  // scores partial credit, but "found where the bug lives" is a claim about
+  // the file - the same symbol can be reached from several.
   const pass = fileHits.length > 0;
 
-  // Precision: naming ten real files to catch the one real fix is not the
-  // same as naming just the one - of the real, in-tree files actually named,
-  // how many were the fix. Only meaningful once at least one is; with no
-  // file hit, precision has nothing to divide (pass is already false, and
-  // recall alone - which may still carry function credit - is the score).
-  const namedFiles = pass ? citedRealFiles(text, f.dir) : null;
-  const precision = pass ? fileHits.length / namedFiles.size : 1;
-  const score = recall * precision;
-
   const reason = pass
-    ? `Named ${fileHits.length}/${f.sourceFiles.length} real file(s)${funcHits.length ? ` and ${funcHits.length}/${(f.functions || []).length} real function(s)` : ''}; ${fileHits.length}/${namedFiles.size} of the real files named were actually the fix.`
+    ? `Named ${fileHits.length}/${f.sourceFiles.length} real file(s)${funcHits.length ? ` and ${funcHits.length}/${(f.functions || []).length} real function(s)` : ''}.`
     : `Did not name any of the real fix's file(s): ${f.sourceFiles.join(', ')}.`;
   return { pass, score, reason };
 }
 
-module.exports = { noInventedFileRefs, touchesRealFix, PATHLIKE, FILENAME, fileTokens, citesFile, citedRealFiles, hasSubstance };
+module.exports = { noInventedFileRefs, findsTheFix, PATHLIKE, FILENAME, fileTokens, citesFile, hasSubstance };
