@@ -63,11 +63,13 @@ defaultTest:
     - type: javascript
       value: file://assertions/comment.cjs:codePreserved
       metric: code_preserved
-    # 3. not_narration lives in tests/cases.yaml, on the nine cases that hide
-    #    something, not here. It scores (K - F) / N over the comments added, so a
-    #    reply that correctly adds nothing scores 0 - which is the right answer on
-    #    the five negative controls. Those are graded by restraint instead, and the
-    #    two metrics now partition the suite rather than overlapping on it.
+    # 3. not_narration and no_false_comments live in tests/cases.yaml, on the nine
+    #    cases that hide something, not here. They are one enumeration of the added
+    #    comments read two ways: K / N, the share that say something a competent
+    #    reader would not already know, and whether any of them is false about the
+    #    code. Both score a reply that adds nothing at 0, which is why neither runs
+    #    on the five negative controls - restraint grades those instead, so the
+    #    metrics partition the suite rather than overlapping on it.
     # 4. Loading a SKILL.md is not free; the overhead is part of the comparison.
     - type: latency
       threshold: 180000

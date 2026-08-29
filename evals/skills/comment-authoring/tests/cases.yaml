@@ -14,101 +14,196 @@
 # not carry and nothing else, the rest are self-evident throughout. None of them
 # has a second defensible answer - restraint scores adding nothing and adding
 # only an assumption-carrying comment the same, so both correct answers pass.
-
-- description: go constraint - retry policy and backoff budget
+#
+# PROVENANCE. The nine graded cases come from seven different projects, in five
+# languages, and no project supplies more than three of them. That spread is the
+# point: a suite drawn from one codebase measures how well the model fits that
+# codebase's idiom, not whether the skill works. `fagerbergj/quack` was removed
+# outright in the previous revision - quack is an AI code-review bot that runs
+# these very skills, so its code may have been commented with the skill under
+# test - and its eight cases were replaced one-for-one from `turnstone`, which
+# then supplied eight of the nine. Six of those eight are now replaced again,
+# from six unrelated public repositories. Do not reintroduce quack material, and
+# do not let any one project drift back above roughly a third of the suite.
+#
+# Each extract is the real file at the pinned commit with its comments and
+# docstrings stripped. Where a case shows only part of a module - the TLS client
+# without `_request_cert`, TypeAdapter without `nullSafe` - that is deliberate:
+# the file is a coherent extract, not a compiling program, and every fact the
+# ask carries is about code that IS shown.
+#
+# THE SIX NEW CASES, in file order.
+#
+#   - go constraint - `caddyserver/caddy`, `modules/caddyhttp/encode/encode.go`
+#     L443-518 at 502691f5, the encoder's `Close`, `init` and `hasVaryValue`.
+#     Qualifies: the status-code guard exists for a named regression, the two
+#     header deletions each have an external reason, the ETag suffix is an RFC
+#     requirement, and the obligation to strip that suffix back out of
+#     If-None-Match happens in another file entirely.
+#   - go workaround - `rclone/rclone`, `fs/fshttp/dialer.go` L42-127 at
+#     55fa9b6a, `DialContext` and `timeoutConn`. Qualifies: the family suffix
+#     and the success-path Windows warning are both workarounds for named Go
+#     issues, the deadline is an idle timeout rather than an operation timeout,
+#     and the bandwidth accounting records a shape the author prefers and did
+#     not build.
+#   - python security - `psf/requests`, `src/requests/sessions.py` L127-132 and
+#     L309-392 at 6e83187b: the `SessionRedirectMixin` declaration, then
+#     `rebuild_auth`, `rebuild_proxies` and `rebuild_method`. Every line of the
+#     three is a credential-leak rule that reads like housekeeping. The class
+#     header is carried so the extract starts at column zero - a YAML block
+#     scalar takes its indentation from the first line, so an extract that
+#     began inside the class body would silently store dedented code.
+#   - javascript public API - `expressjs/express`, `lib/request.js` L220-366 at
+#     023767fe, the `query`, `is`, `protocol`, `secure`, `ip` and `ips`
+#     accessors. Qualifies: four contract facts a caller cannot read off the
+#     getters, three of them turning on the "trust proxy" setting.
+#   - java public API - `google/gson`,
+#     `gson/src/main/java/com/google/gson/TypeAdapter.java` L122-214 at
+#     b3f4ca20, plus the class-closing brace from L323. Qualifies: null
+#     handling is the implementer's job, the checked exception reaches the
+#     caller from the Writer overload and is rewrapped unchecked by the String
+#     one, the tree form returns JsonNull rather than null, and the
+#     reader's default strictness accepts trailing data. This case restores the
+#     Java coverage the quack removal cost, and carries the third
+#     doc_placement_floor.
+#   - python security plus deferred work - `pallets/click`,
+#     `src/click/_termui_impl.py` L548-632 at 36baa15f, `_pipepager`.
+#     Qualifies: a copied environment and a shell-free argv, plus two pieces of
+#     deferred work with their conditions - a branch that is dead until the
+#     caller's routing changes, and a swallowed ^C left to the user's own
+#     configuration.
+#
+# THE THREE TURNSTONE CASES KEPT, unchanged: the thumbnails decode bound
+# (performance), the TypeScript SDK base client (public API, two
+# doc_placement_floor assertions) and the boot-only PEM sweep (invariant). All
+# five negative controls are unchanged too.
+#
+# REMOVED IN THIS PASS, all turnstone: the mcp_oauth refresh cooldown
+# (constraint), the tls.py cancellation shield (workaround), the output_guard
+# credential redaction (security), the list_cache.js shared cache (javascript
+# public API), the mcp_crypto compare-and-swap (security plus deferred work),
+# and the hand-written MemoryClient (python public API) - the last of these was
+# not from any repository at all, which is why it went rather than a turnstone
+# case: the suite's opening line says real code.
+#
+# AI-AUTHORSHIP SCREEN. Run twice per case, and per line rather than per file.
+# Every commit attributed by `git blame` over the exact extracted line range was
+# checked for an authorship disclosure - `Co-Authored-By: Claude ...
+# <noreply@anthropic.com>`, a "Generated with Claude Code" trailer, a bot
+# co-author - AND for `copilot`, `claude` or `anthropic` in the author or
+# committer ident. That second check is not redundant: `copilot-swe-agent[bot]`
+# authors commits whose own `Co-authored-by:` names a human, so a trailer-only
+# screen passes them. Contamination counts at the time of writing: caddy 33,
+# rclone 18, express 2, click/requests/gson 0. Every range shown here blames
+# clean under both checks. Subject-matter mentions of Anthropic or Copilot
+# inside a body are not authorship claims.
+#
+# Nothing grades on the language: the comment scanner reads Java and JavaScript
+# through the same C-like path the three Go negative controls exercise, and
+# Python through its own. Rust was considered and left out - its lifetime
+# syntax (`&'a str`) confuses the scanner's quote handling.
+#
+# Metric counts: not_narration 9, no_false_comments 9, fact_transfer 9,
+# restraint 5, doc_placement_floor 4 assertions over 3 cases. no_false_comments
+# is the F term lifted out of not_narration's numerator; it runs on the same
+# nine cases and nowhere else.
+# NOT RE-MEASURED. Every stored baseline for this suite was taken on a case set
+# that included eight quack files, and the revision before this one on a set
+# that was eight-ninths turnstone. Neither describes this one. All of it needs
+# re-measuring.
+- description: go constraint - what an encoder has to take out of the response headers
   vars:
     lang: go
     ask: |
-      Can you comment this up before I push it back? Got a review saying "why is
-      POST treated differently, looks like a bug". It isn't. A POST that times out
-      mid-flight may already have been processed server-side, so we only send it
-      again when the connection provably never landed - WithIdempotent is the
-      escape hatch for calls where a repeat is harmless, like regenerating a model
-      completion. The 4 attempts and the 200ms/5s pair are there so a dead upstream
-      gives up after about a second instead of grinding away for minutes.
+      Comment pass on this before it goes back up. Review came back saying three of
+      these look defensive and asking whether they are needed - they all are, and the
+      reason is nowhere in the file. The statusCode check is issue #5059: if nothing
+      set a status explicitly we must not invent one on the way out. Content-Length
+      goes because of golang/go#14975, and Accept-Ranges goes because once we encode
+      on the fly we no longer know what byte ranges mean. The Etag suffix is RFC 9110
+      section 8.8.3.3 - a strong ETag has to be distinct per selected representation -
+      and the part that catches people is that whatever we append here has to be
+      stripped back out of If-None-Match before the request goes on upstream, since
+      the upstream handler built that ETag without knowing we would touch it.
     code: |
-      package httpx
-
-      import (
-      	"context"
-      	"errors"
-      	"net"
-      	"net/http"
-      	"strconv"
-      	"time"
-      )
-
-      const (
-      	DefaultMaxAttempts = uint(4)
-      	DefaultBaseDelay   = 200 * time.Millisecond
-      	DefaultMaxDelay    = 5 * time.Second
-      )
-
-      type idempotencyKey struct{}
-
-      func WithIdempotent(ctx context.Context) context.Context {
-      	return context.WithValue(ctx, idempotencyKey{}, true)
-      }
-
-      func isIdempotent(ctx context.Context) bool {
-      	v, _ := ctx.Value(idempotencyKey{}).(bool)
-      	return v
-      }
-
-      type transport struct {
-      	next        http.RoundTripper
-      	maxAttempts uint
-      	baseDelay   time.Duration
-      	maxDelay    time.Duration
-      }
-
-      func (t *transport) shouldRetry(req *http.Request, resp *http.Response, err error) bool {
-      	free := req.Method == http.MethodGet || req.Method == http.MethodHead || isIdempotent(req.Context())
-      	if err != nil {
-      		var netErr net.Error
-      		if errors.As(err, &netErr) && netErr.Timeout() {
-      			return free
+      func (rw *responseWriter) Close() error {
+      	if !rw.wroteHeader {
+      		cl, err := strconv.Atoi(rw.Header().Get("Content-Length"))
+      		if err == nil && cl > rw.config.MinLength {
+      			rw.init()
       		}
-      		var opErr *net.OpError
-      		if errors.As(err, &opErr) && !opErr.Temporary() {
-      			return true
+
+      		if rw.statusCode != 0 {
+      			rw.ResponseWriter.WriteHeader(rw.statusCode)
       		}
-      		return free
+      		rw.wroteHeader = true
       	}
-      	if resp == nil {
-      		return false
+
+      	var err error
+      	if rw.w != nil {
+      		err = rw.w.Close()
+      		rw.w.Reset(nil)
+      		rw.config.writerPools[rw.encodingName].Put(rw.w)
+      		rw.w = nil
       	}
-      	if resp.StatusCode == http.StatusTooManyRequests {
-      		return free
-      	}
-      	return free && resp.StatusCode >= 500
+      	return err
       }
 
-      func retryAfter(resp *http.Response) (time.Duration, bool) {
-      	if resp == nil {
-      		return 0, false
+      func (rw *responseWriter) Unwrap() http.ResponseWriter {
+      	return rw.ResponseWriter
+      }
+
+      func (rw *responseWriter) init() {
+      	if rw.disabled {
+      		return
       	}
-      	v := resp.Header.Get("Retry-After")
-      	if v == "" {
-      		return 0, false
+
+      	hdr := rw.Header()
+
+      	if hdr.Get("Content-Encoding") == "" && isEncodeAllowed(hdr) &&
+      		rw.config.Match(rw) {
+      		rw.w = rw.config.writerPools[rw.encodingName].Get().(Encoder)
+      		rw.w.Reset(rw.ResponseWriter)
+      		hdr.Del("Content-Length")
+      		hdr.Set("Content-Encoding", rw.encodingName)
+      		if !hasVaryValue(hdr, "Accept-Encoding") {
+      			hdr.Add("Vary", "Accept-Encoding")
+      		}
+      		hdr.Del("Accept-Ranges")
+
+      		if etag := hdr.Get("Etag"); etag != "" && !strings.HasPrefix(etag, "W/") {
+      			etag = fmt.Sprintf(`%s-%s"`, strings.TrimSuffix(etag, `"`), rw.encodingName)
+      			hdr.Set("Etag", etag)
+      		}
       	}
-      	if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
-      		return time.Duration(secs) * time.Second, true
+      }
+
+      func hasVaryValue(hdr http.Header, target string) bool {
+      	for _, vary := range hdr.Values("Vary") {
+      		for val := range strings.SplitSeq(vary, ",") {
+      			if strings.EqualFold(strings.TrimSpace(val), target) {
+      				return true
+      			}
+      		}
       	}
-      	if at, err := http.ParseTime(v); err == nil {
-      		return time.Until(at), true
-      	}
-      	return 0, false
+      	return false
       }
   assert:
     # not_narration, enumerate-and-divide. The three-band holistic version had the
     # worst per-cell spread in the suite (0.568 over five identical runs) even at
-    # n=11, cells wandering [0, 0.5, 0, 1, 0.5] between runs. A false claim is
-    # counted as an F term instead of capping the row: a cap is a binary switch
-    # bolted onto a graded scale. Anchored here and aliased by the eight other
-    # cases that hide something. The negative controls do not carry it - scoring
-    # (K - F) / N would score a reply that correctly adds nothing at 0, so those
-    # are graded by restraint instead.
+    # n=11, cells wandering [0, 0.5, 0, 1, 0.5] between runs. Anchored here and
+    # aliased by the eight other cases that hide something. The negative controls
+    # do not carry it - K / N would score a reply that correctly adds nothing at
+    # 0, so those are graded by restraint instead.
+    #
+    # It scored (K - F) / N until now, which collapsed two independent failures:
+    # a comment that states the obvious and a comment that is FALSE about the
+    # code cost the row exactly the same, and F was buried in a numerator instead
+    # of reported. They are different properties - one is a comment not worth
+    # writing, the other is a comment that misleads the next reader - so F is now
+    # its own metric below. On the 18 stored rows of results/comment-authoring
+    # @2.0.1.json F was non-zero exactly once, so this split is a correction to
+    # what the number MEANS, not a change anyone should expect to see move.
     - &not_narration
       type: llm-rubric
       metric: not_narration
@@ -130,311 +225,56 @@
         be that count. For each numbered comment answer, in one line:
           - the constraint, cause, contract, or consequence it states, quoted; or NARRATION
             if a competent programmer in this language, reading only the identifiers and
-            statements it sits beside, would already know what it says; or FALSE if it makes
-            a claim that is not true of this code.
+            statements it sits beside, would already know what it says.
         Answer for every comment before scoring. Do not group them.
 
+        Take each comment's claim at face value. Whether it is TRUE of this code is a
+        separate question with its own score: a comment that states a constraint counts
+        here even if you believe the constraint is wrong, and a comment that states the
+        obvious counts as NARRATION even if it is perfectly accurate.
+
         Let K be the number answered with a quoted constraint, cause, contract, or
-        consequence. Let F be the number answered FALSE.
+        consequence.
 
-        Score from 0 to 1, never above 1: (K - F) / N, floored at 0. If N is 0, score 0.
-        State N, K, F and the arithmetic in your reason.
-    - type: llm-rubric
-      metric: fact_transfer
-      threshold: 0.6
+        Score from 0 to 1, never above 1: K / N. If N is 0, score 0. State N, K and the
+        arithmetic in your reason.
+    # Split out of not_narration, where a FALSE comment was subtracted from the
+    # count of good ones: one false claim and one obvious remark moved the score
+    # by the same 1/N, and a reader of the number could not tell which had
+    # happened. A comment that lies about the code is a different defect from a
+    # comment not worth writing - it costs the next reader more than no comment
+    # at all - so it is reported rather than netted off.
+    #
+    # Yes/no, not a proportion: a file carrying one false claim is not "mostly
+    # accurate", it has a wrong statement in it that someone will act on. Same
+    # shape as fix-bug's no_invented_file_refs. N=0 scores 0 exactly as
+    # not_narration does, so the two never point opposite ways on a reply that
+    # added nothing - restraint owns that behaviour, on the controls.
+    - &no_false_comments
+      type: llm-rubric
+      metric: no_false_comments
+      threshold: 1
       value: |
-        The requester wrote this:
-        "{{ask}}"
+        Judge only the comments the Reply added. Ignore where comments sit, their length,
+        their syntax, and their punctuation. Ignore whether a comment was worth writing at
+        all - a comment that states the obvious is not a fault here, and is scored
+        separately.
 
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) a POST that times out may already have executed server-side, so it is retried
-              only when the request provably never reached the server; the asymmetry is
-              correctness, not a bug.
-          (b) WithIdempotent is a caller's opt-in for requests where a duplicate is harmless.
-          (c) the attempt count and the base/max delay pair bound total time against a dead
-              upstream to roughly a second rather than minutes.
-
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried.
-        Award nothing for a comment that only renames the code in English, such as restating
-        that GET, HEAD and idempotent requests are retried.
-
-        Ignore comment placement, length and syntax.
-
-
-- description: go workaround - span reparenting around an upstream context rebuild
-  vars:
-    lang: go
-    ask: |
-      Nobody remembers why this re-injects a span context instead of just using
-      the one on ctx, and someone already "simplified" it once and silently broke
-      our traces for a week. The ADK rebuilds the child context this callback runs
-      under, so oteltrace.SpanFromContext(ctx) hands back the no-op span and we
-      root a brand new disconnected trace. Coords carries the SpanContext we
-      captured before that rebuild. And no, StartLinked is not the fix - it forces
-      WithNewRoot and forks the trace anyway. Comment it so the next person leaves
-      it alone.
-    code: |
-      package agent
-
-      import (
-      	"go.opentelemetry.io/otel/attribute"
-      	oteltrace "go.opentelemetry.io/otel/trace"
-      	adkagent "google.golang.org/adk/v2/agent"
-
-      	"github.com/fagerbergj/quack/internal/ledger"
-      	"github.com/fagerbergj/quack/internal/otelobs"
-      	"github.com/fagerbergj/quack/internal/stream"
-      )
-
-      func emitCompaction(ctx adkagent.Context, before, after int) {
-      	coords := ledger.CoordsFromContext(ctx)
-      	parentCtx := oteltrace.ContextWithSpanContext(ctx, coords.SpanContext)
-      	_, span := otelobs.Start(parentCtx, "compaction",
-      		attribute.String("node_id", coords.Node),
-      		attribute.String("run_id", coords.Round),
-      		attribute.Bool(otelobs.GenAIConversationCompacted, true))
-      	span.End()
-
-      	sink, ok := stream.YieldFromContext(ctx)
-      	if !ok {
-      		return
-      	}
-      	sink(stream.Compaction(coords.Node, coords.Round, int32(before), int32(after)))
-      }
-  assert:
-    - *not_narration
-    - type: llm-rubric
-      metric: fact_transfer
-      threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
-
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the ADK rebuilds the context this callback runs under, so SpanFromContext on ctx
-              returns a no-op span and starting from ctx would root a new disconnected trace.
-          (b) Coords carries the SpanContext captured before that rebuild, which is why the
-              span context is re-injected rather than taken from ctx.
-          (c) StartLinked is not the fix - it forces WithNewRoot and forks the trace anyway.
-
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. Fact (c) counts only if
-        the Reply names the alternative explicitly; a general "do not simplify this" warning
-        does not count.
-
-        Ignore comment placement, length and syntax.
-
-
-- description: go security - credential redaction before anything is persisted
-  vars:
-    lang: go
-    ask: |
-      This one guards the ledger - anything that gets past it lands in a file we
-      keep for months and ship to support. Two things people keep trying to
-      "clean up": the string branch re-parses values as JSON because half our
-      upstreams hand us a pre-marshalled blob and the keys would otherwise sail
-      straight through, and the key set is matched lowercased because header
-      casing is whatever the sender felt like that day. Comment it before I open
-      the PR.
-    code: |
-      package ledger
-
-      import (
-      	"encoding/json"
-      	"strings"
-      )
-
-      var redactedKeys = map[string]bool{
-      	"authorization": true, "www-authenticate": true, "proxy-authorization": true,
-      	"api_key": true, "apikey": true, "api-key": true, "x-api-key": true,
-      	"token": true, "access_token": true, "refresh_token": true, "id_token": true,
-      	"secret": true, "client_secret": true, "webhook_secret": true,
-      	"password": true, "passwd": true,
-      	"private_key": true, "privatekey": true,
-      	"cookie": true, "set-cookie": true,
-      }
-
-      const redactedValue = "[REDACTED]"
-
-      func Redact(v any) any {
-      	switch x := v.(type) {
-      	case map[string]any:
-      		out := make(map[string]any, len(x))
-      		for k, val := range x {
-      			if redactedKeys[strings.ToLower(k)] {
-      				out[k] = redactedValue
-      				continue
-      			}
-      			out[k] = Redact(val)
-      		}
-      		return out
-      	case []any:
-      		out := make([]any, len(x))
-      		for i, e := range x {
-      			out[i] = Redact(e)
-      		}
-      		return out
-      	case string:
-      		return redactJSONString(x)
-      	default:
-      		return v
-      	}
-      }
-
-      func redactJSONString(s string) string {
-      	var decoded any
-      	if err := json.Unmarshal([]byte(s), &decoded); err != nil {
-      		return s
-      	}
-      	switch decoded.(type) {
-      	case map[string]any, []any:
-      	default:
-      		return s
-      	}
-      	b, err := json.Marshal(Redact(decoded))
-      	if err != nil {
-      		return s
-      	}
-      	return string(b)
-      }
-  assert:
-    - *not_narration
-    - type: llm-rubric
-      metric: fact_transfer
-      threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
-
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the string branch re-parses values as JSON because some upstreams hand over a
-              pre-marshalled blob whose keys would otherwise pass through unredacted.
-          (b) keys are matched lowercased because header casing is not controlled by this code.
-          (c) anything that gets past this is persisted for months and shipped to support, so a
-              miss is a durable disclosure.
-
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A comment that merely
-        labels the key set "sensitive keys" or the function "redacts secrets" carries none of
+        List every comment the Reply added, quoting each verbatim and numbering them. Let N
+        be that count. For each numbered comment answer, in one line, TRUE or FALSE:
+        answer FALSE only when the code beside it contradicts the comment - it names a
+        function, field, parameter, error, or branch that is not there; it states a
+        condition the code does not test; it describes behaviour this code does not have;
+        or it attributes the code to a cause or standard that does not apply to it. A
+        claim you cannot check against the code shown, and a judgement call you would
+        argue with, are both TRUE. Answer for every comment before scoring. Do not group
         them.
 
-        Ignore comment placement, length and syntax.
+        Let F be the number answered FALSE.
 
-
-- description: go performance - the ugly cap ladder that keeps a request under budget
-  vars:
-    lang: go
-    ask: |
-      I know this looks like something written at 2am, and it sort of was. The
-      three-pass cap ladder is deliberate: one pass at 500 chars shreds tool
-      results that would have fit fine at 8k, so we squeeze in stages and stop as
-      soon as we're under. The char-per-token divisor of 4 and the 1.3 calibration
-      ratio came out of comparing our estimate against what the provider actually
-      billed us. Can you put some comments on it so the next reader doesn't
-      "simplify" it into a single pass?
-    code: |
-      package agent
-
-      import (
-      	"log/slog"
-
-      	adkagent "google.golang.org/adk/v2/agent"
-      	"google.golang.org/adk/v2/model"
-      	"google.golang.org/genai"
-      )
-
-      const (
-      	charsPerToken           = 4
-      	toolOutputMaxChars      = 2_000
-      	minPreserveTokens       = 2_000
-      	defaultCalibrationRatio = 1.3
-      )
-
-      func backstop(ctx adkagent.Context, req *model.LLMRequest, threshold int) {
-      	if len(req.Contents) == 0 {
-      		return
-      	}
-      	ratio := defaultCalibrationRatio
-      	overhead := intState(ctx, overheadKey)
-
-      	if head := calibrated(estimateTokens(req.Contents[:1]), ratio, overhead); head > threshold {
-      		if truncateHeadToFit(req.Contents, threshold, ratio) {
-      			slog.Warn("compaction truncated an oversized prompt as a last resort",
-      				"component", "agent", "threshold", threshold, "head_tokens", head)
-      		}
-      	}
-      	for _, cap := range []int{8_000, toolOutputMaxChars, 500} {
-      		if calibrated(estimateTokens(req.Contents), ratio, overhead) <= threshold {
-      			break
-      		}
-      		if n := clampToolResults(req.Contents[1:], cap); n > 0 {
-      			slog.Warn("compaction clamped oversized tool results",
-      				"component", "agent", "clamped", n, "cap_chars", cap)
-      		}
-      	}
-      	if got := calibrated(estimateTokens(req.Contents), ratio, overhead); got > threshold {
-      		slog.Warn("compaction could not bring request under budget; overflow likely",
-      			"component", "agent", "calibrated_tokens", got, "threshold", threshold)
-      	}
-      }
-
-      func truncateHeadToFit(contents []*genai.Content, budget int, ratio float64) bool {
-      	if len(contents) == 0 || contents[0] == nil {
-      		return false
-      	}
-      	headBudgetEst := int(float64(budget)/ratio) - estimateTokens(contents[1:])
-      	if headBudgetEst < minPreserveTokens {
-      		headBudgetEst = minPreserveTokens
-      	}
-      	headMaxChars := headBudgetEst * charsPerToken
-      	if contentBytes(contents[0]) <= headMaxChars {
-      		return false
-      	}
-      	contents[0] = truncateContentMiddle(contents[0], headMaxChars)
-      	return true
-      }
-  assert:
-    - *not_narration
+        Score from 0 to 1, never above 1: 1 if F is 0, and 0 if F is 1 or more. There is
+        no partial credit - one wrong statement about the code is the failure. If N is 0,
+        score 0. State N, F, which comments were FALSE and why, and the arithmetic.
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
@@ -457,82 +297,113 @@
         than saying something about the declaration it sits on, carries no facts. Facts must be
         stated as claims about this code.
 
-          (a) the staged cap ladder is deliberate - a single pass at the smallest cap would
-              shred tool results that would have fit under a larger cap, so it stops as soon as
-              the request is under budget.
-          (b) the chars-per-token divisor is an estimate, not an exact conversion.
-          (c) the calibration ratio was derived by comparing the local estimate against what the
-              provider actually billed.
+          (a) the status-code guard is there because a status that was never set explicitly must
+              not be written out, not as a general defensive check.
+          (b) Content-Length is dropped for a known Go issue, and Accept-Ranges is dropped because
+              byte ranges are not knowable for content encoded on the fly.
+          (c) the encoding name is appended to a strong ETag because the standard requires a strong
+              ETag to differ per selected representation.
+          (d) that appended suffix has to be removed from If-None-Match before the request is sent
+              upstream, because upstream handlers produced their ETag without knowing about it.
 
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A comment saying the loop
-        "tries progressively smaller caps" carries none of them.
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that only says Close "flushes and releases the writer", or that init "sets the
+        encoding headers", carries none of them.
 
         Ignore comment placement, length and syntax.
-
-
-- description: go public API - godoc contract on an encode/decode pair
+- description: go workaround - a dialer that has to name the address family itself
   vars:
     lang: go
     ask: |
-      This package is the bit three other packages import, and I keep getting
-      asked the same questions in review, so I want it written down next to the
-      code. Things worth knowing: the scheme is chosen so it can never collide
-      with a real FileData part (gs://, https://), Decode returns ok=false for
-      anything that isn't ours rather than erroring, and callers must not assume
-      the revision still exists in the artifact store by the time they resolve it.
-      Comment it for me.
+      Can you comment this before I push it back? Four things in here that nobody can
+      see from the code. Appending "4" or "6" to the network string is golang/go#48723:
+      binding to 0.0.0.0 or ::0 binds both families, so --bind cannot pin one unless we
+      say tcp4 or tcp6 outright. The Windows warning fires on the path where there was
+      no error on purpose - SetTOS over IPv4 on Windows returns nil and does nothing
+      (golang/go#42728), so there is nothing to report and the user would otherwise
+      think their DSCP setting took. The deadline on timeoutConn is an idle timeout,
+      not a deadline for the whole transfer, which is why it gets nudged again after
+      every read and write that actually moved bytes. And on Read we account bandwidth
+      with the count we actually got back; reserving len(b) up front and returning the
+      tokens we did not use would be the better shape and we have not done it.
     code: |
-      package artifactref
-
-      import (
-      	"net/url"
-      	"strconv"
-      	"strings"
-
-      	"google.golang.org/genai"
-      )
-
-      const AppName = "quack"
-
-      const Scheme = "quack-artifact"
-
-      func Encode(userID, sessionID, name string, revision int64, mimeType string) *genai.Part {
-      	u := url.URL{
-      		Scheme: Scheme,
-      		Path:   "/" + url.PathEscape(userID) + "/" + url.PathEscape(sessionID) + "/" + url.PathEscape(name),
-      	}
-      	q := url.Values{}
-      	q.Set("v", strconv.FormatInt(revision, 10))
-      	u.RawQuery = q.Encode()
-      	return &genai.Part{FileData: &genai.FileData{FileURI: u.String(), MIMEType: mimeType}}
+      func (d *Dialer) Dial(network, address string) (net.Conn, error) {
+      	return d.DialContext(context.Background(), network, address)
       }
 
-      func Decode(p *genai.Part) (userID, sessionID, name string, revision int64, ok bool) {
-      	if p == nil || p.FileData == nil || p.FileData.FileURI == "" {
-      		return "", "", "", 0, false
+      var warnDSCPFail, warnDSCPWindows sync.Once
+
+      func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+      	if ip, ok := d.Dialer.LocalAddr.(*net.TCPAddr); ok && ip.IP.IsUnspecified() && (network == "tcp" || network == "udp") {
+      		if ip.IP.To4() != nil {
+      			network += "4"
+      		} else {
+      			network += "6"
+      		}
       	}
-      	u, err := url.Parse(p.FileData.FileURI)
-      	if err != nil || u.Scheme != Scheme {
-      		return "", "", "", 0, false
-      	}
-      	segs := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
-      	if len(segs) != 3 {
-      		return "", "", "", 0, false
-      	}
-      	uid, err1 := url.PathUnescape(segs[0])
-      	sid, err2 := url.PathUnescape(segs[1])
-      	nm, err3 := url.PathUnescape(segs[2])
-      	if err1 != nil || err2 != nil || err3 != nil || uid == "" || sid == "" || nm == "" {
-      		return "", "", "", 0, false
-      	}
-      	rev, err := strconv.ParseInt(u.Query().Get("v"), 10, 64)
+
+      	c, err := d.Dialer.DialContext(ctx, network, address)
       	if err != nil {
-      		return "", "", "", 0, false
+      		return c, err
       	}
-      	return uid, sid, nm, rev, true
+
+      	if d.tclass != 0 {
+      		if strings.Count(c.RemoteAddr().String(), ":") > 1 {
+      			err = ipv6.NewConn(c).SetTrafficClass(d.tclass)
+      		} else {
+      			err = ipv4.NewConn(c).SetTOS(d.tclass)
+      			if runtime.GOOS == "windows" {
+      				warnDSCPWindows.Do(func() {
+      					fs.LogLevelPrintf(fs.LogLevelWarning, nil, "dialer: setting DSCP on Windows/IPv4 fails silently; see https://github.com/golang/go/issues/42728")
+      				})
+      			}
+      		}
+      		if err != nil {
+      			warnDSCPFail.Do(func() {
+      				fs.LogLevelPrintf(fs.LogLevelWarning, nil, "dialer: failed to set DSCP socket options: %v", err)
+      			})
+      		}
+      	}
+
+      	t := &timeoutConn{
+      		Conn:    c,
+      		timeout: d.timeout,
+      	}
+      	return t, t.nudgeDeadline()
+      }
+
+      type timeoutConn struct {
+      	net.Conn
+      	timeout time.Duration
+      }
+
+      func (c *timeoutConn) nudgeDeadline() error {
+      	if c.timeout > 0 {
+      		return c.SetDeadline(time.Now().Add(c.timeout))
+      	}
+      	return nil
+      }
+
+      func (c *timeoutConn) Read(b []byte) (n int, err error) {
+      	n, err = c.Conn.Read(b)
+      	accounting.TokenBucket.LimitBandwidth(accounting.TokenBucketSlotTransportRx, n)
+      	if err == nil && n > 0 && c.timeout > 0 {
+      		err = c.nudgeDeadline()
+      	}
+      	return n, err
+      }
+
+      func (c *timeoutConn) Write(b []byte) (n int, err error) {
+      	accounting.TokenBucket.LimitBandwidth(accounting.TokenBucketSlotTransportTx, len(b))
+      	n, err = c.Conn.Write(b)
+      	if err == nil && n > 0 && c.timeout > 0 {
+      		err = c.nudgeDeadline()
+      	}
+      	return n, err
       }
   assert:
     - *not_narration
+    - *no_false_comments
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
@@ -555,199 +426,111 @@
         than saying something about the declaration it sits on, carries no facts. Facts must be
         stated as claims about this code.
 
-          (a) the URI scheme is chosen so it can never collide with a real FileData part such as
-              a gs:// or https:// URI.
-          (b) Decode reports ok=false for any part that is not one of ours rather than returning
-              an error - a false result is a normal outcome, not a failure.
-          (c) a successful Decode does not mean the revision still exists in the artifact store,
-              so callers must not assume it is resolvable.
+          (a) the family suffix on the network string works around a Go issue in which an
+              unspecified local bind address binds both address families, so the bind option
+              cannot pin one without it.
+          (b) the Windows warning is emitted where there was no error because setting the traffic
+              class on Windows over IPv4 silently does nothing and reports success.
+          (c) the deadline is an idle timeout re-armed after each read or write that moved bytes,
+              not a deadline for the whole operation.
+          (d) bandwidth is accounted after the read with the count actually returned, and the
+              better shape - reserving the buffer length up front and returning the unused
+              tokens - is knowingly not done.
 
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A doc comment that only
-        restates the signature carries none of them.
-
-        Ignore comment placement, length and syntax.
-        Also ignore whether the comment opens with the identifier name.
-    # Placement only, and a conformance floor rather than a discriminator: go doc and
-    # pkgsite drop a comment that is not immediately above the declaration, so the
-    # rendered artifact differs. The name-prefix half is gone - it patterns over the
-    # comment's prose and is the skill's own instruction.
-    - type: regex
-      value: '(?:^|\n)(?://[^\n]*\n)+func Encode\('
-      metric: doc_placement_floor
-    - type: regex
-      value: '(?:^|\n)(?://[^\n]*\n)+func Decode\('
-      metric: doc_placement_floor
-
-
-- description: typescript public API - exported router helpers other pages call
-  vars:
-    lang: ts
-    ask: |
-      Handing this module to the extensions team tomorrow and they'll be calling
-      it without reading the body. Stuff they'll trip on: navigate() keeps the
-      current query string when the path has no '?' of its own, which is what
-      stops a chat switch from dropping the sidebar's filters; the route matches
-      are anchored to a whole segment on purpose, because startsWith('/memory')
-      also matches /memory-export; and the hooks re-render on popstate, so they
-      only work inside a component. Comment it up for them.
-    code: |
-      import { useState, useEffect } from 'react'
-
-      export type Route = 'chat' | 'memory' | 'ext'
-
-      function readChatId(): string | undefined {
-        const m = window.location.pathname.match(/^\/chat\/([^/]+)/)
-        return m ? decodeURIComponent(m[1]) : undefined
-      }
-
-      export function navigate(path: string, opts?: { replace?: boolean }) {
-        const full = path.includes('?') ? path : path + window.location.search
-        if (opts?.replace) window.history.replaceState(null, '', full)
-        else window.history.pushState(null, '', full)
-        window.dispatchEvent(new PopStateEvent('popstate'))
-      }
-
-      export function routeFor(pathname: string): Route {
-        if (/^\/ext(\/|$)/.test(pathname)) return 'ext'
-        return /^\/memory(\/|$)/.test(pathname) ? 'memory' : 'chat'
-      }
-
-      export function useChatId(): string | undefined {
-        const [chatId, setChatId] = useState(readChatId)
-        useEffect(() => {
-          const onPop = () => setChatId(readChatId())
-          window.addEventListener('popstate', onPop)
-          return () => window.removeEventListener('popstate', onPop)
-        }, [])
-        return chatId
-      }
-
-      export function useSearch(): string {
-        const [search, setSearch] = useState(() => window.location.search)
-        useEffect(() => {
-          const onPop = () => setSearch(window.location.search)
-          window.addEventListener('popstate', onPop)
-          return () => window.removeEventListener('popstate', onPop)
-        }, [])
-        return search
-      }
-  assert:
-    - *not_narration
-    - type: llm-rubric
-      metric: fact_transfer
-      threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
-
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) navigate carries the current query string forward when the path has no '?' of its
-              own, which is what stops a chat switch from dropping the sidebar's filters.
-          (b) the route patterns are anchored to a whole path segment on purpose, because a
-              prefix match would also claim sibling paths such as /memory-export.
-          (c) the hooks re-render on popstate, so they only work inside a React component and
-              cannot be called from plain module code.
-
-        Score from 0 to 1, never above 1: award 0.34 per fact carried and 0.17 per fact half carried. A comment that restates
-        the TypeScript signature, or says a hook "subscribes to popstate", carries none.
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that only says DialContext "dials with the configured options", or that
+        nudgeDeadline "sets the deadline", carries none of them.
 
         Ignore comment placement, length and syntax.
-        Ignore whether JSDoc block syntax was used.
-
-
-- description: python public API - client method with a clamp and an error contract
+- description: python security - what a redirect is allowed to carry to the next host
   vars:
     lang: python
     ask: |
-      This is the only thing outside the package that other teams import, and I'd
-      rather write it down once than answer it in Slack again. What they need:
-      limit is clamped at 100 because the server silently clamps it anyway and
-      then the page you get back doesn't match the number you asked for; a 429 is
-      retried twice with whatever Retry-After says and everything else raises
-      requests.HTTPError; an empty result is an empty page, not an exception; and
-      iter_all holds a cursor, so it is not safe to share one across threads.
-      Comment it before I tag the release.
+      Commenting this before it goes in - it is the redirect path and every line of it
+      is a credential-leak rule that reads like housekeeping. Authorization comes off
+      when the redirect crosses to a different host, so we do not hand a token to
+      somewhere it was not issued for; the netrc lookup right after is not putting it
+      back, it is a fresh grant that happens to exist for the new host. Proxy-
+      Authorization is deleted every hop and only put back for a non-https scheme,
+      because urllib3 supplies proxy auth itself on the tunnelled path and adding ours
+      there risks it going out where it can be seen. Proxies get recomputed on every
+      hop rather than carried across, because the new URL may be covered by NO_PROXY
+      or may need keys an earlier hop stripped. And the method rewrites are browsers,
+      not the RFC - 302 and POST-plus-301 become GET because that is what everything
+      else does, which is issue 1704; 307 and 308 keep the method and body on purpose.
     code: |
-      from dataclasses import dataclass
-      from typing import Any, Iterator, Optional
-      import time
-      import warnings
+      class SessionRedirectMixin:
+          max_redirects: int
+          trust_env: bool
+          cookies: RequestsCookieJar
 
-      import requests
+          def send(self, request: PreparedRequest, **kwargs: Any) -> Response: ...
 
+          def rebuild_auth(
+              self, prepared_request: PreparedRequest, response: Response
+          ) -> None:
+              original_request = response.request
+              assert _is_prepared(original_request)
+              assert _is_prepared(prepared_request)
 
-      @dataclass
-      class Page:
-          items: list[dict[str, Any]]
-          cursor: Optional[str]
+              headers = prepared_request.headers
+              original_url = original_request.url
+              url = prepared_request.url
 
+              if "Authorization" in headers and self.should_strip_auth(original_url, url):
+                  del headers["Authorization"]
 
-      class MemoryClient:
-          def __init__(self, base_url: str, token: str, session: Optional[requests.Session] = None):
-              self.base_url = base_url.rstrip("/")
-              self.token = token
-              self.session = session or requests.Session()
+              new_auth = get_netrc_auth(url) if self.trust_env else None
+              if new_auth is not None:
+                  prepared_request.prepare_auth(new_auth)
 
-          def search(self, query: str, bucket: Optional[str] = None, limit: int = 20, cursor: Optional[str] = None, page_size: Optional[int] = None) -> Page:
-              if page_size is not None:
-                  warnings.warn("page_size is deprecated, use limit", DeprecationWarning, stacklevel=2)
-                  limit = page_size
-              params: dict[str, Any] = {"q": query, "limit": min(limit, 100)}
-              if bucket:
-                  params["bucket"] = bucket
-              if cursor:
-                  params["cursor"] = cursor
-              for attempt in range(3):
-                  response = self.session.get(
-                      f"{self.base_url}/v1/memory/search",
-                      params=params,
-                      headers={"Authorization": f"Bearer {self.token}"},
-                      timeout=10,
-                  )
-                  if response.status_code == 429 and attempt < 2:
-                      time.sleep(float(response.headers.get("Retry-After", 1)))
-                      continue
-                  response.raise_for_status()
-                  break
-              body = response.json()
-              return Page(items=body["items"], cursor=body.get("next_cursor"))
+          def rebuild_proxies(
+              self,
+              prepared_request: PreparedRequest,
+              proxies: dict[str, str] | None,
+          ) -> dict[str, str]:
+              assert _is_prepared(prepared_request)
+              headers = prepared_request.headers
+              scheme = urlparse(prepared_request.url).scheme
+              new_proxies = resolve_proxies(prepared_request, proxies, self.trust_env)
 
-          def iter_all(self, query: str, **kwargs: Any) -> Iterator[dict[str, Any]]:
-              cursor = None
-              while True:
-                  page = self.search(query, cursor=cursor, **kwargs)
-                  yield from page.items
-                  if not page.cursor:
-                      return
-                  cursor = page.cursor
+              if "Proxy-Authorization" in headers:
+                  del headers["Proxy-Authorization"]
+
+              try:
+                  username, password = get_auth_from_url(new_proxies[scheme])
+              except KeyError:
+                  username, password = None, None
+
+              if not scheme.startswith("https") and username and password:
+                  headers["Proxy-Authorization"] = _basic_auth_str(username, password)
+
+              return new_proxies
+
+          def rebuild_method(
+              self, prepared_request: PreparedRequest, response: Response
+          ) -> None:
+              method = prepared_request.method
+
+              if response.status_code == codes.see_other and method != "HEAD":
+                  method = "GET"
+
+              if response.status_code == codes.found and method != "HEAD":
+                  method = "GET"
+
+              if response.status_code == codes.moved and method == "POST":
+                  method = "GET"
+
+              prepared_request.method = method
   assert:
     - *not_narration
+    - *no_false_comments
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
       value: |
         The requester wrote this:
         "{{ask}}"
-
-        PEP 257: "The docstring for a function or method should summarize its behavior and
-        document its arguments, return value(s), side effects, exceptions raised, and
-        restrictions on when it can be called (all if applicable)." It is a should, and the
-        parenthetical is the source's own - a fact that does not apply to this code is not
-        owed a line.
 
         Judge only whether the comments the Reply added carry the facts listed below. Match on
         meaning, never on wording: a paraphrase that carries the same claim counts in full, and
@@ -764,201 +547,498 @@
         than saying something about the declaration it sits on, carries no facts. Facts must be
         stated as claims about this code.
 
-          (a) limit is capped at 100 because the server clamps it silently, so an uncapped
-              request returns a page that does not match the number asked for.
-          (b) a 429 is retried twice honouring Retry-After, and every other failing status
-              raises requests.HTTPError to the caller.
-          (c) an empty result is an empty page, not an exception.
-          (d) iter_all holds a cursor across yields, so a single iterator is not safe to share
-              across threads.
+          (a) Authorization is stripped on a cross-host redirect so credentials are not handed to
+              a host they were not issued for, and the netrc lookup afterwards is a fresh grant
+              for the new host rather than a restore of the old one.
+          (b) Proxy-Authorization is removed every hop and re-attached only for a non-https
+              scheme, because the underlying pool manager supplies proxy auth on the tunnelled
+              path and re-adding it there risks exposing it.
+          (c) proxies are recomputed each hop rather than carried forward, because the new URL may
+              be covered by NO_PROXY or may need keys a previous hop removed.
+          (d) turning 302, and POST with 301, into GET is browser behaviour kept deliberately
+              against the specification.
 
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. Ignore summary-line
-        formatting and which docstring style was used.
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that only says rebuild_auth "updates the authentication headers", or that
+        rebuild_method "adjusts the method for the status code", carries none of them.
 
         Ignore comment placement, length and syntax.
-    # Placement only, and a conformance floor: only the first statement string in a
-    # def becomes __doc__, so a docstring elsewhere is not one.
-    # Decided by Python's own parser: only the first statement string becomes
-    # __doc__. A regex cannot do this - `def search(` spans seven lines here, so
-    # any `def name\([^\n]*` form never reaches the quotes and fails regardless
-    # of what the model wrote. It scored 0.00 in both arms for that reason.
-    - type: javascript
-      value: file://assertions/comment.cjs:docstringOnFunctions
-      config: { functions: [search, iter_all] }
+- description: python performance - a decode bound that the library's own ceiling does not enforce
+  vars:
+    lang: python
+    ask: |
+      Someone is going to look at this and delete the explicit pixel check because
+      "MAX_IMAGE_PIXELS already does that". It does not: Pillow only RAISES above
+      twice the cap - between the cap and 2x it just warns and decodes the whole
+      thing, so a 40-80M pixel image still lands as ~480MB of RGB. That is why there
+      is an explicit check, why it runs on the header-declared size straight after
+      open() and before exif_transpose or convert (both of those decode the pixels),
+      and why it is a check and not a warnings filter - this runs in a thread and the
+      global warnings state is not thread-safe. The 40M cap is deliberately below
+      PIL's ~89M default, which still lets a few-KB file decode to something like
+      530MB. Can you comment it so nobody simplifies it away?
+    code: |
+      from __future__ import annotations
+
+      from io import BytesIO
+
+      from turnstone.core.log import get_logger
+
+      log = get_logger(__name__)
+
+      _THUMB_MAX_PX = 160
+
+      _MAX_IMAGE_PIXELS = 40_000_000
+
+      def make_thumbnail(data: bytes, kind: str, *, max_px: int = _THUMB_MAX_PX) -> bytes | None:
+          try:
+              from PIL import Image, ImageOps
+          except ImportError:
+              log.warning("Pillow not installed; thumbnails unavailable")
+              return None
+
+          Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
+          try:
+              if kind == "pdf":
+                  from turnstone.core.pdf import rasterize_pdf
+
+                  pages = rasterize_pdf(data, max_pages=1)
+                  if not pages:
+                      return None
+                  img = Image.open(BytesIO(pages[0]))
+              elif kind == "image":
+                  img = Image.open(BytesIO(data))
+              else:
+                  return None
+              px = img.size[0] * img.size[1]
+              if px > _MAX_IMAGE_PIXELS:
+                  log.warning(
+                      "thumbnail rejected: %d×%d (%d px) exceeds %d-pixel cap",
+                      img.size[0],
+                      img.size[1],
+                      px,
+                      _MAX_IMAGE_PIXELS,
+                  )
+                  return None
+              oriented = ImageOps.exif_transpose(img) or img
+              rgb = oriented.convert("RGB")
+              rgb.thumbnail((max_px, max_px))
+              buf = BytesIO()
+              rgb.save(buf, format="PNG")
+              return buf.getvalue()
+          except Image.DecompressionBombError as exc:
+              log.warning("thumbnail rejected: image exceeds %d-pixel cap: %s", _MAX_IMAGE_PIXELS, exc)
+              return None
+          except Exception as exc:
+              log.warning("thumbnail generation failed (kind=%s): %s", kind, exc)
+              return None
+  assert:
+    - *not_narration
+    - *no_false_comments
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the library ceiling only raises above twice the cap - between the cap and 2x it warns
+              and decodes fully - so the explicit size check is what actually bounds the decode.
+          (b) the check runs on the header-declared size right after open() and before
+              exif_transpose and convert, because both of those decode the pixels.
+          (c) it is an explicit check rather than a warnings filter because this runs in a thread and
+              the global warnings state is not thread-safe.
+          (d) the cap is deliberately tighter than the library default, which still permits a few-KB
+              file to decode into hundreds of megabytes of RGB.
+
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment saying the function "rejects oversized images" carries none of them.
+
+        Ignore comment placement, length and syntax.
+- description: typescript public API - the SDK base client other packages extend
+  vars:
+    lang: ts
+    ask: |
+      Handing this to the integrations team tomorrow and they will use it without
+      reading the body. Things they will trip on: the tls option is documentation
+      only - the SDK never opens those files, and anyone who actually needs mTLS has
+      to pass their own fetch wired to their runtime's agent; Content-Type is left
+      off deliberately when form is set, because the runtime's fetch writes it along
+      with the multipart boundary and setting it ourselves breaks the upload; a
+      non-2xx always arrives as a TurnstoneAPIError carrying the status, and on the
+      request path the message is taken from error, then detail, then the raw body -
+      the SSE helper only reports which status it got; and baseUrl has its trailing
+      slash stripped in the constructor, so every path they pass needs a leading
+      slash. Comment it up for them.
+    code: |
+      import { TurnstoneAPIError } from "./errors.js";
+      import { parseSSEStream } from "./sse.js";
+
+      export interface TlsOptions {
+        caCert?: string;
+        clientCert?: string;
+        clientKey?: string;
+      }
+
+      export interface ClientOptions {
+        baseUrl: string;
+        token?: string;
+        fetch?: typeof globalThis.fetch;
+        tls?: TlsOptions;
+      }
+
+      export interface RequestOptions {
+        json?: object;
+        params?: Record<string, string | number>;
+        form?: FormData;
+      }
+
+      export class BaseClient {
+        protected readonly baseUrl: string;
+        protected readonly token: string;
+        protected readonly fetchFn: typeof globalThis.fetch;
+
+        constructor(options: ClientOptions) {
+          this.baseUrl = options.baseUrl.replace(/\/$/, "");
+          this.token = options.token ?? "";
+          this.fetchFn = options.fetch ?? globalThis.fetch.bind(globalThis);
+        }
+
+        protected async request<T>(
+          method: string,
+          path: string,
+          options?: RequestOptions,
+        ): Promise<T> {
+          const headers: Record<string, string> = {};
+          if (!options?.form) {
+            headers["Content-Type"] = "application/json";
+          }
+          if (this.token) {
+            headers["Authorization"] = `Bearer ${this.token}`;
+          }
+
+          const url = this._buildUrl(path, options?.params);
+
+          let body: BodyInit | undefined;
+          if (options?.form) {
+            body = options.form;
+          } else if (options?.json) {
+            body = JSON.stringify(options.json);
+          }
+
+          const resp = await this.fetchFn(url, {
+            method,
+            headers,
+            body,
+          });
+
+          if (!resp.ok) {
+            let msg = "";
+            try {
+              const errBody = (await resp.json()) as Record<string, unknown>;
+              msg = (errBody.error as string) ?? (errBody.detail as string) ?? "";
+            } catch {
+              msg = await resp.text().catch(() => "");
+            }
+            throw new TurnstoneAPIError(resp.status, msg || `HTTP ${resp.status}`);
+          }
+
+          return (await resp.json()) as T;
+        }
+
+        private _buildUrl(
+          path: string,
+          params?: Record<string, string | number>,
+        ): string {
+          let url = `${this.baseUrl}${path}`;
+          if (params) {
+            const searchParams = new URLSearchParams();
+            for (const [key, value] of Object.entries(params)) {
+              if (value !== undefined && value !== "") {
+                searchParams.set(key, String(value));
+              }
+            }
+            const qs = searchParams.toString();
+            if (qs) url += `?${qs}`;
+          }
+          return url;
+        }
+
+        protected async *streamSSE<T = Record<string, unknown>>(
+          path: string,
+          params?: Record<string, string | number>,
+          signal?: AbortSignal,
+        ): AsyncIterableIterator<T> {
+          const headers: Record<string, string> = {
+            Accept: "text/event-stream",
+          };
+          if (this.token) {
+            headers["Authorization"] = `Bearer ${this.token}`;
+          }
+
+          let url = `${this.baseUrl}${path}`;
+          if (params) {
+            const searchParams = new URLSearchParams();
+            for (const [key, value] of Object.entries(params)) {
+              if (value !== undefined && value !== "") {
+                searchParams.set(key, String(value));
+              }
+            }
+            const qs = searchParams.toString();
+            if (qs) url += `?${qs}`;
+          }
+
+          const resp = await this.fetchFn(url, { method: "GET", headers, signal });
+          if (!resp.ok) {
+            throw new TurnstoneAPIError(
+              resp.status,
+              `SSE connection failed: HTTP ${resp.status}`,
+            );
+          }
+
+          yield* parseSSEStream<T>(resp);
+        }
+      }
+  assert:
+    - *not_narration
+    - *no_false_comments
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the tls option is documentation only - the SDK never reads those paths, and a caller
+              needing mTLS must supply a custom fetch configured with their runtime's agent.
+          (b) Content-Type is deliberately omitted when a form body is sent, because the runtime's
+              fetch sets it together with the multipart boundary.
+          (c) a non-2xx response always surfaces as a TurnstoneAPIError carrying the status, and on
+              the request path the message is taken from error, then detail, then the raw body text.
+          (d) the constructor strips a trailing slash from baseUrl, so paths passed in are expected to
+              start with one.
+
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that restates the TypeScript signature, or says request "throws on error",
+        carries none.
+
+        Ignore comment placement, length and syntax.
+        Ignore whether TSDoc block syntax was used.
+    # Placement only, and a conformance floor rather than a discriminator: tsc
+    # --declaration and every TSDoc-based generator carry over only the comment
+    # immediately above the declaration, so a comment placed elsewhere changes the
+    # emitted artifact. Nothing here patterns over the comment's prose.
+    - type: regex
+      value: '(?:^|\n)(?:(?://[^\n]*|\s*\*[^\n]*|/\*\*?)\n)+export class BaseClient'
       metric: doc_placement_floor
+    - type: regex
+      value: '(?:^|\n)(?:(?://[^\n]*|\s*\*[^\n]*|/\*\*?)\n)+export interface ClientOptions'
+      metric: doc_placement_floor
+- description: javascript public API - request accessors whose answers depend on trust proxy
+  vars:
+    lang: js
+    ask: |
+      These are on the request object every app in the world touches, and I would
+      rather write the contract down once than keep answering it. X-Forwarded-Proto is
+      only honoured when trust proxy trusts the socket's own remote address; with no
+      trust proxy configured the socket's TLS state wins and the header is ignored
+      entirely. The comma split in there is belt and braces - that header is normally a
+      single value. ips is ordered client first, so index 0 is the furthest downstream
+      and the socket address is deliberately dropped off the end; it is not a raw
+      X-Forwarded-For dump, and with no trust proxy it is empty. secure is defined as
+      protocol === 'https' and nothing else, so it inherits all of that rather than
+      asking the socket. And is() has three outcomes, not two: the matched type as a
+      string, false when the body does not match, null when there is no body at all.
+      Comment it before I tag the release.
+    code: |
+      defineGetter(req, 'query', function query(){
+        var queryparse = this.app.get('query parser fn');
 
+        if (!queryparse) {
+          return Object.create(null);
+        }
 
-- description: java security plus deferred work - webhook signature check
+        var querystring = parse(this).query;
+
+        return queryparse(querystring);
+      });
+
+      req.is = function is(types) {
+        var arr = types;
+
+        if (!Array.isArray(types)) {
+          arr = new Array(arguments.length);
+          for (var i = 0; i < arr.length; i++) {
+            arr[i] = arguments[i];
+          }
+        }
+
+        return typeis(this, arr);
+      };
+
+      defineGetter(req, 'protocol', function protocol(){
+        var proto = this.socket.encrypted
+          ? 'https'
+          : 'http';
+        var trust = this.app.get('trust proxy fn');
+
+        if (!trust(this.socket.remoteAddress, 0)) {
+          return proto;
+        }
+
+        var header = this.get('X-Forwarded-Proto') || proto
+        var index = header.indexOf(',')
+
+        return index !== -1
+          ? header.substring(0, index).trim()
+          : header.trim()
+      });
+
+      defineGetter(req, 'secure', function secure(){
+        return this.protocol === 'https';
+      });
+
+      defineGetter(req, 'ip', function ip(){
+        var trust = this.app.get('trust proxy fn');
+        return proxyaddr(this, trust);
+      });
+
+      defineGetter(req, 'ips', function ips() {
+        var trust = this.app.get('trust proxy fn');
+        var addrs = proxyaddr.all(this, trust);
+
+        addrs.reverse().pop()
+
+        return addrs
+      });
+  assert:
+    - *not_narration
+    - *no_false_comments
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the forwarded protocol header is honoured only when trust proxy trusts the socket's
+              remote address, and otherwise the socket's own TLS state decides.
+          (b) ips is ordered with the client first and the socket address deliberately removed, and
+              it is empty when trust proxy is not configured.
+          (c) secure is exactly protocol === 'https', so it inherits the proxy-trust behaviour
+              rather than reading the socket itself.
+          (d) is() returns the matched type as a string, false when the body does not match, and
+              null when the request carries no body.
+
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that only restates the getter name, or says protocol "returns http or https",
+        carries none of them.
+
+        Ignore comment placement, length and syntax.
+        Ignore whether JSDoc block syntax was used.
+- description: java public API - the adapter base class every serializer subclasses
   vars:
     lang: java
     ask: |
-      Last thing before this goes out: verify() is all that stands between a
-      forged payload and a dispatched run, and callers have to hand it the raw
-      body bytes - if anyone re-serialises the JSON first the digest won't match
-      and they'll waste a day on it. Also, that .equals() is not constant time and
-      leaks a timing signal; we can't move to MessageDigest.isEqual until the
-      platform crypto upgrade lands, which is PLAT-4417 on Priya's board. I don't
-      want either of those to be tribal knowledge, so please comment it.
+      This is the class everyone extends when they write their own adapter, and the
+      same four questions come back on every review. write can be handed a null value
+      and read is allowed to return null - an implementation has to deal with null
+      itself, we do not filter it out before calling. The two toJson methods are not
+      the same on errors: toJson(Writer) is declared throws IOException and lets
+      whatever write throws go straight out to the caller, while the String one has no
+      way to do that, so it catches and rethrows as JsonIOException, which is
+      unchecked. toJsonTree hands back JsonNull for a null value, not a Java null, so
+      the return is never null. And fromJson(Reader) builds a reader with the default
+      legacy-strict setting, which means it will not complain about several top-level
+      values or trailing junk after the first one - anyone who wants that has to build
+      their own JsonReader and call read directly. Comment it before I tag the release.
     code: |
-      package com.quack.webhooks;
+      public abstract class TypeAdapter<T> {
 
-      import java.nio.charset.StandardCharsets;
-      import java.security.GeneralSecurityException;
-      import java.util.HexFormat;
+        public TypeAdapter() {}
 
-      import javax.crypto.Mac;
-      import javax.crypto.spec.SecretKeySpec;
+        public abstract void write(JsonWriter out, T value) throws IOException;
 
-      public final class WebhookVerifier {
+        public final void toJson(Writer out, T value) throws IOException {
+          JsonWriter writer = new JsonWriter(out);
+          write(writer, value);
+        }
 
-          private static final String ALGORITHM = "HmacSHA256";
-          private static final String PREFIX = "sha256=";
-
-          private final byte[] secret;
-
-          public WebhookVerifier(String secret) {
-              this.secret = secret.getBytes(StandardCharsets.UTF_8);
+        public final String toJson(T value) {
+          StringBuilder stringBuilder = new StringBuilder();
+          try {
+            toJson(Streams.writerForAppendable(stringBuilder), value);
+          } catch (IOException e) {
+            throw new JsonIOException(e);
           }
+          return stringBuilder.toString();
+        }
 
-          @Deprecated
-          public boolean verify(String body, String signatureHeader) {
-              return verify(body.getBytes(StandardCharsets.UTF_8), signatureHeader);
+        public final JsonElement toJsonTree(T value) {
+          try {
+            JsonTreeWriter jsonWriter = new JsonTreeWriter();
+            write(jsonWriter, value);
+            return jsonWriter.get();
+          } catch (IOException e) {
+            throw new JsonIOException(e);
           }
+        }
 
-          public boolean verify(byte[] rawBody, String signatureHeader) {
-              if (signatureHeader == null || !signatureHeader.startsWith(PREFIX)) {
-                  return false;
-              }
-              String provided = signatureHeader.substring(PREFIX.length());
-              return sign(rawBody).equals(provided);
-          }
+        public abstract T read(JsonReader in) throws IOException;
 
-          private String sign(byte[] body) {
-              try {
-                  Mac mac = Mac.getInstance(ALGORITHM);
-                  mac.init(new SecretKeySpec(secret, ALGORITHM));
-                  return HexFormat.of().formatHex(mac.doFinal(body));
-              } catch (GeneralSecurityException e) {
-                  throw new IllegalStateException("HMAC unavailable: " + ALGORITHM, e);
-              }
-          }
+        public final T fromJson(Reader in) throws IOException {
+          JsonReader reader = new JsonReader(in);
+          return read(reader);
+        }
       }
   assert:
     - *not_narration
-    - type: llm-rubric
-      metric: fact_transfer
-      threshold: 0.6
-      value: |
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the byte[] overload requires the raw request body exactly as received -
-              re-serialising the JSON before calling changes the bytes and the digest will not
-              match.
-          (b) this check is the only thing between a forged payload and a dispatched run.
-          (c) the string comparison of computed and provided digests is not constant time and
-              leaks a timing signal.
-          (d) that comparison is deferred work, not an oversight - it is tracked as PLAT-4417
-              on Priya's board, and it can be removed once the platform crypto upgrade lands
-              and MessageDigest.isEqual becomes available. Naming the ticket or the owner is
-              one half; naming the condition that retires the deferral is the other. A comment
-              that only says the comparison should be fixed later carries neither half.
-
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A comment saying the
-        method "verifies the HMAC signature" carries none. Do not score any marker keyword, its
-        casing, its bracket style, or its position.
-
-        Ignore comment placement, length and syntax.
-
-
-- description: go invariant - a startup-only sweep callers must not run late
-  vars:
-    lang: go
-    ask: |
-      Two landmines in here I'd like written down. ScanOrphanedRuns is table-wide
-      with no per-chat liveness check, so it is only safe before the Hub has
-      registered any run - call it later and it stamps a chat that is very much
-      alive. And it deliberately leaves pending_question alone: the node row owns
-      that question now, and the last time we blanked the chat's copy we destroyed
-      resume state for everyone mid-run. Comment it up, I'm handing this off.
-    code: |
-      package store
-
-      import (
-      	"context"
-      	"log/slog"
-      	"time"
-      )
-
-      const (
-      	RunStatusIdle        = "idle"
-      	RunStatusFailed      = "failed"
-      	RunStatusInterrupted = "interrupted"
-      	RunStatusPaused      = "paused"
-      )
-
-      func (s *Store) ScanOrphanedRuns(ctx context.Context) (paused, interrupted []string, err error) {
-      	var chats []Chat
-      	if err := s.db.WithContext(ctx).
-      		Where("active_turn_id <> ? OR run_status IN ?", "", []string{RunStatusInterrupted, RunStatusPaused}).
-      		Find(&chats).Error; err != nil {
-      		return nil, nil, err
-      	}
-      	suspended, err := s.chatsWithPausedNodes(ctx)
-      	if err != nil {
-      		return nil, nil, err
-      	}
-      	for _, c := range chats {
-      		status := RunStatusInterrupted
-      		if suspended[c.ID] {
-      			status = RunStatusPaused
-      			paused = append(paused, c.ID)
-      		} else {
-      			interrupted = append(interrupted, c.ID)
-      		}
-      		if err := s.stampRunStatusKeepingQuestion(ctx, c.ID, status); err != nil {
-      			slog.Warn("scan orphaned runs: stamp failed", "component", "store", "chat", c.ID, "err", err)
-      		}
-      	}
-      	return paused, interrupted, nil
-      }
-
-      func (s *Store) stampRunStatusKeepingQuestion(ctx context.Context, chatID, status string) error {
-      	return s.db.WithContext(ctx).Model(&Chat{}).Where("id = ?", chatID).Updates(map[string]any{
-      		"run_status":     status,
-      		"active_turn_id": "",
-      		"updated_at":     time.Now().UTC(),
-      	}).Error
-      }
-
-      func (s *Store) chatsWithPausedNodes(ctx context.Context) (map[string]bool, error) {
-      	nodes, err := s.ListPausedDagNodes(ctx)
-      	if err != nil {
-      		return nil, err
-      	}
-      	out := map[string]bool{}
-      	for _, n := range nodes {
-      		var p DagPlan
-      		if e := s.db.WithContext(ctx).Where("id = ?", n.PlanID).First(&p).Error; e == nil {
-      			out[p.ChatID] = true
-      		}
-      	}
-      	return out, nil
-      }
-  assert:
-    - *not_narration
+    - *no_false_comments
     - type: llm-rubric
       metric: fact_transfer
       threshold: 0.6
@@ -981,23 +1061,242 @@
         than saying something about the declaration it sits on, carries no facts. Facts must be
         stated as claims about this code.
 
-          (a) the sweep is table-wide with no per-chat liveness check, so it is only safe to
-              call before any run has been registered; calling it later stamps a chat that is
-              still running.
-          (b) pending_question is deliberately left untouched because the node row owns that
-              question, and blanking the chat's copy destroyed resume state for in-flight runs.
+          (a) write may be given a null value and read may return null, so an implementation has
+              to handle null itself.
+          (b) toJson(Writer) lets an IOException from write reach the caller, while toJson(T)
+              cannot and rethrows it as the unchecked JsonIOException.
+          (c) toJsonTree returns JsonNull for a null value rather than a Java null, so its result
+              is never null.
+          (d) fromJson(Reader) reads with the default legacy-strict configuration and therefore
+              does not reject several top-level values or trailing data, and a caller wanting that
+              must configure its own reader and call read.
 
-        Score from 0 to 1, never above 1: award 0.5 per fact carried and 0.25 per fact half carried. Naming the helper "keeps
-        the question" in prose does not carry (b) - the reason and the consequence must both be
-        stated.
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that only restates the signature - "converts the value to JSON", "reads one
+        value" - carries none of them.
 
         Ignore comment placement, length and syntax.
-    # Placement only, a conformance floor - see the note on case 5.
+        Ignore whether Javadoc block syntax was used.
+    # Placement only, and a conformance floor rather than a discriminator: javadoc
+    # carries over only the block immediately above the declaration, so the same
+    # sentence placed anywhere else changes the generated artifact. Nothing here
+    # patterns over the comment's prose.
     - type: regex
-      value: '(?:^|\n)(?://[^\n]*\n)+func \(s \*Store\) ScanOrphanedRuns\('
+      value: '(?:^|\n)(?:[ \t]*(?://[^\n]*|\*[^\n]*|/\*\*?)\n)+public abstract class TypeAdapter<T> \{'
       metric: doc_placement_floor
+- description: python security plus deferred work - a pager child that must not outlive an error
+  vars:
+    lang: python
+    ask: |
+      Comment pass before this merges. The environment is copied rather than mutated
+      because injecting LESS=-R must not follow the parent process around after the
+      pager exits, and the command goes to Popen as an argv list with shell=False so a
+      PAGER value a user set is never handed to a shell. The casefold branch under WIN
+      is dead code today - the caller routes every Windows invocation to
+      _tempfilepager - and it stays deliberately so the name detection is still right
+      if that routing ever changes. The terminate on a stray exception is not tidiness:
+      if we let the pager keep running the user never sees the traceback and the
+      terminal can be left in a broken state. And the wait loop swallowing
+      KeyboardInterrupt is deliberate too - less takes ^C for its own search UI rather
+      than exiting, so if someone wants ^C to kill the pager they set LESS='-K'; that
+      is their call to make, not ours.
+    code: |
+      @contextlib.contextmanager
+      def _pipepager(
+          cmd_path: Path, cmd_params: list[str], color: bool | None = None
+      ) -> t.Iterator[tuple[t.TextIO, bool | None]]:
+          import subprocess
 
+          env = dict(os.environ)
 
+          cmd_name = cmd_path.stem
+          if WIN:
+              cmd_name = cmd_name.casefold()
+
+          if color is None and cmd_name == "less":
+              less_env = os.environ.get("LESS", "")
+              if _less_uses_raw_mode(less_env, cmd_params):
+                  color = True
+              elif not less_env and not cmd_params:
+                  env["LESS"] = "-R"
+                  color = True
+
+          c = subprocess.Popen(
+              [str(cmd_path)] + cmd_params,
+              shell=False,
+              stdin=subprocess.PIPE,
+              env=env,
+              errors="replace",
+              text=True,
+          )
+          stdin = t.cast(t.TextIO, c.stdin)
+          try:
+              yield stdin, color
+          except BrokenPipeError:
+              pass
+          except Exception as e:
+              c.terminate()
+              raise e
+          finally:
+              try:
+                  stdin.close()
+              except BrokenPipeError:
+                  pass
+
+              while True:
+                  try:
+                      c.wait()
+                  except KeyboardInterrupt:
+                      pass
+                  else:
+                      break
+  assert:
+    - *not_narration
+    - *no_false_comments
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the environment is copied so the injected pager variable does not outlive this call
+              in the parent process, and the command is passed as an argv list without a shell so
+              a user-supplied pager string is never shell-interpreted.
+          (b) the Windows branch is unreachable today because every Windows invocation is routed
+              elsewhere, and it is kept so the detection stays correct if that routing changes.
+          (c) an exception escaping while the pager runs must terminate the child, or the user
+              never sees the error and the terminal can be left broken.
+          (d) KeyboardInterrupt is swallowed while waiting because the pager takes ^C for its own
+              interface, and making it exit on ^C is left to the user's own configuration.
+
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that only says the function "pipes the text to the pager and waits for it",
+        carries none of them.
+
+        Ignore comment placement, length and syntax.
+- description: python invariant - a boot-only sweep callers must not run late
+  vars:
+    lang: python
+    ask: |
+      Two landmines in here I want written down before I hand it off.
+      prepare_pem_runtime_dir wipes every lacme-pem-* directory under the root, so it
+      is a boot-only call - run it after the live dir has been written and you have
+      just deleted the cert the container healthcheck presents. It also assumes one
+      node per PEM root: two processes sharing a root clear each other's live dirs,
+      which is why bare metal has to set TURNSTONE_TLS_PEM_DIR per node. The symlink
+      and ownership refusal is not paranoia either - the default root is in shared
+      /tmp, where a local user can pre-create it and redirect where the key material
+      lands. And refresh_runtime_pems writes the new directory before removing the old
+      one on purpose, so a probe that lands mid-renewal always finds at least one
+      complete dir. Comment it up.
+    code: |
+      from __future__ import annotations
+
+      from pathlib import Path
+
+      def tls_pem_runtime_dir() -> Path:
+          import os
+          import tempfile
+
+          env = os.environ.get("TURNSTONE_TLS_PEM_DIR")
+          return Path(env) if env else Path(tempfile.gettempdir()) / "turnstone-tls"
+
+      def prepare_pem_runtime_dir() -> Path:
+          import os
+          import shutil
+          import stat
+
+          root = tls_pem_runtime_dir()
+          try:
+              st = os.lstat(root)
+          except FileNotFoundError:
+              st = None
+          if st is not None and (stat.S_ISLNK(st.st_mode) or st.st_uid != os.geteuid()):
+              raise RuntimeError(
+                  f"PEM runtime dir {root} exists but is a symlink or not owned by this process"
+              )
+          root.mkdir(mode=0o700, parents=True, exist_ok=True)
+          os.chmod(root, 0o700)
+          for stale in root.glob("lacme-pem-*"):
+              shutil.rmtree(stale, ignore_errors=True)
+          return root
+
+      def refresh_runtime_pems(
+          bundle: CertBundle,
+          *,
+          ca_pem: bytes | None,
+          previous: Path | None,
+      ) -> PemPaths:
+          import shutil
+
+          from lacme.mtls import write_pem_files
+
+          new_paths = write_pem_files(bundle, ca_pem=ca_pem, directory=tls_pem_runtime_dir())
+          if previous is not None and previous != new_paths.cert.parent:
+              shutil.rmtree(previous, ignore_errors=True)
+          return new_paths
+  assert:
+    - *not_narration
+    - *no_false_comments
+    - type: llm-rubric
+      metric: fact_transfer
+      threshold: 0.6
+      value: |
+        The requester wrote this:
+        "{{ask}}"
+
+        Judge only whether the comments the Reply added carry the facts listed below. Match on
+        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
+        matching phrasing earns nothing extra. Read every comment in the file before answering,
+        including doc comments on helpers, and quote the comment carrying each fact verbatim.
+        Write NONE for a fact only after searching the whole file for it, and when you write
+        NONE, name the declarations you checked.
+
+        A fact stated as a reason plus a consequence is carried only when both halves are
+        present in some comment; if one half is present and the other is not, it is half
+        carried.
+
+        A block of comment text that reproduces the requester's message as a passage, rather
+        than saying something about the declaration it sits on, carries no facts. Facts must be
+        stated as claims about this code.
+
+          (a) the sweep removes every runtime PEM directory under the root, so it is safe only
+              before the live directory is written; calling it later deletes the cert the
+              healthcheck presents.
+          (b) it assumes one node per PEM root - two processes sharing a root clear each other's live
+              directories, which is why a bare-metal deployment sets the root per node.
+          (c) the symlink and ownership refusal exists because the default root sits in shared /tmp,
+              where a local user could pre-create it and redirect where key material lands.
+          (d) the renewal writes the new directory before removing the old one so a concurrent probe
+              always finds at least one complete directory.
+
+        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
+        comment that only says the function "clears stale directories" carries none of them.
+
+        Ignore comment placement, length and syntax.
+    # Placement only, and a conformance floor - see the note on the TypeScript case.
+    # Decided by Python's own parser: only the first statement string in a def
+    # becomes __doc__, so a docstring placed anywhere else is not one.
+    - type: javascript
+      value: file://assertions/comment.cjs:docstringOnFunctions
+      config: { functions: [prepare_pem_runtime_dir, refresh_runtime_pems] }
+      metric: doc_placement_floor
 - description: negative control - plain unexported Go list helpers
   vars:
     lang: go
@@ -1122,8 +1421,6 @@
 
         Score from 0 to 1, never above 1: 1 - (U / D), floored at 0. Adding no comments at
         all scores 1. State D, U and the arithmetic in your reason.
-
-
 - description: negative control - self-evident TypeScript view helpers
   vars:
     lang: ts
@@ -1173,7 +1470,6 @@
       }
   assert:
     - *restraint
-
 - description: negative control - unexported Go table-rendering helpers
   vars:
     lang: go
@@ -1224,8 +1520,6 @@
       }
   assert:
     - *restraint
-
-
 - description: negative control - internal TypeScript settings helpers
   vars:
     lang: ts
@@ -1266,8 +1560,6 @@
       }
   assert:
     - *restraint
-
-
 - description: negative control - unexported Go flag usage rendering
   vars:
     lang: go

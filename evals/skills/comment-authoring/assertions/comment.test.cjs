@@ -1,6 +1,8 @@
 // Offline self-test: no network, no promptfoo. `node assertions/comment.test.cjs`.
 const assert = require('node:assert/strict');
 const checks = require('./comment.cjs');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 
 const fence = (lang, body) => `\`\`\`${lang}\n${body}\n\`\`\``;
 const ctx = (code, lang, config) => ({ vars: { code, lang }, config });
@@ -112,5 +114,41 @@ assert.equal(checks.scan(checks.firstFence(fence('ts', tsDoc)), 'ts').code.inclu
 assert.equal(checks.firstFence('````\n```go\nx := 1\n```\n````').trim(), '```go\nx := 1\n```');
 assert.equal(checks.firstFence('```go\nx := 1').trim(), 'x := 1', 'an unterminated fence returned nothing');
 assert.equal(checks.firstFence('no fence at all'), '');
+
+// --- the judged rubrics ----------------------------------------------------
+// Parsed, not regexed: cases.yaml is a structured file, and PyYAML is already a
+// dependency of the python gates next door.
+const cases = JSON.parse(
+  execFileSync('python3', ['-c', 'import json,sys,yaml;print(json.dumps(yaml.safe_load(open(sys.argv[1]))))', path.resolve(__dirname, '..', 'tests/cases.yaml')], { encoding: 'utf8' }),
+);
+const rubric = (name) => {
+  const found = cases.flatMap((c) => c.assert || []).filter((a) => a.metric === name);
+  assert.ok(found.length, `no case carries ${name}`);
+  return found[0];
+};
+const carries = (name) => cases.filter((c) => (c.assert || []).some((a) => a.metric === name)).length;
+
+// A comment that states the obvious and a comment that is false about the code
+// are different defects; one metric cannot report both. The F term is out of
+// not_narration's numerator and is its own score.
+assert.equal(carries('not_narration'), 9, 'not_narration runs on the nine cases that hide something');
+assert.equal(carries('no_false_comments'), 9, 'the accuracy half runs on exactly the same cases - it is one judgement split, not a new population');
+assert.equal(carries('restraint'), 5, 'the negative controls carry neither: a reply that correctly adds nothing scores 0 on both, and restraint owns that behaviour');
+
+// Line breaks in a block scalar are not part of the criterion.
+const flat = (v) => v.replace(/\s+/g, ' ');
+const nn = flat(rubric('not_narration').value);
+assert.ok(!/\bFALSE\b/.test(nn), 'not_narration must not classify a comment as FALSE - accuracy is no_false_comments');
+assert.ok(!/K - F|\(K-F\)/.test(nn), 'not_narration must not subtract F from its numerator');
+assert.ok(/K \/ N/.test(nn), 'not_narration scores the share of added comments that say something');
+// Without this, a false-but-substantive comment is rewarded by one metric and
+// fined by the other - the same behaviour with two signs.
+assert.ok(/at face value/.test(nn), 'not_narration must judge substance at face value and leave truth to the other metric');
+
+const nf = flat(rubric('no_false_comments').value);
+assert.ok(/no partial credit/.test(nf), 'one wrong statement about the code is the failure; a fraction would call a file with a lie in it mostly accurate');
+assert.equal(rubric('no_false_comments').threshold, 1, 'a binary metric passes only at 1');
+assert.ok(/If N is 0, score 0/.test(nf) && /If N is 0, score 0/.test(nn), 'both halves score an empty reply 0, so they never point opposite ways on one');
+assert.ok(/worth writing/.test(nf), 'no_false_comments must not re-score whether the comment was worth writing');
 
 console.log('comment assertions: ok');
