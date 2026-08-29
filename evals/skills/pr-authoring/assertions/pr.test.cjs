@@ -3,6 +3,21 @@ const fs = require('node:fs');
 const path = require('node:path');
 const checks = require('./pr.cjs');
 
+// A latency assertion stays UNNAMED. Named, it becomes a graded column beside
+// the quality metrics - and a row slow enough to trip it is a row the
+// completion cap truncated, which those metrics already fine. fix-bug paid that
+// double charge on 22 of 120 rows; see its promptfooconfig.yaml. The guard
+// itself stays: it costs no call, and report.js prints the timing regardless.
+// PyYAML rather than a regex - the config is structured and carries anchors.
+const yamlLoadCfg = (f) => JSON.parse(require('node:child_process').execFileSync('python3', ['-c',
+  'import json,sys,yaml; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)',
+  require('node:path').join(__dirname, '..', f)], { encoding: 'utf8' }));
+for (const a of [...(yamlLoadCfg('promptfooconfig.yaml').defaultTest.assert || []),
+  ...yamlLoadCfg('tests/cases.yaml').flatMap((c) => c.assert || [])]) {
+  assert.ok(!(a && a.type === 'latency' && a.metric),
+    `latency carries metric "${a && a.metric}" - it must stay an unnamed run-shape guard, not a graded column`);
+}
+
 // Tripwires on the two judged rubrics, which no unit test can otherwise reach:
 // one criterion, one property, and no two criteria scoring one behaviour with
 // opposite signs. A text scan rather than a parse - the suite ships no YAML

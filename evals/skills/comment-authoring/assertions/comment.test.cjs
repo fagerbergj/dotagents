@@ -4,6 +4,21 @@ const checks = require('./comment.cjs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
+// A latency assertion stays UNNAMED. Named, it becomes a graded column beside
+// the quality metrics - and a row slow enough to trip it is a row the
+// completion cap truncated, which those metrics already fine. fix-bug paid that
+// double charge on 22 of 120 rows; see its promptfooconfig.yaml. The guard
+// itself stays: it costs no call, and report.js prints the timing regardless.
+// PyYAML rather than a regex - the config is structured and carries anchors.
+const yamlLoadCfg = (f) => JSON.parse(execFileSync('python3', ['-c',
+  'import json,sys,yaml; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)',
+  path.join(__dirname, '..', f)], { encoding: 'utf8' }));
+for (const a of [...(yamlLoadCfg('promptfooconfig.yaml').defaultTest.assert || []),
+  ...yamlLoadCfg('tests/cases.yaml').flatMap((c) => c.assert || [])]) {
+  assert.ok(!(a && a.type === 'latency' && a.metric),
+    `latency carries metric "${a && a.metric}" - it must stay an unnamed run-shape guard, not a graded column`);
+}
+
 const fence = (lang, body) => `\`\`\`${lang}\n${body}\n\`\`\``;
 const ctx = (code, lang, config) => ({ vars: { code, lang }, config });
 

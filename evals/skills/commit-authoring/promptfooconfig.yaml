@@ -214,9 +214,15 @@ defaultTest:
       metric: no_invented_claims
     # Loading a SKILL.md costs tokens and wall time; that overhead is part of
     # what is being measured. Needs `--no-cache` to mean anything.
+    #
+    # Unnamed: a run-shape guard, not a scored metric. As `latency_overhead` it
+    # read 1.00/1.00 on all 162 rows of results/commit-authoring@1.0.json and
+    # had no way to say anything else - a commit message at 120s is a message
+    # the completion cap cut off, which `why_quality` and `conventional_header`
+    # already fine. The timing survives: report.js prints `latency (s avg)` and
+    # rollup.js records `latency_s` straight off latencyMs.
     - type: latency
       threshold: 120000
-      metric: latency_overhead
 
 tests:
   - file://tests/*.yaml

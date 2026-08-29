@@ -97,9 +97,14 @@ defaultTest:
     # Reading the surrounding code costs round-trips, and that overhead is part
     # of what the arms are compared on. No `cost` assertion: this gateway
     # declares no per-token price, so it would read zero and pass trivially.
+    #
+    # Unnamed, so it guards the run shape without being graded as quality.
+    # Named it scored 1.00/1.00 on all 96 rows of results/review-code@1.2.json,
+    # a column that cannot move; and when it does move it will move on a row the
+    # completion cap truncated, which `finds_the_defect` and `severity_discipline`
+    # already fine. report.js prints `latency (s avg)` either way.
     - type: latency
       threshold: 300000
-      metric: latency
 
 tests:
   - file://tests/*.yaml

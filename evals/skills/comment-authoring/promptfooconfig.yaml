@@ -55,6 +55,21 @@ defaultTest:
         omitDefaults: true
   assert:
     # 1. Did it answer with a file at all.
+    #    Kept although it reads 1.00/1.00 on all 84 rows of
+    #    results/comment-authoring@2.0.1.json, which evals/AGENTS.md would
+    #    normally cut. It is not grading the model's formatting - it is the
+    #    tripwire on the pipeline that delivers the artifact to every other
+    #    grader here. It has fired once for real: sending `tools` makes the
+    #    gateway prefix the reply with blank lines, and all 14 skill-arm rows
+    #    arrived as `\n\n```go...` and scored 0.00 against a 1.00 baseline - a
+    #    -1.00 phantom delta that five other suites carried silently because
+    #    they had no shape assertion to fail on it. That specific bug is now
+    #    covered offline by lib/skill-tools.test.cjs, but the transform and the
+    #    fence unwrapper still sit between the gateway and the judges, and a
+    #    preamble reintroduced anywhere in there leaves `code_preserved`,
+    #    `not_narration` and `restraint` all reading a fragment without saying
+    #    so. A `starts-with` costs no call and no token; a ceiling that is free
+    #    reports "the instrument is still pointing at the artifact" for nothing.
     - type: starts-with
       value: '```'
       metric: code_block
@@ -70,10 +85,14 @@ defaultTest:
     #    code. Both score a reply that adds nothing at 0, which is why neither runs
     #    on the five negative controls - restraint grades those instead, so the
     #    metrics partition the suite rather than overlapping on it.
-    # 4. Loading a SKILL.md is not free; the overhead is part of the comparison.
+    # 4. Loading a SKILL.md is not free; the overhead is part of the comparison,
+    #    but as a guard on the run's shape, not as a graded column. Named it
+    #    scored 1.00/1.00 on all 84 rows of results/comment-authoring@2.0.1.json
+    #    and could only ever move on a row the completion cap truncated - which
+    #    `code_preserved` and `not_narration` already fail. report.js prints
+    #    `latency (s avg)` from latencyMs with no assertion involved.
     - type: latency
       threshold: 180000
-      metric: latency
 
 tests:
   - file://tests/*.yaml

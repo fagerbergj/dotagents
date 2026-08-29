@@ -3,8 +3,30 @@
 // that hasn't happened yet (same convention as review-code's assertion test).
 const assert = require('node:assert');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { noInventedFileRefs, findsTheFix } = require('./fixbug.cjs');
 const { specs } = require('../lib/bugfix-fixtures.js');
+
+// Config shape, checked before the fixture-dependent block below so it still
+// runs on a checkout where the fixtures were never materialised.
+//
+// A named latency metric charges a slow row twice: once here, and again on the
+// quality graders that the completion cap wrecked when the row ran long. On
+// results/fix-bug@1.0.1.json the 22 rows at the 300s wall scored roughly half
+// on proportionate_fix and regression_proof what the rest did. Latency stays as
+// an unnamed guard - report.js prints it from latencyMs regardless.
+// PyYAML rather than a regex: the config carries anchors a pattern would miss.
+const yamlLoad = (file) => JSON.parse(execFileSync('python3', ['-c',
+  'import json,sys,yaml; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)',
+  path.resolve(__dirname, '..', file)], { encoding: 'utf8' }));
+const suiteAsserts = [
+  ...(yamlLoad('promptfooconfig.yaml').defaultTest.assert || []),
+  ...yamlLoad('tests/cases.yaml').flatMap((c) => c.assert || []),
+];
+for (const a of suiteAsserts) {
+  assert.ok(!(a.type === 'latency' && a.metric),
+    `latency carries metric "${a.metric}" - it would be graded as quality beside the metrics a truncated row already fails`);
+}
 
 // Same resolution fixbug.cjs uses: independent of the cwd the test is run from.
 const CONTROLS = specs(path.resolve(__dirname, '..')).filter((f) => f.verdict === 'not-a-bug');

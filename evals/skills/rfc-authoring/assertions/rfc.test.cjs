@@ -83,6 +83,30 @@ for (const grader of graders) {
 const grounded = cases.filter((c) => c.assert.some((g) => FABRICATION.has(g.metric)));
 assert.equal(grounded.length, 8, `no_invented_specifics rides on ${grounded.length} cases, not all 8 proposals`);
 
+// The one metric allowed to subtract has to stay capped and stay scoped, or it
+// reverts to a length penalty. Uncapped, four listed items was an automatic
+// zero and 26 of 48 rows of results/rfc-authoring@1.0.1.json sat at 0, with
+// judge arithmetic reading "1.00 - 0.25 x 22 = -4.50, floored". A design
+// proposal proposes specifics and a longer one proposes more.
+// Matched against the rubric with its line wrapping collapsed: it is a YAML
+// block scalar, so a clause reads across a newline and an unnormalised pattern
+// silently never matches.
+const grounding = graders.find((g) => g.metric === 'no_invented_specifics').value.replace(/\s+/g, ' ');
+assert.match(grounding, /cap that count at 2/,
+  'the deduction is uncapped again - the score ranks documents by how much they propose');
+assert.match(grounding, /0\.50 for two or more/,
+  'the floor moved off 0.50, so a long document can be zeroed on volume again');
+// Each carve-out below is a class the stored rows actually fined. Matched on
+// the clause, not on the example words, so rewording the examples is free and
+// deleting the exemption is not.
+for (const [fined, clause] of [
+  ['ordinary vocabulary - TLS, IAM, VPC, CloudWatch', /widely known protocols/],
+  ['schema fields the document itself proposes - event_id, timestamp, producer, data', /PROPOSING rather than reporting/],
+  ['section headings - "Rationale and alternatives", "Unresolved questions"', /own section headings/],
+]) {
+  assert.match(grounding, clause, `${fined} counts as an invention again`);
+}
+
 // The whole point of the control expansion: a metric riding on two cases moves
 // by more than any delta it can report.
 const controls = cases.filter((c) => c.assert.some((g) => g.metric === 'control_quality'));
