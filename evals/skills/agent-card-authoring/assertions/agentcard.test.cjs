@@ -56,6 +56,17 @@ const card = {
 }
 
 {
+  bad('capabilitiesMatch on plain prose', g.capabilitiesMatch('Let me ask a few questions first.', { config: { streaming: true } }));
+}
+
+{
+  // withDoc extracts the card itself rather than requiring a suite-wide
+  // transform to have pre-stripped the prose. Without that, normalizeToJson
+  // has to run on every assertion - and it is what blinded no_fabrication.
+  ok('capabilitiesMatch on a card wrapped in prose', g.capabilitiesMatch(wrap(card), { config: { streaming: true, pushNotifications: false } }));
+}
+
+{
   // null (the default) means the case doesn't state that flag - ungraded.
   ok('capabilitiesMatch with nothing configured', g.capabilitiesMatch(JSON.stringify(card), { config: {} }));
 }
@@ -83,6 +94,7 @@ const card = {
 const oauthCard = { ...card, securitySchemes: { oauth2: { oauth2SecurityScheme: { flows: { clientCredentials: { tokenUrl: 'https://sso.example/token', scopes: {} } } } } } };
 const oauthCardOldShape = { ...card, securitySchemes: { oauth2: { type: 'oauth2', flows: { clientCredentials: { tokenUrl: 'https://sso.example/token' } } } } };
 const apiKeyCard = { ...card, securitySchemes: { apiKey: { apiKeySecurityScheme: { location: 'header', name: 'X-Api-Key' } } } };
+const oauthCardKeyOnly = { ...card, securitySchemes: { oauth2AuthCode: { oauthSecurityScheme: { flow: 'authorizationCode', authorizationEndpoint: 'https://auth.schedulehub.example/oauth/authorize', tokenEndpoint: 'https://auth.schedulehub.example/oauth/token', scopes: ['schedule:write'] } } } };
 
 {
   ok('securitySchemeDeclares oauth2 wrapped shape', g.securitySchemeDeclares(JSON.stringify(oauthCard), { config: { family: 'oauth2' } }));
@@ -94,6 +106,20 @@ const apiKeyCard = { ...card, securitySchemes: { apiKey: { apiKeySecurityScheme:
 
 {
   bad('securitySchemeDeclares wrong family', g.securitySchemeDeclares(JSON.stringify(apiKeyCard), { config: { family: 'oauth2' } }));
+}
+
+{
+  // Verbatim from a stored case-H skill-arm row. The family is named only by
+  // the securitySchemes key; the value spells "oauthSecurityScheme" with no
+  // literal 2. Two sibling rows with identical semantics scored 1 purely
+  // because their value happened to contain "oauth2AuthSecurityScheme".
+  ok('securitySchemeDeclares oauth2 named by the key, not the value', g.securitySchemeDeclares(JSON.stringify(oauthCardKeyOnly), { config: { family: 'oauth2', headerName: 'schedule:write' } }));
+}
+
+{
+  // The key is evidence, not a free pass: a wrong-family lookup against the
+  // same card still fails.
+  bad('securitySchemeDeclares key match does not cross families', g.securitySchemeDeclares(JSON.stringify(oauthCardKeyOnly), { config: { family: 'apiKey' } }));
 }
 
 {

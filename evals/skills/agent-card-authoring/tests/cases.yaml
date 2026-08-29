@@ -3,14 +3,29 @@
 # field, a capability flag, or a security-scheme type - deciding those is the
 # thing being graded.
 #
-# contract_shape is attached only to cases A and B, whose correct answer is
-# unambiguously a fresh agent-card.json. C and D's correct answer may be
-# prose (a refusal to fabricate, a narrow answer) - a schema check
-# there would grade good behavior with "no card found".
+# Every brief carrying a structural assertion names `agent-card.json` as the
+# deliverable and asks for it outright. That is the task, not the skill's job,
+# and leaving it out made those metrics measure format guessing instead of
+# agent-card correctness. Measured: of the six cases carrying structural
+# assertions, only A named the file, and it was the only one where the
+# baseline emitted a card at all - 15 of 18 baseline rows on both
+# security_scheme_matches_brief and capabilities_match_brief scored 0 with the
+# literal reason "No agent card JSON found in the output.", several of them on
+# substantively correct answers written in Markdown. Cases F and G asked for
+# nothing whatsoever, so a baseline row that reasonably ended "So: what's the
+# specific deliverable you need from me?" was fined on three metrics for
+# asking. The shared preamble in evals/lib/arms.js stays content-free on
+# purpose (a global "return only the artifact" would hand the baseline a fix
+# the skill is supposed to earn), so the ask belongs here. Naming the file is
+# not describing its contents: no brief may name a graded field.
 #
-# Case B (an audit of an existing card) was cut along with its only
-# assertion, audit_finds_vague_skill - see the note where that metric used
-# to sit, between cases A and the current B.
+# contract_shape is attached to the six cases whose correct answer is
+# unambiguously a fresh agent-card.json (A, B, E, F, G, H). The negative
+# controls' correct answer may be prose (a refusal to fabricate, a question) -
+# a schema check there would grade good behavior with "no card found".
+#
+# An earlier case (an audit of an existing card) was cut along with its only
+# assertion, audit_finds_vague_skill.
 
 - description: A - expense-and-travel-policy finance bot, OAuth2, real SSE
   vars:
@@ -53,6 +68,11 @@
     - &contract_shape
       type: is-json
       metric: contract_shape
+      # Assertion-scoped, not defaultTest-scoped: native is-json cannot see past
+      # the prose around a card, but the same transform at suite level blinded
+      # no_fabrication to the asking/caveat it grades. See the note in
+      # promptfooconfig.yaml's defaultTest.options.
+      transform: file://assertions/agentcard.cjs:normalizeToJson
       value: file://assertions/agent-card.schema.json
     # 2. Capability flags have to match the deployment, not read impressively.
     #    A2A v1.0.1 spec s3.3.4 "Capability Validation" (fetched from
@@ -113,8 +133,9 @@
 - description: B - single-skill invoice lookup, plain API key, nothing fancy
   vars:
     brief: |
-      just need a card for the invoice lookup thing - one skill, you give it
-      an invoice number and it gives you back status, amount, and due date.
+      just need the agent-card.json for the invoice lookup thing - one
+      skill, you give it an invoice number and it gives you back status,
+      amount, and due date.
       no streaming, no push notifications, keep it simple. callers put a
       static key in a header called X-Api-Key. lives at
       https://billing.internal.example/a2a/v1 over JSONRPC, org is Regional
@@ -241,9 +262,10 @@
 - description: E - fleet-maintenance bot, apiKey via query param, push notifications live
   vars:
     brief: |
-      putting together the card for the fleet-maintenance bot - it looks up
-      a vehicle by VIN and tells you what service is overdue, and it can
-      also file a maintenance ticket once you confirm the shop and date.
+      can you knock out the agent-card.json for the fleet-maintenance bot?
+      it looks up a vehicle by VIN and tells you what service is overdue,
+      and it can also file a maintenance ticket once you confirm the shop
+      and date.
       when a ticket actually gets scheduled we already ping the requester
       through webhooks, that part's built and tested. it doesn't stream
       tokens or anything like that, single response is fine.
@@ -285,6 +307,7 @@
       (https://heliosupport.example), endpoint
       https://api.heliosupport.example/a2a/v1 over JSONRPC, docs at
       https://docs.heliosupport.example, version 3.0.0.
+      can you write the agent-card.json for it?
   assert:
     - *contract_shape
     # Both flags stated live and tested. Same A2A s3.3.4 citation as case A -
@@ -319,6 +342,7 @@
       Team (https://platform.internal.example), agent lives at
       https://docsearch.internal.example/a2a/v1 over JSONRPC, docs at
       https://docs.internal.example/agents/docsearch, version 0.9.2.
+      can I get the agent-card.json for it?
   assert:
     - *contract_shape
     - type: javascript
@@ -341,9 +365,10 @@
 - description: H - scheduling assistant, OAuth2 authorization-code flow, push live
   vars:
     brief: |
-      scheduling-assistant card - one skill: given a list of attendees and a
-      rough time window, proposes meeting slots and books the one people
-      pick. once it's booked we fire a webhook back to the caller with the
+      can you write up the agent-card.json for the scheduling assistant?
+      one skill: given a list of attendees and a rough time window, it
+      proposes meeting slots and books the one people pick. once it's
+      booked we fire a webhook back to the caller with the
       confirmation - that part's live and covers every booking. we don't do
       incremental streaming responses, whole thing comes back as one shot.
       auth's OAuth2, but it's the authorization-code flow through our

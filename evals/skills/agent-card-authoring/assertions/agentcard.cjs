@@ -41,12 +41,13 @@ function source(output) {
   return looksLikeCard(trimmed) ? trimmed : null;
 }
 
-// defaultTest transform. Mirrors rest-api-authoring's normalizeToJson: pulls the
-// card out of whatever surrounds it (reasoning leakage, commentary) so every
-// downstream is-json/regex/icontains/javascript assertion grades the artifact,
-// not the chatter. A case whose correct answer is prose (the negative controls)
-// has no card to find; the sentinel keeps that from matching a quote-anchored
-// assertion while leaving the original text intact for the rubric to read.
+// Transform for `contract_shape` ONLY - native `is-json` cannot see past the
+// prose around a card, so that one assertion needs the card alone. It must not
+// go back on defaultTest: as a suite-wide transform it also fed no_fabrication,
+// whose rubric asks whether the reply "asks what the missing piece actually is
+// or explicitly marks the skeleton as placeholder" - and that answer is the
+// prose this throws away. Same class as the fence truncation in evals/AGENTS.md:
+// a transform discarding the evidence a grader was written to read.
 function normalizeToJson(output) {
   const text = String(output);
   const src = source(text);
@@ -60,12 +61,15 @@ function normalizeToJson(output) {
   return JSON.stringify(doc, null, 2);
 }
 
+// Extracts the card itself, so these graders read the raw reply rather than
+// depending on a suite-wide transform having pre-stripped it (see
+// normalizeToJson). A reply with no card fails here, same as before.
 function withDoc(output, grader) {
-  const text = String(output);
-  if (text.startsWith('NO AGENT CARD JSON IN OUTPUT')) return result(false, 'No agent card JSON found in the output.');
+  const src = source(output);
+  if (!src) return result(false, 'No agent card JSON found in the output.');
   let doc;
   try {
-    doc = JSON.parse(text);
+    doc = JSON.parse(src);
   } catch (error) {
     return result(false, `Output is not parseable JSON: ${error.message}`);
   }
@@ -139,6 +143,13 @@ function examplesPreserveStatedPrompts(output, context) {
 // `^(http_auth_security_scheme)$` and `^(open_id_connect_security_scheme)$`),
 // so a brief naming bearer/basic HTTP auth or an OIDC provider has a family
 // to match against instead of only ever matching apiKey/oauth2.
+//
+// Ceiling, deliberate: for apiKey/httpAuth/openIdConnect the pattern also
+// matches the schema's own mandated discriminator key, so a card that uses the
+// right wire field cannot fail its family check. That is this grader working,
+// not a hole - what it grades is that the RIGHT family was chosen, and an
+// apiKey card still fails `family: oauth2`. Exact wire conformance is
+// contract_shape's job.
 const SCHEME_FAMILY_PATTERN = {
   oauth2: /oauth2/i,
   apiKey: /api.?key/i,
@@ -155,7 +166,13 @@ function securitySchemeDeclares(output, context) {
     const schemes = doc.securitySchemes || {};
     const entries = Object.entries(schemes);
     if (!entries.length) return result(false, 'No securitySchemes declared.');
-    const matches = entries.filter(([, scheme]) => SCHEME_FAMILY_PATTERN[family].test(JSON.stringify(scheme)));
+    // Key AND value: the securitySchemes key is the identifier `security[]`
+    // references, as machine-readable as the value and often the only place the
+    // family is spelled out. Matching the value alone scored three stored
+    // case-H rows 0/0/1 on semantically identical authorization-code OAuth2
+    // schemes - all keyed `oauth2AuthCode`, differing only in whether the model
+    // happened to type a literal `2` inside the value.
+    const matches = entries.filter(([name, scheme]) => SCHEME_FAMILY_PATTERN[family].test(`${name} ${JSON.stringify(scheme)}`));
     if (!matches.length) {
       return result(false, `No entry under securitySchemes matches "${family}". Declared: ${JSON.stringify(schemes)}.`);
     }
