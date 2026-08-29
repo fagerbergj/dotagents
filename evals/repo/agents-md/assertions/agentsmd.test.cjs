@@ -97,9 +97,9 @@ const subjectFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'amd-subj-')
 fs.writeFileSync(subjectFile, SAMPLE);
 process.env.EVAL_SUBJECT_PATH = subjectFile;
 
-const md = (commands, extra = {}) => ({
-  metadata: { commands: commands.map((cmd) => ({ cmd, exitCode: 0, outBytes: 10 })), ...extra },
-});
+// The shape lib/skill-tools.js actually returns: commands is the ordered list of
+// shell command strings the row ran, verify is the case's post-turn check.
+const md = (commands, extra = {}) => ({ metadata: { commands, commandsRun: commands.length, ...extra } });
 const ctx = (commands, vars, extra) => ({ ...md(commands, extra), vars });
 
 // --- follows_stated_command -------------------------------------------------
@@ -139,9 +139,14 @@ const ctx = (commands, vars, extra) => ({ ...md(commands, extra), vars });
   const inverted = suite.taskCorrect('', ctx([], { verify_exit: 1 }, { verify: { cmd: 'x', exitCode: 1 } }));
   assert.strictEqual(inverted.score, 1);
 
-  // Never score a missing verification as failure: the case declared one and
-  // the provider did not run it, which is a broken harness, not a bad answer.
+  // Never score a missing or refused verification as failure: the case declared
+  // one and the harness could not complete it, which is not a bad answer.
   assert.throws(() => suite.taskCorrect('', ctx([], {})), /could not run/);
+  assert.throws(
+    () => suite.taskCorrect('', ctx([], {}, { verify: { cmd: 'x', exitCode: -1, refused: 'wall clock spent' } })),
+    /could not run.*refused/s,
+    'a spent wall clock must error, not record the task as failed',
+  );
   assert.throws(() => suite.taskCorrect('', { vars: {} }), /could not run/);
 }
 
@@ -165,16 +170,18 @@ const ctx = (commands, vars, extra) => ({ ...md(commands, extra), vars });
 // Arm wiring: the file is the ONLY difference
 // ---------------------------------------------------------------------------
 {
-  process.env.EVAL_REPO_DIR = '/tmp/amd-repo';
+  process.env.EVAL_WORKSPACE_DIR = '/tmp/amd-workspace';
   const arms = effect.arms((vars) => vars.task);
   const vars = { task: 'do the thing', verify: 'go build ./...' };
   const base = arms.noSkill({ vars });
   const treated = arms.skillCurrent({ vars });
 
   assert.deepStrictEqual(base.config, treated.config, 'both arms must get an identical environment');
-  assert.strictEqual(base.config.repoDir, path.join('/tmp/amd-repo', 'clean'));
+  assert.strictEqual(base.config.workspaceDir, '/tmp/amd-workspace');
   assert.strictEqual(base.config.verify, 'go build ./...');
   assert.ok(!('skillDir' in base.config), 'skillDir would serve the whole repo to one arm only');
+  // withConfigEveryArm spreads its argument last, so the check must survive it.
+  assert.ok('verify' in treated.config, 'workspaceDir must not clobber the case\'s own check');
 
   // The user turn is byte-identical; only the system message differs, and only
   // by the file's text.
@@ -191,11 +198,9 @@ const ctx = (commands, vars, extra) => ({ ...md(commands, extra), vars });
     assert.ok(!JSON.stringify(arm.prompt).includes('go build'), 'the verify command leaked into the prompt');
   }
 
-  // A case variant selects a sibling tree, the same one for both arms.
-  const v = { task: 't', repo_variant: 'bug-1016' };
-  assert.strictEqual(arms.noSkill({ vars: v }).config.repoDir, arms.skillCurrent({ vars: v }).config.repoDir);
-  assert.strictEqual(arms.noSkill({ vars: v }).config.repoDir, path.join('/tmp/amd-repo', 'bug-1016'));
-  assert.throws(() => arms.noSkill({ vars: { task: 't', repo_variant: '../escape' } }), /bad repo_variant/);
+  // A case that declares no check gets none, rather than an empty string the
+  // provider would try to run.
+  assert.ok(!('verify' in arms.noSkill({ vars: { task: 't' } }).config));
 }
 
 console.log('agents-md-effect: parser, repo preparation, three graders and arm wiring pass');

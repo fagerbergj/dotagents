@@ -52,19 +52,22 @@ prompts:
     label: skill-current
 
 providers:
-  # Sandboxed bash over a per-row fresh copy of the repo. BOTH arms get it:
-  # execution is the subject matter, not an affordance the AGENTS.md earns -
-  # the same reasoning that gives `read_source` to both arms in review-code and
-  # fix-bug. Gating it on the file would make the delta measure tool access.
+  # The shared provider from lib/skill-tools.js. `run_bash` is offered on
+  # `workspaceDir` alone and therefore reaches BOTH arms: executing the build is
+  # the subject matter of "does this file help", not an affordance the file
+  # earns. Gating it on the arm would make every exit code a measure of tool
+  # access. Commands run in a disposable container - --network=none, read-only
+  # root, tmpfs workspace, nothing of the host in the namespace (lib/sandbox.js).
   #
-  # Caps are identical across arms on purpose. A different cap is a different
-  # environment and the delta then stops being the file. They exist so one
-  # thrashing row cannot set the cost comparison: ETH's "over 20% on average"
-  # is the largest real effect anyone has measured here and it has to stay
-  # attributable. Values follow quack's own workspace.DefaultCaps - 60s per
-  # command, 64 KB of output - which is the boundary its owner already
-  # settled on (internal/workspace/caps.go).
-  - id: file://../../lib/sandbox-bash.js
+  # `read_source` is deliberately NOT offered alongside it. The shell already
+  # reads the tree, and two ways to read one repo would split the behaviour the
+  # command columns exist to measure.
+  #
+  # Caps are the shipped defaults, identical across arms on purpose: a per-arm
+  # cap is a per-arm environment and the delta stops being the file. They exist
+  # so one thrashing row cannot set the cost comparison, which is the largest
+  # real effect anyone has measured here (ETH's +20%).
+  - id: file://../../lib/skill-tools.js
     label: deepseek-v4-flash+bash
     config:
       model: deepseek/deepseek-v4-flash
@@ -74,12 +77,29 @@ providers:
         reasoning:
           enabled: false
       apiKeyEnvar: OPENROUTER_API_KEY
-      # A build plus a test run plus a fix is genuinely multi-step; 40 leaves
-      # room for wrong turns without letting a loop spin all night.
-      maxBashRounds: 40
-      commandTimeoutSec: 60
-      maxOutputBytes: 65536
-      network: none
+      maxCommands: 25
+      maxTokens: 150000
+      maxToolCalls: 40
+      sandbox:
+        # MUST be an image that already carries what the cases need: git, and a
+        # Go toolchain for the `go` cases. --network=none means nothing can be
+        # installed at run time. See tests/cases.yaml for the full contract.
+        image: quack-eval:latest
+        commandTimeoutMs: 60000
+        wallClockMs: 300000
+        maxOutputBytes: 8192
+        # Raised from the shipped 1024/512/256. Measured on quack at the pinned
+        # SHA: the vendored module tree is 201 MB and the Go build cache for one
+        # package is 574 MB, both of which live in the tmpfs workspace and are
+        # charged to --memory. The shipped defaults cannot hold them.
+        memoryMB: 3072
+        workspaceMB: 1536
+        tmpMB: 512
+
+# RUN THIS AT --max-concurrency 1.
+#   ./run.sh agents-md --max-concurrency 1
+# Up to ~1 GB of container against ~5 GB free, and the workspace above is most
+# of a gigabyte on its own. The text suites run at 24; this one must not.
 
 defaultTest:
   options:

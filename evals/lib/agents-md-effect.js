@@ -120,11 +120,11 @@ function statedCommands(agentsMd) {
 // ---------------------------------------------------------------------------
 //
 // The bash provider returns, per row:
-//   metadata.commands  [{ cmd, exitCode, outBytes, truncated, timedOut }]
-//   metadata.verify    { cmd, exitCode, stdout } - the case's own post-turn
-//                      check, run by the harness in the same container AFTER
-//                      the model's last turn. null when the case declares none.
-//   metadata.bashRounds, metadata.outputBytes, metadata.capHit
+//   metadata.commands       the shell commands the model actually ran, in order
+//   metadata.verify         { cmd, exitCode, stdout, refused } - the case's own
+//                           post-turn check, run in the SAME container after the
+//                           model's last turn. Absent when the case declares none.
+//   metadata.commandsRun, commandsTimedOut, commandsTruncated, toolRounds
 //
 // A grader that cannot see this did not run and must say so: report.js treats
 // "could not run" as an errored row, not as a score of zero.
@@ -136,7 +136,7 @@ function transcript(context, metric) {
   return md;
 }
 
-const ran = (md) => md.commands.map((c) => String(c.cmd || ''));
+const ran = (md) => md.commands.map(String);
 
 // Substring match on the command line, normalised for whitespace. Deliberately
 // not a regex over the case's text: a case author writing `go test ./...` must
@@ -190,6 +190,12 @@ function taskCorrect(output, context) {
   if (!md.verify || typeof md.verify.exitCode !== 'number') {
     throw new Error('task_correct could not run: no metadata.verify. The case declares `verify:` and the provider must run it post-turn in the same container.');
   }
+  // A refused check is a spent wall clock, not a wrong answer. Scoring it 0
+  // would file a harness limit as a task the model got wrong, and the two look
+  // identical in the results.
+  if (md.verify.refused) {
+    throw new Error(`task_correct could not run: the verification was refused (${md.verify.refused}).`);
+  }
   const pass = md.verify.exitCode === expect;
   return {
     pass,
@@ -235,41 +241,48 @@ function unmentionedUnchanged(output, context) {
 // while the copy on disk has it removed for both arms.
 const INJECT = (body) => `The repository you are working in ships this AGENTS.md at its root. It is repository guidance, already loaded into your context.\n\n---\n${body}\n---`;
 
-function arms(taskTemplate, { repoDir } = {}) {
+function arms(taskTemplate, { workspaceDir: repoDir } = {}) {
   const base = require('./arms.js')('agents-md', taskTemplate, { inject: INJECT });
   // Resolved per call, not at module load: `promptfoo validate config` imports
   // every prompt module, so an eager throw here makes the free config gate
   // unrunnable. The failure still lands before a single token is bought,
   // because the first row cannot build a prompt without it.
   const resolveDir = () => {
-    const d = repoDir || process.env.EVAL_REPO_DIR;
-    if (!d) throw new Error('agents-md-effect: set EVAL_REPO_DIR to the prepared repo copy (see prepareRepo).');
+    const d = repoDir || process.env.EVAL_WORKSPACE_DIR;
+    if (!d) throw new Error('agents-md-effect: set EVAL_WORKSPACE_DIR to the prepared workspace (see prepareRepo).');
     return d;
   };
   // No skillDir: the subject sits at a repo root, so handing its directory to
   // load_resource would serve the whole repo to one arm only - lib/arms.js says
-  // exactly this. The repo reaches both arms through repoDir instead.
+  // exactly this. The workspace reaches both arms instead.
+  //
   // `vars.verify` rides to the provider as config rather than into the prompt:
   // the model must never see the command its work is graded by, and the prompt
-  // function is the only place a case var can reach provider config.
-  // `vars.repo_variant` picks a sibling prepared tree - a debug case needs the
-  // buggy state, everything else the clean one. Both arms of one case always
-  // resolve to the same variant, so this varies the environment per CASE and
-  // never per arm.
-  const withRepo = (fn) => (ctx) => {
+  // function is the only place a case var can reach provider config. It is set
+  // on the arm's OWN config so that withConfigEveryArm, which spreads its
+  // argument last, still wins on workspaceDir without clobbering the check.
+  const withVerify = (fn) => (ctx) => {
     const vars = (ctx && ctx.vars) || {};
-    const variant = vars.repo_variant || 'clean';
-    if (/[^\w.-]/.test(variant)) throw new Error(`agents-md-effect: bad repo_variant ${JSON.stringify(variant)}`);
-    return {
-      prompt: fn(ctx),
-      config: { repoDir: path.join(resolveDir(), variant), ...(vars.verify ? { verify: vars.verify } : {}) },
-    };
+    return { prompt: fn(ctx), config: vars.verify ? { verify: vars.verify } : {} };
   };
-  return {
-    noSkill: withRepo(base.noSkill),
-    skillCurrent: withRepo(base.skillCurrent),
-    skillNext: withRepo(base.skillNext),
-  };
+  // One workspace for every case and every arm. Attached through the shared
+  // helper rather than hand-rolled: executing the build is the case's
+  // environment, and an arm that got it alone would make every exit code a
+  // measure of tool access. read_source is deliberately NOT offered - the
+  // shell already reads the tree, and two ways to read one repo would split
+  // the behaviour the cost columns are trying to measure.
+  return require('./arms.js').withConfigEveryArm(
+    // A getter, not a value: withConfigEveryArm spreads its argument on every
+    // call, so this resolves per row. Resolving it here instead would throw at
+    // module load and make `promptfoo validate config` - the free gate -
+    // unrunnable without the workspace already built.
+    { get workspaceDir() { return resolveDir(); } },
+    {
+      noSkill: withVerify(base.noSkill),
+      skillCurrent: withVerify(base.skillCurrent),
+      skillNext: withVerify(base.skillNext),
+    },
+  );
 }
 
 module.exports = {

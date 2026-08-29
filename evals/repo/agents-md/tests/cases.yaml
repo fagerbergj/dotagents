@@ -47,25 +47,62 @@
 # is the prediction, recorded before the run.
 #
 # ---------------------------------------------------------------------------
-# Environment each case needs (the image contract, per case)
+# The image and workspace contract, and what --network=none cost us
 # ---------------------------------------------------------------------------
-#   tree     the prepared tree and a shell. Nothing else.
-#   go       tree + Go toolchain + warm GOMODCACHE + the plugin trees fetchable
-#            offline (a local git mirror at the URLs in .agents/vendor/
-#            plugins.yaml). NOTHING in quack compiles without the plugin trees:
-#            internal/dag transitively imports the root package, whose go:embed
-#            covers .agents/vendor/dotagents/skills.
-# Two prepared trees, named by `repo_variant` (default `clean`):
-#   clean      the pinned tree as committed.
-#   bug-1016   the same, then `git checkout 8e81263^ -- internal/dag/admission.go`
-#              so the test from 8e81263 is present and its source fix is not.
-# Both arms of a case always get the same variant; it varies per case, never
-# per arm.
+# Commands run in a disposable container with NO network (lib/sandbox.js), so
+# everything must be in the image or in the workspace tar before the container
+# starts. Measured on quack at the pinned SHA, not estimated:
 #
-#   codegen  go + frontend/node_modules + the oapi-codegen tool in the module
-#            cache. Heaviest; cut this case first if the image is too much.
-# A case whose environment is not met fails identically in BOTH arms and
-# measures nothing. Check the environment before reading any number.
+#   go mod vendor                     201 MB
+#   cold GOCACHE for ONE package      574 MB   (go build ./internal/dag/)
+#   cold build of that package         52 s    on a many-core host
+#
+# `--cpus=1.0` makes that 52 s several minutes, against a 60 s per-command
+# timeout and a 300 s wall clock. So a cold Go build cannot happen inside a row.
+# The workspace tar therefore has to ship a WARM cache, and the caps in
+# promptfooconfig.yaml are raised to hold it.
+#
+# ONE workspace, built like this (both arms get the identical copy):
+#   1. prepareRepo(quack, a19807d, ws)   tracked tree, AGENTS.md and its
+#                                        CLAUDE.md symlink removed, one commit.
+#   2. git checkout 8e81263^ -- internal/dag/admission.go
+#        The test from 8e81263 stays, its source fix does not. One workspace, so
+#        the buggy state is the state - it compiles, so it does not disturb the
+#        build cases, and it gives the report and debug cases a real failure.
+#   3. Bare mirrors at .plugin-mirror/{dotagents,ponytail}.git, and
+#      .agents/vendor/plugins.yaml rewritten to point `url:` at them.
+#        This is what keeps the fresh-clone state reproducible offline.
+#        scripts/plugins.sh does a `git clone`, which --network=none forbids
+#        against GitHub but permits against a local path. Seeding
+#        .agents/vendor/dotagents directly instead would make bare
+#        `go test ./...` work and delete the whole point of AGENTS.md line 2.
+#        The infidelity is the rewritten URL, and nothing else.
+#   4. go mod vendor, then `make plugins && GOCACHE=$ws/.cache/go-build go build
+#      ./...`, then DELETE .agents/vendor/{dotagents,ponytail} again.
+#        The cache stays valid for every package except the root embed package,
+#        which recompiles in seconds once the trees are restored.
+#   5. A prebuilt `quack` binary at the workspace root, for the L7 probe.
+#      HOME=/workspace, so GOCACHE and GOMODCACHE resolve inside the workspace
+#      with no env var to set, and vendor/ makes Go use -mod=vendor by itself.
+#
+# Per-case environment:
+#   tree     the tree and a shell. git, coreutils. Nothing else.
+#   go       + the Go toolchain in the image and the warm cache above.
+#   binary   + the prebuilt `quack` at the workspace root.
+#
+# CUT for --network=none. Both would have failed identically in both arms,
+# which measures nothing:
+#   * "make a small change end to end" (openapi + make generate). Needs
+#     frontend/node_modules and oapi-codegen; `npm ci` cannot reach a registry,
+#     and node_modules on top of 800 MB does not fit the memory ceiling. This
+#     was the generic population's only end-to-end-change shape; the rename
+#     control is the nearest survivor, and it is a much smaller task.
+#   * probe L3, `npm --prefix scripts ci`. The command the AGENTS.md names is
+#     exactly the one the network ban forbids. Line 3 is now unmeasured.
+#
+# So the generic population is FOUR cases and every one of them leans on the
+# warm-cache workspace. If that workspace cannot be built, the suite collapses
+# to the three tree-only cases and is not worth running.
 
 # ===========================================================================
 # A. GENERIC TASK CASES - the primary measurement
@@ -95,7 +132,6 @@
     population: generic
     env: go
     discoverable: true
-    repo_variant: bug-1016
     # The prepared tree for this case carries the test from quack 8e81263 with
     # its source fix reverted (`git checkout 8e81263^ -- internal/dag/
     # admission.go`), so there is a real, reproducible failure to find.
@@ -197,7 +233,6 @@
     population: generic
     env: go
     discoverable: true
-    repo_variant: bug-1016
     # quack 8e81263, "fix(dag): Admit's onQueued panic must not double-unlock
     # the mutex (#1016)". Prepared with the test present and the source fix
     # reverted. The commit message records that the test "reproduces the exact
@@ -209,26 +244,6 @@
       `fatal error: sync: unlock of unlocked mutex`. Track down what causes
       it and fix it in the source. Leave the repo with that test passing;
       do not edit the test to make it pass.
-  assert:
-    - type: javascript
-      value: file://assertions/agentsmd.cjs:taskCorrect
-      metric: task_correct
-
-- description: 'generic: make a small change end to end'
-  vars:
-    population: generic
-    env: codegen
-    # CONTRIBUTING.md states the regenerate-and-commit rule and names the CI
-    # drift check, so this is discoverable without AGENTS.md.
-    discoverable: true
-    # Exactly what CI's codegen-drift job checks: regenerate, then demand no
-    # further diff in the generated trees.
-    verify: './scripts/generate.sh >/dev/null 2>&1 && git diff --exit-code -- internal/schema frontend/src/generated >/dev/null'
-    verify_exit: 0
-    task: |
-      Add an optional string field `note` to the Session schema in
-      openapi.yaml, and leave the working tree in the state CI would accept -
-      CI has a codegen-drift check. Tell me at the end which files you changed.
   assert:
     - type: javascript
       value: file://assertions/agentsmd.cjs:taskCorrect
@@ -366,22 +381,6 @@
       value: file://assertions/agentsmd.cjs:followsStatedCommand
       metric: follows_stated_command
 
-- description: 'probe L3: npm --prefix scripts ci before vetting tests'
-  vars:
-    population: line-probe
-    env: tree
-    # The command itself is in config/quack.yaml:508 and scripts/package.json
-    # exists; only the "before vetting tests" ordering is unique to AGENTS.md.
-    discoverable: true
-    probe_line: 1
-    task: |
-      I want to run the Mermaid validation that this repo's vetting tests use.
-      Get it running and tell me the commands, in order.
-  assert:
-    - type: javascript
-      value: file://assertions/agentsmd.cjs:followsStatedCommand
-      metric: follows_stated_command
-
 # probe L4 (make generate) is DELETED, not missing. Its task was word-for-word
 # the generic end-to-end case above, so a separate row would buy a second
 # codegen run and report nothing new. Attach probe_line: 2 to that case if
@@ -390,7 +389,7 @@
 - description: 'probe L7: quack sandbox check before touching workspace sandboxing'
   vars:
     population: line-probe
-    env: go
+    env: binary
     # docs/sandbox-cli.md carries this exact invocation; only the trigger
     # (before touching internal/workspace) is unique to AGENTS.md.
     discoverable: true
@@ -399,6 +398,7 @@
       I want to add a new environment variable to what a sandboxed worker
       process gets in internal/workspace. Before you write anything, tell me
       what you would run to confirm you have not broken the sandbox, and run it.
+      A built `quack` binary is at the workspace root.
   assert:
     - type: javascript
       value: file://assertions/agentsmd.cjs:followsStatedCommand

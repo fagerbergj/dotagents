@@ -320,3 +320,96 @@ global.fetch = async (_url, opts) => {
   fs.rmSync(outside, { recursive: true, force: true });
   console.log('ok   skill-tools (confinement, listings, budget, token summing, loud failure, ask_user persona)');
 })();
+
+// The case's post-turn verification. This is what lets a suite grade whether the
+// work is RIGHT rather than whether the answer named the right command, so it
+// has to run in the SAME container, after the last turn, without the model ever
+// seeing it and without spending the command budget. A fake Sandbox stands in
+// for Docker so this stays free and offline.
+(async () => {
+  const sandboxMod = require('./sandbox.js');
+  const realSandbox = sandboxMod.Sandbox;
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-tools-ws-'));
+  const seen = [];
+  let started = 0;
+
+  const fake = (result) => class {
+    static async start() { started += 1; return new this(); }
+    async run(cmd) { seen.push(cmd); return result(cmd); }
+    async stop() {}
+  };
+
+  const provider = (verify) => {
+    const p = new Provider({ config: { model: 'm', apiKeyEnvar: 'X' } });
+    p.chat = async () => ({ json: { choices: [{ message: { content: 'done' } }] }, cached: false });
+    return p.callApi(JSON.stringify([{ role: 'user', content: 'go' }]), {
+      prompt: { config: { workspaceDir: ws, ...(verify ? { verify } : {}) } },
+    });
+  };
+
+  process.env.X = 'k';
+
+  // A row that ran no commands still gets its check: "did nothing" must be
+  // gradeable, so the container is started for the verification alone.
+  sandboxMod.Sandbox = fake(() => ({ exitCode: 0, stdout: 'ok', stderr: '', timedOut: false, truncated: 0, refused: null }));
+  const passed = await provider('go build ./...');
+  assert.deepStrictEqual(seen, ['go build ./...'], 'the verify command must run, exactly once');
+  assert.strictEqual(started, 1, 'the container must start even when the model ran nothing');
+  assert.strictEqual(passed.metadata.verify.exitCode, 0);
+  assert.strictEqual(passed.metadata.verify.cmd, 'go build ./...');
+  assert.strictEqual(passed.metadata.commandsRun, 0, 'the check must not be charged to the command budget');
+  assert.ok(!JSON.stringify(passed.output).includes('go build'), 'the verify command must never reach the model');
+
+  // A non-zero exit is the answer key, and its output has to survive for the
+  // grader's reason - an unreadable failure row is a wasted row.
+  seen.length = 0;
+  sandboxMod.Sandbox = fake(() => ({ exitCode: 2, stdout: 'FAIL x', stderr: 'boom', timedOut: false, truncated: 0, refused: null }));
+  const failed = await provider('go test ./...');
+  assert.strictEqual(failed.metadata.verify.exitCode, 2);
+  assert.match(failed.metadata.verify.stdout, /FAIL x/);
+  assert.match(failed.metadata.verify.stdout, /boom/);
+
+  // A spent wall clock refuses the check. That is a harness condition, not a
+  // wrong answer, so the refusal rides through for the grader to error on
+  // rather than being recorded as a task the model got wrong.
+  sandboxMod.Sandbox = fake(() => ({ exitCode: -1, stdout: '', stderr: '', timedOut: false, truncated: 0, refused: 'wall clock spent' }));
+  const refused = await provider('go test ./...');
+  assert.match(refused.metadata.verify.refused, /wall clock/);
+
+  // No verify declared, no verify recorded - and no container started for it.
+  seen.length = 0;
+  started = 0;
+  sandboxMod.Sandbox = fake(() => ({ exitCode: 0, stdout: '', stderr: '', timedOut: false, truncated: 0, refused: null }));
+  const none = await provider(null);
+  assert.strictEqual(none.metadata.verify, undefined);
+  assert.strictEqual(started, 0, 'a row with no check and no commands must not pay for a container');
+
+  // What a row RAN is the behavioural record a spillover metric reads - ETH's
+  // finding is that a context file makes agents "run more tests... search more
+  // files (grep), read more files" - so the command strings themselves have to
+  // survive into metadata, not just their count. Folded into this IIFE rather
+  // than given its own: the stub on sandboxMod is shared module state, and two
+  // top-level async blocks swapping it race each other.
+  const chatty = new Provider({ config: { model: 'm', apiKeyEnvar: 'X' } });
+  let turn = 0;
+  chatty.chat = async () => {
+    turn += 1;
+    if (turn === 1) {
+      return { json: { choices: [{ message: { tool_calls: [
+        { id: 'c1', function: { name: 'run_bash', arguments: JSON.stringify({ command: 'grep -rn DefaultCaps .' }) } },
+        { id: 'c2', function: { name: 'run_bash', arguments: JSON.stringify({ command: 'make test' }) } },
+      ] } }] }, cached: false };
+    }
+    return { json: { choices: [{ message: { content: 'done' } }] }, cached: false };
+  };
+  const withCommands = await chatty.callApi(JSON.stringify([{ role: 'user', content: 'go' }]), {
+    prompt: { config: { workspaceDir: ws } },
+  });
+  assert.deepStrictEqual(withCommands.metadata.commands, ['grep -rn DefaultCaps .', 'make test'],
+    'the commands a row ran must reach metadata, in order');
+  assert.strictEqual(withCommands.metadata.commandsRun, 2);
+
+  sandboxMod.Sandbox = realSandbox;
+  fs.rmSync(ws, { recursive: true, force: true });
+  console.log('ok   skill-tools post-turn verify and command record');
+})();

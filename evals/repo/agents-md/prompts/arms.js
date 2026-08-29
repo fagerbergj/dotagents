@@ -5,6 +5,11 @@
 // lib/agents-md-effect.js prepareRepo). Otherwise the baseline could `cat
 // AGENTS.md` and the arms would stop differing by the treatment - the same trap
 // as serving a skill's own directory to the no-skill arm.
+// Both arms get a sandboxed `run_bash` over one prepared workspace: the wiring
+// hands `workspaceDir` to every arm through arms.withConfigEveryArm, inside
+// lib/agents-md-effect.js. Naming it here is not decoration - run.sh greps the
+// suite directory for `workspaceDir` to decide whether to run the sandbox's own
+// escape tests, and a suite that hands the model a shell must pay for that.
 const { arms } = require('../../../lib/agents-md-effect.js');
 
 // The deliverable is named in every task. A question that does not say what it
