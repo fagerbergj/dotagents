@@ -62,8 +62,10 @@ function materialise(f, log = () => {}) {
   // SHA, verified on a cold clone, so obtainability is the property that matters.
   try {
     git(p.git, ['fetch', '-q', '--filter=blob:none', 'origin', f.reviewed]);
-  } catch {
-    throw new Error(`fixture ${f.name}: reviewed commit ${f.reviewed.slice(0, 12)} cannot be fetched from ${f.repo} - GitHub has dropped it; re-pin or drop the fixture`);
+  } catch (err) {
+    // A dropped commit and a dead network fail identically here, so the git error
+    // rides along as `cause` rather than being replaced by a guess at which.
+    throw new Error(`fixture ${f.name}: reviewed commit ${f.reviewed.slice(0, 12)} cannot be fetched from ${f.repo} - GitHub has dropped it, or the fetch could not reach GitHub at all; see cause. Re-pin or drop the fixture if the commit is gone.`, { cause: err });
   }
   git(p.git, ['fetch', '-q', '--filter=blob:none', 'origin', f.base]);
   // Three dots: the base branch moves on after a PR opens, so diffing against its
