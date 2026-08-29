@@ -67,10 +67,21 @@ module.exports = function arms(skillName, taskTemplate) {
 // own skillDir/repoDir wiring), so it composes as the last step regardless of
 // what came before it.
 module.exports.withPersonaEveryArm = function withPersonaEveryArm(persona, exportedArms) {
+  return withConfigEveryArm({ userPersona: persona }, exportedArms);
+};
+
+// The general form: merge `config` into every arm at once. `workspaceDir` (the
+// run_bash sandbox) belongs here for the same reason a persona does - executing
+// the build is the case's environment, not something an arm earns, and a suite
+// that hand-rolls it onto one arm is measuring tool access. Anything a single
+// arm must have alone - skillDir, which IS the thing under test - stays out.
+function withConfigEveryArm(config, exportedArms) {
   const attach = (fn) => (ctx) => {
     const result = fn(ctx);
-    const { prompt, config } = Array.isArray(result) ? { prompt: result, config: {} } : result;
-    return { prompt, config: { ...config, userPersona: persona } };
+    const { prompt, config: own } = Array.isArray(result) ? { prompt: result, config: {} } : result;
+    return { prompt, config: { ...own, ...config } };
   };
   return Object.fromEntries(Object.entries(exportedArms).map(([name, fn]) => [name, attach(fn)]));
-};
+}
+
+module.exports.withConfigEveryArm = withConfigEveryArm;

@@ -24,6 +24,20 @@ const armsFactory = require('./arms.js');
   console.log('ok   arms.withPersonaEveryArm (symmetric attachment, preserves existing config)');
 }
 
+// arms.withConfigEveryArm: the general form, used for workspaceDir. run_bash is
+// the case's environment, not something an arm earns, so it must land on every
+// arm at once - and on the arm that already carries a skillDir too.
+{
+  const raw = [{ role: 'user', content: 'hi' }];
+  const wrapped = armsFactory.withConfigEveryArm({ workspaceDir: '/w' }, {
+    a: () => raw,
+    b: () => ({ prompt: raw, config: { skillDir: '/x' } }),
+  });
+  assert.deepEqual(wrapped.a({}), { prompt: raw, config: { workspaceDir: '/w' } });
+  assert.deepEqual(wrapped.b({}), { prompt: raw, config: { skillDir: '/x', workspaceDir: '/w' } });
+  console.log('ok   arms.withConfigEveryArm (workspaceDir reaches every arm)');
+}
+
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-tools-test-'));
 fs.mkdirSync(path.join(root, 'references/flowchart'), { recursive: true });
 fs.mkdirSync(path.join(root, 'references/railroad'), { recursive: true });

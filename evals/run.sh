@@ -87,6 +87,12 @@ node assertions/*.test.cjs
 # The load_resource provider is shared harness code, so its self-check runs for
 # every suite even though only mermaid uses it yet.
 node "$here/lib/skill-tools.test.cjs"
+# The sandbox behind run_bash is security-relevant, so its self-check attempts
+# every escape for real - which costs ~20 containers and a minute. Only a suite
+# that actually hands the model a shell pays for it.
+if grep -rqs workspaceDir "$suites_dir/$suite"; then
+  node "$here/lib/sandbox.test.cjs"
+fi
 # Fixture materialisation has its own offline check - a local repo stands in for
 # GitHub, so the diff range and the archived tree are exercised without network.
 node "$here/lib/fixtures.test.cjs"
