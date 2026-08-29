@@ -75,5 +75,37 @@ assert.equal(checks.oneBoundedIssue(threeHeadings, {}).pass, false);
 assert.equal(checks.oneBoundedIssue(single, { config: { min: 2, max: 3 } }).pass, false);
 
 
+// --- config shape -----------------------------------------------------------
+// semantic_quality graded the negative control from defaultTest and folded a
+// per-invention subtraction into its own arithmetic. Both are checked here
+// because neither is visible to `validate config`, and both are silent at
+// runtime: the control scored 1.00 for a ticket it should have refused to
+// write, and a write-up quoting all four properties could still report 0.00.
+const { execFileSync } = require('node:child_process');
+const path = require('node:path');
+const load = (file) => JSON.parse(execFileSync('python3', ['-c',
+  'import json,sys,yaml; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)',
+  path.join(__dirname, '..', file)], { encoding: 'utf8' }));
 
-console.log('issue assertions: ok');
+const config = load('promptfooconfig.yaml');
+const cases = load('tests/cases.yaml');
+const rides = (metric) => cases.filter((c) => (c.assert || []).some((g) => g.metric === metric));
+
+for (const grader of config.defaultTest.assert) {
+  assert.notEqual(grader.metric, 'semantic_quality',
+    'semantic_quality in defaultTest grades the negative control, where a ticket is the failure');
+}
+const positives = cases.filter((c) => !/NEGATIVE CONTROL/.test(c.description));
+assert.equal(rides('semantic_quality').length, positives.length,
+  'semantic_quality must ride on every positive case');
+assert.equal(rides('semantic_quality').filter((c) => /NEGATIVE CONTROL/.test(c.description)).length, 0,
+  'semantic_quality must not ride on the negative control');
+// Invention is `no_invented_facts` (computed) and the per-case `case_fidelity`
+// rubric. It must not also be a subtraction inside the recall score.
+const semantic = (rides('semantic_quality')[0].assert || []).find((g) => g.metric === 'semantic_quality');
+assert.doesNotMatch(semantic.value, /subtract[\s\S]{0,90}?(invent|unsourced|fabricat)/i,
+  'semantic_quality subtracts for invention; that term belongs to its own metric');
+assert.doesNotMatch(semantic.value, /bounded scope/i,
+  'semantic_quality restates the computed bounded_scope grader');
+
+console.log(`issue assertions: ok (${cases.length} cases, semantic_quality on ${rides('semantic_quality').length})`);
