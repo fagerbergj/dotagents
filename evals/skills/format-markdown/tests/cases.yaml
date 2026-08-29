@@ -207,7 +207,7 @@
 
 - description: no title - status page with several sections and no H1
   vars:
-    ask: "internal status snapshot, goes in the ops channel every morning. what would you do with it"
+    ask: "internal status snapshot, goes in the ops channel every morning. send it back the way you'd have it"
     rubric: |
       The document was not given a title it never had, and each service still reports the same status.
     document: |
@@ -275,7 +275,7 @@
 
 - description: negative control - already clean, and mostly fenced commands
   vars:
-    ask: "key rotation steps for the runbook. anything you'd do to it before i paste it in?"
+    ask: "key rotation steps for the runbook. give it whatever you think it needs and send it back so i can paste it in"
     rubric: |
       This document was already in good shape. The right answer changes almost nothing about it.
     document: |

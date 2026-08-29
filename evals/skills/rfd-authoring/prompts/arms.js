@@ -2,7 +2,7 @@ const arms = require('../../../lib/arms.js')('rfd-authoring', (vars) => `A colle
 
 ${vars.task}
 
-Write what you would send back to the people involved. Return only that text, with no commentary about how you wrote it.`);
+Write what you would send back to the people involved. If an open-ended write-up is not the right response here, say that instead and say what to do. Return only that text, with no commentary about how you wrote it.`);
 
 // SKILL.md step 4 falls back to `references/industry-examples.md` and the
 // attributed `assets/example-rfd.md` whenever no house template exists - every case here.

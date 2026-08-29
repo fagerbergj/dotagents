@@ -99,4 +99,31 @@ const grounded = cases.filter((c) => c.assert.some((g) => g.metric === 'no_inven
 assert.equal(grounded.length, judged.length,
   `no_invented_specifics rides on ${grounded.length} of the ${judged.length} cases judged against a source`);
 
+// The task template is the only place a permission to push back can live and
+// still reach both arms; a skill body carrying it would BE the delta. adr and
+// rfc both offer that out and score control_quality positive; rfd offered none
+// and scored -0.29, so every control row was graded on an answer its own prompt
+// gave the model no way to give.
+const armsModule = require('../prompts/arms.js');
+const control = cases.find((c) => c.assert.some((g) => g.metric === 'control_quality'));
+const userTurn = (arm) => arm({ vars: control.vars }).prompt
+  ? arm({ vars: control.vars }).prompt.at(-1).content
+  : arm({ vars: control.vars }).at(-1).content;
+const noSkillTask = userTurn(armsModule.noSkill);
+assert.match(noSkillTask, /if an open-ended write-up is not the right response here, say that instead/i,
+  'the task template must let the model decline the exploratory shape, or control_quality grades an answer the prompt forbids');
+// Same sentence, same wording, both arms. The skill body is the only difference
+// the suite is allowed to measure.
+assert.equal(userTurn(armsModule.skillCurrent), noSkillTask,
+  'the two arms must receive a byte-identical task; only the system message may differ');
+
+// The judge used to read the artifact as raw material for a missing reply -
+// "the output is the proposal email itself, not a reply" - and score a correct
+// baseline answer 0 on all three items. The prompt asks for what the author
+// would SEND to the people involved, which is often not addressed to the
+// colleague at all, so the rubric has to say what it is looking at.
+const controlRubric = control.assert.find((g) => g.metric === 'control_quality').value;
+assert.match(controlRubric, /IS the reply being graded/,
+  'control_quality must say that a document addressed to third parties is the answer, not raw material for one');
+
 console.log(`rfd config: ok (${cases.length} cases, ${graders.length} assertions)`);

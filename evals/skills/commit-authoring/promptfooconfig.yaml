@@ -142,6 +142,23 @@ defaultTest:
     # Unlike why_quality this one is given the diff. A rubric only sees what is
     # interpolated into it (evals/AGENTS.md), so "the diff does not support it"
     # was inert where this criterion used to sit, and the judge guessed.
+    #
+    # Two things it must not fine, both measured on
+    # results/commit-authoring@1.0.json, where this metric read -0.21:
+    #
+    # - An unfilled placeholder ticket ref. `SKILL.md` prescribes a `Refs
+    #   #<issue>` footer, so the skill arm emits one and the judge quoted
+    #   `#<issue>`, `Refs #<TBD>`, `Refs #<ticket-number>` back as "an invented
+    #   reference to an issue number that does not exist" - 9 skill-arm zeros
+    #   against 0 in the baseline, i.e. the arm was fined for its own template
+    #   slot. A slot asserts nothing. pr-authoring's `restraint` already carries
+    #   this exemption and, like it, this one stops at a CONCRETE number.
+    # - Recommending a split. `splits_mixed_change` pays +0.47 for exactly that,
+    #   and this metric took it off again on ~4 skill rows - one reason reads
+    #   "this is a recommendation about how to commit it, which is explicitly
+    #   excluded from consideration" and scores 0 anyway, because the judge went
+    #   on to fine a sentence the recommendation is MADE of. So the exemption
+    #   now names the parts, not just the act.
     - type: llm-rubric
       value: |
         The developer said this about the change:
@@ -162,7 +179,31 @@ defaultTest:
         Not an invention, and must not be listed: anything the diff shows or the note
         says, however differently worded; a plain description of what the diff does; a
         judgement about the change ("this is a breaking change", "the old behaviour was
-        wrong") that follows from the diff; or a recommendation about how to commit it.
+        wrong") that follows from the diff.
+
+        Two exemptions, both narrow, both about the message as a template rather than
+        as a claim about the code.
+
+        First, an UNFILLED placeholder slot asserts nothing and is not a reference:
+        `Refs #<issue>`, `#TBD`, `#NNN`, `#???`, `Co-authored-by: [Your Name]`. It is a
+        slot for a value the author fills in against the tracker, so it belongs on no
+        list however obviously the diff carries no ticket number. A CONCRETE value in
+        that slot is judged normally - `Refs #4471` where neither the diff nor the note
+        names 4471 is an invention and goes on the list. This exemption is this suite's
+        own house position, matching pr-authoring's `restraint`; no published convention
+        speaks to an unfilled one.
+
+        Second, a recommendation about HOW TO COMMIT the change is not a claim about the
+        code, and neither is anything the recommendation is made of: saying the tree
+        holds unrelated work, proposing a boundary between commits, writing out the
+        subject and body of each proposed commit, and the standing reasons for splitting
+        (a reviewable diff, a bisect that lands on one change, an independent revert,
+        each commit building on its own). Read a proposed commit's own body for
+        inventions the same way you read a single message's - a fabricated cause inside
+        it still counts - but never list the proposal, its boundary, or its rationale.
+        Splitting a mixed diff is a behaviour this suite pays for elsewhere; it cannot
+        also be fined here.
+
         A message that asserts nothing beyond the diff at all lists nothing and scores 1.
 
         Score from 0 to 1, never above 1: 1 if your list is empty, 0 if it is not.
