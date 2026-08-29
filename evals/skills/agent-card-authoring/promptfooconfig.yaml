@@ -33,11 +33,13 @@ providers:
 
 defaultTest:
   options:
-    # The llm-swap gateway returns reasoning as message content. This pulls the
-    # fenced agent-card.json out of that leak; a negative-control case with no
-    # card gets a sentinel-prefixed pass-through so the rubric still sees the
-    # reply. See assertions/agentcard.cjs:normalizeToJson.
-    transform: file://assertions/agentcard.cjs:normalizeToJson
+    # NO suite-wide `transform` here, deliberately. normalizeToJson used to sit
+    # at this level and replace every reply with the bare card, which also fed
+    # no_fabrication - whose rubric grades whether the reply asks for the
+    # missing piece or marks its skeleton as placeholder, i.e. exactly the prose
+    # this level of transform deletes. It now hangs off the one assertion that
+    # cannot see past prose (contract_shape, native is-json); the javascript
+    # graders extract the card themselves via agentcard.cjs:source.
     provider:
       id: openai:chat:deepseek/deepseek-v4-flash
       config:
