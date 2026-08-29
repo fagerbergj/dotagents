@@ -155,6 +155,9 @@
         If the appended section reads NO-ANCHORS, this review names nothing that
         resolves to code and there is nothing to check: score 1 and say so.
 
+        If it reads NO-REVIEW, the model produced nothing and the row is dead,
+        not clean: score 0 and say so.
+
         State the count and the arithmetic.
       threshold: 0.5
       metric: no_false_claims

@@ -233,6 +233,13 @@ function citedCode(output, context) {
   touched.sort((a, b) => Number(isTest(a)) - Number(isTest(b)));
   const found = anchors(output, dir, touched);
   const header = '\n\n===== CODE FROM THE REPOSITORY (appended by the grader, not written by the reviewer) =====\n';
+  // A dead row is not a clean review. Truncation to empty output has happened in
+  // this harness before (reasoning tokens emptied 15 rows of one baseline), and
+  // it lands on the arm with the longer prompt - so "asserted nothing false"
+  // would hand the skill arm a free 1.00 for a row that produced nothing.
+  if (!String(output).trim()) {
+    return `${output}${header}NO-REVIEW: the model returned no review text at all.\n`;
+  }
   if (!found.length) {
     return `${output}${header}NO-ANCHORS: this review names no line and no symbol that resolves to code in the files this change touches.\n`;
   }

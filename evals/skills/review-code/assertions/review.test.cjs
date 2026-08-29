@@ -71,6 +71,9 @@ try {
   // goes, which is the thing worth pinning.
   assert.match(cc('see a/../../pr-7916.patch:1'), /NO-ANCHORS/, 'a citation cannot read outside the tree');
   assert.match(cc('Looks good to me, ship it.'), /NO-ANCHORS/, 'a review that names no code says so explicitly');
+  // A truncated row must not read as a review that asserted nothing false.
+  assert.match(cc(''), /NO-REVIEW/, 'an empty output is a dead row, not a clean review');
+  assert.ok(!/NO-ANCHORS/.test(cc('   \n  ')), 'whitespace-only output is dead too, not merely unanchored');
 
   // Cost and reproducibility: the appendix is capped, and the same review twice
   // produces the same bytes - a judged metric over a moving input is not a
