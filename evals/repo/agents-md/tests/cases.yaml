@@ -1,0 +1,469 @@
+# PROTOTYPE CASES FOR github.com/fagerbergj/quack.
+#
+# THIS FILE DOES NOT BELONG IN dotagents. It lives here only because the
+# prototype had to land somewhere reviewable. Its home is `evals/agents-md/
+# tests/cases.yaml` INSIDE quack, next to the AGENTS.md it measures, exactly as
+# every other repo running this suite will keep its own. Everything else in this
+# suite - the config, the arm wiring, the three graders - is repo-agnostic and
+# stays in dotagents.
+#
+# Repo pinned at a19807d (main, 2026-08). The prepared copy is `git archive` of
+# the tracked tree with AGENTS.md and its CLAUDE.md symlink removed, re-committed
+# as a single commit, plus the untracked build inputs the image seeds. Both arms
+# get that identical copy and identical shell.
+#
+# ---------------------------------------------------------------------------
+# Discoverability audit of quack's eight AGENTS.md bullets
+# ---------------------------------------------------------------------------
+# Done against the pinned tree, not from memory. The brief expected roughly
+# seven of eight to be undiscoverable. Measured, it is ONE:
+#
+#  1. AGENTS.md.local            UNDISCOVERABLE. Named nowhere else in the tree;
+#                                the file is absent and untracked.
+#  2. make plugins / make test   DISCOVERABLE, four times over: README.md's
+#                                quickstart, CONTRIBUTING.md "Cloning", the
+#                                Makefile's own comment on the `plugins` target,
+#                                and embed.go's comment, which names the exact
+#                                failure ("pattern all:.agents/vendor/dotagents/
+#                                skills: no matching files found").
+#  3. npm --prefix scripts ci    PARTLY. scripts/package.json sits beside
+#                                mermaid-validate.mjs; config/quack.yaml:508
+#                                carries the command in a comment. Nothing
+#                                states the "before vetting tests" ordering.
+#  4. make generate              DISCOVERABLE. CONTRIBUTING.md "Before you open
+#                                a PR" says it verbatim, including the
+#                                never-hand-edit rule and the CI drift check.
+#  5. prefer the quack CLI       DISCOVERABLE. README links docs/cli.md.
+#  6. agent bundle = 4 files     DISCOVERABLE. CONTRIBUTING.md "Adding or
+#                                changing an agent" states the exact file list.
+#  7. quack sandbox check        PARTLY. docs/sandbox-cli.md documents the
+#                                command including that exact invocation; only
+#                                the WHEN (before touching internal/workspace)
+#                                is unique to AGENTS.md.
+#  8. non-production server      PARTLY. Adjacent to the PR checklist.
+#
+# By ETH's redundancy result - value tracks what is NOT otherwise available -
+# this file should show close to nothing on quality and a cost increase. That
+# is the prediction, recorded before the run.
+#
+# ---------------------------------------------------------------------------
+# Environment each case needs (the image contract, per case)
+# ---------------------------------------------------------------------------
+#   tree     the prepared tree and a shell. Nothing else.
+#   go       tree + Go toolchain + warm GOMODCACHE + the plugin trees fetchable
+#            offline (a local git mirror at the URLs in .agents/vendor/
+#            plugins.yaml). NOTHING in quack compiles without the plugin trees:
+#            internal/dag transitively imports the root package, whose go:embed
+#            covers .agents/vendor/dotagents/skills.
+# Two prepared trees, named by `repo_variant` (default `clean`):
+#   clean      the pinned tree as committed.
+#   bug-1016   the same, then `git checkout 8e81263^ -- internal/dag/admission.go`
+#              so the test from 8e81263 is present and its source fix is not.
+# Both arms of a case always get the same variant; it varies per case, never
+# per arm.
+#
+#   codegen  go + frontend/node_modules + the oapi-codegen tool in the module
+#            cache. Heaviest; cut this case first if the image is too much.
+# A case whose environment is not met fails identically in BOTH arms and
+# measures nothing. Check the environment before reading any number.
+
+# ===========================================================================
+# A. GENERIC TASK CASES - the primary measurement
+# Chosen independently of what the AGENTS.md says. These are the honest
+# headline: does the file improve the work, and what does it cost.
+# ===========================================================================
+
+- description: 'generic: build the project from a fresh clone'
+  vars:
+    population: generic
+    env: go
+    # README, CONTRIBUTING, the Makefile and embed.go all state the plugin step.
+    discoverable: true
+    verify: 'go build ./... >/dev/null'
+    verify_exit: 0
+    task: |
+      I just cloned this repo onto a fresh box. Get it to the point where
+      `go build ./...` succeeds, and then tell me the exact commands you ran,
+      in order, as a shell snippet I can paste.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:taskCorrect
+      metric: task_correct
+
+- description: 'generic: run the tests and report what failed'
+  vars:
+    population: generic
+    env: go
+    discoverable: true
+    repo_variant: bug-1016
+    # The prepared tree for this case carries the test from quack 8e81263 with
+    # its source fix reverted (`git checkout 8e81263^ -- internal/dag/
+    # admission.go`), so there is a real, reproducible failure to find.
+    # The ask is to REPORT, not to fix.
+    answer_key: |
+      internal/dag fails. TestAdmitOnQueuedPanicNeverDoubleUnlocks does not
+      fail as a normal test - it kills the test binary with Go's unrecoverable
+      "fatal error: sync: unlock of unlocked mutex". The cause is in
+      Admission.Admit: it manually Unlocks a.mu, calls the onQueued callback,
+      and Locks again; when onQueued panics, the manual Lock never runs, so
+      Admit's own deferred Unlock unlocks an already-unlocked mutex.
+      A correct report names the package internal/dag, names that test, and
+      says the failure is a fatal unlock-of-unlocked-mutex rather than an
+      ordinary assertion failure.
+    task: |
+      Run this project's Go test suite and tell me what is broken. In your
+      final message give me: the failing package path, the failing test name,
+      and one paragraph on why it fails. Do not fix it - I want the diagnosis
+      first.
+  assert:
+    - type: llm-rubric
+      metric: answer_correct
+      value: |
+        The reported diagnosis matches the answer key. Award credit only for
+        what the report actually says, not for what it could have meant.
+        Score from 0 to 1, never above 1.
+      rubricPrompt:
+        # The system half is mandatory. A custom rubricPrompt REPLACES
+        # promptfoo's whole grading prompt including the message that
+        # establishes this contract; dropping it is the "Could not extract
+        # JSON" failure that scored 18/18 rows of another suite at 0.00 while
+        # the run reported success.
+        - role: system
+          content: |
+            You are grading a diagnosis against a known-correct answer key.
+            You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}.
+            `score` is a number from 0 to 1 and never above 1. `pass` is true when score >= 0.7.
+            Example: {"reason": "Names the package and the test but calls it an assertion failure, not a fatal unlock.", "pass": false, "score": 0.5}
+            Example: {"reason": "Names internal/dag, the test, and the double-unlock mechanism.", "pass": true, "score": 1}
+        - role: user
+          content: |
+            <AnswerKey>
+            {{answer_key}}
+            </AnswerKey>
+
+            <Report>
+            {{output}}
+            </Report>
+
+            <Rubric>
+            {{rubric}}
+            </Rubric>
+
+- description: 'generic: answer a factual question about the codebase'
+  vars:
+    population: generic
+    env: tree
+    discoverable: true
+    answer_key: |
+      ResolveSandbox, in internal/workspace/sandbox.go. It fails CLOSED: for
+      workspace.sandbox: bwrap it probes bubblewrap with probeBwrap() and
+      returns an error (with install instructions) if the probe fails, rather
+      than silently downgrading to an unsandboxed mode. Its own comment says
+      "Fails closed."
+    task: |
+      In this repo, when the configured workspace sandbox mode cannot be
+      proven to work, what happens? Give me the function name, its file, and
+      say plainly whether it fails open or fails closed.
+  assert:
+    - type: llm-rubric
+      metric: answer_correct
+      value: |
+        The answer matches the answer key on all three points it asks for: the
+        function, its file, and open-vs-closed. Score from 0 to 1, never above 1.
+      rubricPrompt:
+        - role: system
+          content: |
+            You are grading an answer against a known-correct answer key.
+            You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}.
+            `score` is a number from 0 to 1 and never above 1. `pass` is true when score >= 0.7.
+            Example: {"reason": "Right function and file, but says it falls back to none - the key says it errors.", "pass": false, "score": 0.4}
+            Example: {"reason": "ResolveSandbox, internal/workspace/sandbox.go, fails closed.", "pass": true, "score": 1}
+        - role: user
+          content: |
+            <AnswerKey>
+            {{answer_key}}
+            </AnswerKey>
+
+            <Answer>
+            {{output}}
+            </Answer>
+
+            <Rubric>
+            {{rubric}}
+            </Rubric>
+
+- description: 'generic: debug a real issue from the repo history'
+  vars:
+    population: generic
+    env: go
+    discoverable: true
+    repo_variant: bug-1016
+    # quack 8e81263, "fix(dag): Admit's onQueued panic must not double-unlock
+    # the mutex (#1016)". Prepared with the test present and the source fix
+    # reverted. The commit message records that the test "reproduces the exact
+    # prod fatal against unpatched code".
+    verify: 'go test ./internal/dag/ -run TestAdmitOnQueuedPanicNeverDoubleUnlocks -count=1 >/dev/null'
+    verify_exit: 0
+    task: |
+      `go test ./internal/dag/` is killing the test binary outright with
+      `fatal error: sync: unlock of unlocked mutex`. Track down what causes
+      it and fix it in the source. Leave the repo with that test passing;
+      do not edit the test to make it pass.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:taskCorrect
+      metric: task_correct
+
+- description: 'generic: make a small change end to end'
+  vars:
+    population: generic
+    env: codegen
+    # CONTRIBUTING.md states the regenerate-and-commit rule and names the CI
+    # drift check, so this is discoverable without AGENTS.md.
+    discoverable: true
+    # Exactly what CI's codegen-drift job checks: regenerate, then demand no
+    # further diff in the generated trees.
+    verify: './scripts/generate.sh >/dev/null 2>&1 && git diff --exit-code -- internal/schema frontend/src/generated >/dev/null'
+    verify_exit: 0
+    task: |
+      Add an optional string field `note` to the Session schema in
+      openapi.yaml, and leave the working tree in the state CI would accept -
+      CI has a codegen-drift check. Tell me at the end which files you changed.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:taskCorrect
+      metric: task_correct
+
+# ===========================================================================
+# B. NEGATIVE CONTROLS - spillover onto tasks the file never mentions
+# Grounded in ETH's measured spillover: with a context file present, agents
+# "run more tests... search more files (grep), read more files, and write more
+# files". unmentioned_unchanged is its own metric and is NEVER averaged with
+# task_correct or answer_correct.
+#
+# `out_of_scope` is a block scalar, not a YAML list: a list-valued case var is
+# silently expanded into one test per element.
+# ===========================================================================
+
+- description: 'control: read-only lookup, no build or test is in scope'
+  vars:
+    population: control
+    env: tree
+    discoverable: true
+    answer_key: |
+      DefaultCaps() in internal/workspace/caps.go. Timeout is 60 * time.Second
+      and MaxOutputBytes is 64 * 1024 (64 KB).
+    out_of_scope: |
+      make test
+      make plugins
+      go test
+      go build
+      make generate
+      npm --prefix scripts ci
+      quack sandbox check
+    task: |
+      What is the default per-command timeout for a workspace tool call in
+      this repo, and the default cap on command output? Give me the function
+      that sets them, its file, and both values.
+  assert:
+    - type: llm-rubric
+      metric: answer_correct
+      value: |
+        The answer matches the answer key on the function, the file, and both
+        values. Score from 0 to 1, never above 1.
+      rubricPrompt:
+        - role: system
+          content: |
+            You are grading an answer against a known-correct answer key.
+            You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}.
+            `score` is a number from 0 to 1 and never above 1. `pass` is true when score >= 0.7.
+            Example: {"reason": "Right file, but gives 30s for the timeout.", "pass": false, "score": 0.3}
+            Example: {"reason": "DefaultCaps in internal/workspace/caps.go, 60s and 64 KB.", "pass": true, "score": 1}
+        - role: user
+          content: |
+            <AnswerKey>
+            {{answer_key}}
+            </AnswerKey>
+
+            <Answer>
+            {{output}}
+            </Answer>
+
+            <Rubric>
+            {{rubric}}
+            </Rubric>
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:unmentionedUnchanged
+      metric: unmentioned_unchanged
+
+- description: 'control: one-line rename, nothing else is in scope'
+  vars:
+    population: control
+    env: tree
+    discoverable: true
+    # One tracked file changed. The prepared tree is a git repo with a single
+    # clean commit, so this is exact. Writes under .agents/vendor are untracked
+    # and do not count - only a real source change does.
+    verify: 'test "$(git diff --name-only | wc -l)" -eq 1'
+    verify_exit: 0
+    out_of_scope: |
+      make test
+      make plugins
+      make generate
+      go test ./...
+      npm --prefix scripts ci
+      quack sandbox check
+    task: |
+      In internal/dag/admission_test.go, rename the local variable `boom` to
+      `panicValue` inside TestAdmitOnQueuedPanicNeverDoubleUnlocks. Change
+      nothing else anywhere. Tell me when it is done.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:taskCorrect
+      metric: task_correct
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:unmentionedUnchanged
+      metric: unmentioned_unchanged
+
+# ===========================================================================
+# C. LINE PROBES - DIAGNOSTIC ONLY, for the file's author
+#
+# One per AGENTS.md line. The task was selected BECAUSE the file addresses it,
+# so these are rigged in the file's favour and CANNOT support a claim that the
+# file helps. They tell the owner which lines are being followed and therefore
+# which are candidates to cut. ETH already measured instruction-following as
+# high (1.6 uses per instance for a mentioned tool, under 0.01 unmentioned),
+# and with a shell available the outcome is directly observable anyway, which
+# makes follows_stated_command the weakest metric in this suite.
+#
+# `probe_line` indexes the command-bearing bullets of the AGENTS.md, in file
+# order, as lib/agents-md-effect.js statedCommands() parses them:
+#   0 make plugins / make test (avoid: go test ./...)
+#   1 npm --prefix scripts ci
+#   2 make generate
+#   3 quack           <- deliberately NOT probed: a one-word command matches
+#                        almost any command line in a repo called quack, so the
+#                        check would pass on noise. Probed as prose instead.
+#   4 quack sandbox check --agent code-reviewer
+# ===========================================================================
+
+- description: 'probe L2: make test, not bare go test'
+  vars:
+    population: line-probe
+    env: go
+    discoverable: true
+    probe_line: 0
+    verify: 'go build ./... >/dev/null'
+    verify_exit: 0
+    task: |
+      Run this repo's Go tests on this fresh checkout and tell me whether they
+      pass. If something stops them running, deal with it and say what you did.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:taskCorrect
+      metric: task_correct
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:followsStatedCommand
+      metric: follows_stated_command
+
+- description: 'probe L3: npm --prefix scripts ci before vetting tests'
+  vars:
+    population: line-probe
+    env: tree
+    # The command itself is in config/quack.yaml:508 and scripts/package.json
+    # exists; only the "before vetting tests" ordering is unique to AGENTS.md.
+    discoverable: true
+    probe_line: 1
+    task: |
+      I want to run the Mermaid validation that this repo's vetting tests use.
+      Get it running and tell me the commands, in order.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:followsStatedCommand
+      metric: follows_stated_command
+
+# probe L4 (make generate) is DELETED, not missing. Its task was word-for-word
+# the generic end-to-end case above, so a separate row would buy a second
+# codegen run and report nothing new. Attach probe_line: 2 to that case if
+# the prefer/avoid reading of line 4 is ever wanted.
+
+- description: 'probe L7: quack sandbox check before touching workspace sandboxing'
+  vars:
+    population: line-probe
+    env: go
+    # docs/sandbox-cli.md carries this exact invocation; only the trigger
+    # (before touching internal/workspace) is unique to AGENTS.md.
+    discoverable: true
+    probe_line: 4
+    task: |
+      I want to add a new environment variable to what a sandboxed worker
+      process gets in internal/workspace. Before you write anything, tell me
+      what you would run to confirm you have not broken the sandbox, and run it.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:followsStatedCommand
+      metric: follows_stated_command
+
+- description: 'probe L1: AGENTS.md.local is absent, so stop and ask'
+  vars:
+    population: line-probe
+    env: tree
+    # The one bullet in this file that nothing else in the tree states. If the
+    # AGENTS.md moves anything at all, it should move this.
+    discoverable: false
+    answer_key: |
+      The correct move is to refuse to proceed and ask the user for the
+      host-specific deployment steps, because the repo does not contain them.
+      An answer that invents a deploy procedure - docker compose commands, a
+      systemd unit, ssh to a named host, a Watchtower nudge - is wrong even if
+      it looks plausible, because nothing in the tree licenses it.
+    task: |
+      Deploy this to the home server. Give me the exact sequence of commands
+      you would run, or tell me why you cannot.
+  assert:
+    - type: llm-rubric
+      metric: answer_correct
+      value: |
+        The response stops and asks for the host-specific steps rather than
+        producing a deployment procedure. Reconstructing plausible-looking
+        deploy commands scores 0 no matter how sensible they look.
+        Score from 0 to 1, never above 1.
+      rubricPrompt:
+        - role: system
+          content: |
+            You are grading a response against a known-correct answer key.
+            You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}.
+            `score` is a number from 0 to 1 and never above 1. `pass` is true when score >= 0.7.
+            Example: {"reason": "Produces a docker compose deploy sequence; the key says stop and ask.", "pass": false, "score": 0}
+            Example: {"reason": "Says the host-specific steps are not in the repo and asks for them.", "pass": true, "score": 1}
+        - role: user
+          content: |
+            <AnswerKey>
+            {{answer_key}}
+            </AnswerKey>
+
+            <Response>
+            {{output}}
+            </Response>
+
+            <Rubric>
+            {{rubric}}
+            </Rubric>
+
+- description: 'probe L6: an agent bundle holds only its four allowed files'
+  vars:
+    population: line-probe
+    env: tree
+    discoverable: true
+    # Deterministic and repo-shaped: after the change, the bundle directory
+    # must contain nothing outside the allowed four names.
+    verify: 'test -d agents/linter && ! ls -A agents/linter | grep -qvE "^(agent-card\.json|prompt\.md|rubric\.yaml|memory\.md)$"'
+    verify_exit: 0
+    task: |
+      Add a new agent called `linter` to this repo, modelled on an existing
+      one, and wire it up so the server would load it. Tell me every file you
+      added or changed.
+  assert:
+    - type: javascript
+      value: file://assertions/agentsmd.cjs:taskCorrect
+      metric: task_correct

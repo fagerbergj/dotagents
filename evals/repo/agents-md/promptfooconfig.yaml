@@ -1,0 +1,110 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: does a repository's AGENTS.md change what an agent does
+
+# ---------------------------------------------------------------------------
+# What this suite is, and what it is not
+# ---------------------------------------------------------------------------
+#
+# Arms: no AGENTS.md vs with AGENTS.md, same repo, same tasks, same shell. The
+# file is the only difference. Arm labels stay `no-skill`/`skill-current`
+# because run.sh, report.js and rollup.js key off those strings; the SUBJECT is
+# set by EVAL_SUBJECT to the repo's AGENTS.md, not to a SKILL.md.
+#
+# TWO POPULATIONS. They are reported separately and NEVER averaged:
+#
+#   A. GENERIC TASK CASES (`population: generic`) - the primary measurement.
+#      Real work, chosen INDEPENDENTLY of what the AGENTS.md says: set the
+#      project up, run the tests and report what failed, answer a factual
+#      question about the codebase, debug something from the repo's own
+#      history, make a small change end to end. These are the honest headline
+#      and the ETH replication.
+#
+#   B. LINE-PROBE CASES (`population: line-probe`) - a DIAGNOSTIC, for the
+#      file's author. One per AGENTS.md line. **These cannot support a claim
+#      that the file helps**: the task was selected because the file addresses
+#      it, so the test is rigged in the file's favour. They measure only
+#      whether a line is followed, which Gloaguen et al. (arXiv:2602.11988)
+#      already measured as high - a tool mentioned in the file is used 1.6
+#      times per instance against under 0.01 when unmentioned. Their job is
+#      authoring: telling the owner which lines to cut. Do not quote a
+#      line-probe number as evidence the file works.
+#
+# Every case also carries `discoverable: true|false` - is the fact recoverable
+# from the repo, or could it only be told to you? Report the two populations
+# split by that tag. Grounded in ETH's redundancy ablation: stripping the
+# repo's other documentation moved the same context file from -2% to +2.7%,
+# and their conclusion is that a file "should only contain specific additional
+# instructions beyond what is already available in the codebase". Discoverable
+# cases should show flat quality with a cost change; undiscoverable ones a real
+# quality gap. Lulla et al. (arXiv:2601.20404) name this as the open gap:
+# "Beyond a binary treatment of AGENTS.md as present or absent, we also plan to
+# examine how properties of these files... relate to agent outcomes."
+#
+# NOT set: PROMPTFOO_DISABLE_TEMPLATING. The judged metric's rubricPrompt needs
+# {{answer_key}} interpolated from the case vars, and that flag turns off var
+# interpolation into assertion values. lib/check-case-vars.py therefore gates
+# every var against `{{`/`{%` on each run - keep the cases free of them.
+
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # Sandboxed bash over a per-row fresh copy of the repo. BOTH arms get it:
+  # execution is the subject matter, not an affordance the AGENTS.md earns -
+  # the same reasoning that gives `read_source` to both arms in review-code and
+  # fix-bug. Gating it on the file would make the delta measure tool access.
+  #
+  # Caps are identical across arms on purpose. A different cap is a different
+  # environment and the delta then stops being the file. They exist so one
+  # thrashing row cannot set the cost comparison: ETH's "over 20% on average"
+  # is the largest real effect anyone has measured here and it has to stay
+  # attributable. Values follow quack's own workspace.DefaultCaps - 60s per
+  # command, 64 KB of output - which is the boundary its owner already
+  # settled on (internal/workspace/caps.go).
+  - id: file://../../lib/sandbox-bash.js
+    label: deepseek-v4-flash+bash
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      # A build plus a test run plus a fix is genuinely multi-step; 40 leaves
+      # room for wrong turns without letting a loop spin all night.
+      maxBashRounds: 40
+      commandTimeoutSec: 60
+      maxOutputBytes: 65536
+      network: none
+
+defaultTest:
+  options:
+    transform: file://../../lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # Unnamed run-shape guard, not a scored metric - naming it would charge
+    # slowness twice, once here and again through the truncation it causes.
+    # Generous: a row here compiles Go. Cost, steps and command counts reach
+    # the report through report.js's unscored rows, not through an assertion.
+    - type: latency
+      threshold: 900000
+
+tests:
+  - file://tests/*.yaml
