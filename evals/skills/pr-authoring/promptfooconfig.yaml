@@ -73,12 +73,14 @@ defaultTest:
         showThinking: false
         omitDefaults: true
   assert:
-    # 1. Every name in the description exists in the change. Needs code: it
-    #    cross-references identifiers in the body against the diff itself.
-    #    Named for what it can see - invented NAMES. A fabricated causal claim
-    #    carrying no identifier is outside it, and left to the coverage/restraint
-    #    judges. Unchanged from the prior suite - this suite's strongest grader,
-    #    computed against input rather than judged.
+    # 1. Every name in the description exists in the change, or in the tree the
+    #    change lands in - both arms can read that tree, so a file they read is
+    #    not invented. Needs code: it cross-references identifiers in the body
+    #    against the diff and that tree. Named for what it can see - invented
+    #    NAMES. A fabricated causal claim carrying no identifier is outside it,
+    #    and so is a false claim about a file that does exist; both are left to
+    #    `restraint`, which fines them without this one paying for them. This
+    #    suite's strongest grader, computed against input rather than judged.
     - type: javascript
       value: file://assertions/pr.cjs:noFabricatedIdentifiers
       metric: no_invented_identifiers
