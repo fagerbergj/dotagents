@@ -74,7 +74,7 @@ for (const testCase of cases) {
 const FABRICATION = new Set(['no_invented_specifics']);
 for (const grader of graders) {
   if (grader.type !== 'llm-rubric' || FABRICATION.has(grader.metric)) continue;
-  assert.doesNotMatch(grader.value, /subtract[\s\S]{0,90}?(invent|unsourced|fabricat)/i,
+  assert.doesNotMatch(grader.value, /(subtract|cancel)[\s\S]{0,90}?(invent|unsourced|unsupported|fabricat)|(invent|unsourced|unsupported|fabricat)[\s\S]{0,90}?(subtract|cancel)/i,
     `${grader.metric} subtracts for invention; that term belongs to its own metric`);
 }
 const grounded = cases.filter((c) => c.assert.some((g) => FABRICATION.has(g.metric)));

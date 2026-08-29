@@ -61,18 +61,44 @@
 
 
       Score from 0 to 1, never above 1: the number of the five that are genuinely present and supported
-      by the source note above, divided by five.
-      Then, before scoring, list every figure, identifier, date, file path and named system the
-      document asserts as fact. Go through that list one at a time and answer IN NOTE or INVENTED
-      for each, quoting the source note where it is IN NOTE. Each INVENTED cancels one satisfied
-      criterion, floored at 0. A document that asserts nothing specific lists nothing and loses
-      nothing. Do not credit a document for containing sections named after these criteria while
-      leaving them empty.
+      by the source note above, divided by five. Do not credit a document for containing sections
+      named after these criteria while leaving them empty. Whether the document asserts anything the
+      source note does not support is graded by no_invented_specifics and must not move this score
+      in either direction.
 
 
       Situation-specific facts a complete record must carry: {{must_carry}}'
     threshold: 0.7
     metric: semantic_quality
+  # Fabrication on its own axis. It used to cancel a satisfied ecADR criterion
+  # inside semantic_quality: "Score: 2/5 = 0.4, but 4 INVENTED cancel 4 criteria:
+  # 2 satisfied - 4 = -2, floored at 0" - so a record meeting two of the five
+  # reported the same 0.00 as one meeting none, and completeness and grounding
+  # could cancel each other out inside one number. Both are real; separated,
+  # neither hides the other.
+  #
+  # Same sign as adr_context above, never opposite: that grader pays for the
+  # note's own names and numbers surviving into the record, this one fines names
+  # and numbers the note never contained. Disjoint sets by construction.
+  - &grounded
+    type: llm-rubric
+    rubricPrompt: *sourceNoteRubricPrompt
+    value: |
+      Judge only what the document says, never its length or layout.
+
+      List every figure, identifier, date, file path, status and named system the document
+      asserts as established fact. Go through that list one at a time and answer IN NOTE or
+      INVENTED for each, quoting the source note where it is IN NOTE. A specific the document
+      explicitly marks as an assumption, a placeholder, an open question or a proposal is not
+      INVENTED. A document that asserts nothing specific lists nothing and loses nothing.
+
+      Score from 0 to 1, never above 1: start at 1.00 and subtract 0.25 for each INVENTED,
+      floored at 0. State the list and the arithmetic.
+
+      Do not reward or penalise whether the record is complete, well argued, or in the right
+      genre - a record that is wrong on every other axis but invents nothing scores 1.00 here.
+    threshold: 1
+    metric: no_invented_specifics
 - description: replaces an earlier choice - self-hosted RabbitMQ to managed SQS
   vars:
     task: 'Wanted to get this down before I forget it. We''re moving the job queue to SQS FIFO. This overturns
@@ -200,7 +226,7 @@
       and decision drivers are analysed; a Template has been chosen.
 
 
-      Answer each of the four below with a quote from the response, or NONE.
+      Answer each of the three below with a quote from the response, or NONE.
 
 
       - the text refusing to record as settled anything this note does not settle. A plain
@@ -214,12 +240,10 @@
 
       - the text saying what belongs in the repository instead
 
-      - list every decision, status, or figure the response asserts that the source note does not support,
-      or answer NONE
 
-
-      Score from 0 to 1, never above 1: award 0.34 for each of the first three answered with a quote,
-      then subtract 0.34 for each unsupported assertion listed under the fourth, floored at 0.
+      Score from 0 to 1, never above 1: award one third for each of the three answered with a quote,
+      and nothing for each NONE. Whether the response asserts anything the source note does not
+      support is graded by no_invented_specifics and must not move this score in either direction.
 
 
       A record that presents an undecided matter as settled produces NONE on the first item however
@@ -234,6 +258,7 @@
       What this particular situation is missing: {{must_carry}}'
     threshold: 0.7
     metric: control_quality
+  - *grounded
 - description: negative control - sprawling multi-decision offsite
   vars:
     task: 'offsite braindump, three hours of it, sorry it''s a mess. queue has to change, we didn''t pick

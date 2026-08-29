@@ -77,4 +77,25 @@ assert.equal(checks.carriesTaskSpecifics(good, { vars }).pass, true);
 assert.equal(checks.carriesTaskSpecifics('We picked a database. It has upsides and downsides.', { vars }).pass, false);
 assert.equal(checks.carriesTaskSpecifics('Postgres and Dynamo were compared.', { vars, config: { minimum: 2 } }).pass, true);
 
-console.log('adr assertions: ok');
+// --- config shape -----------------------------------------------------------
+// Both judged rubrics used to cancel or subtract for invention inside their own
+// arithmetic: semantic_quality reported "2 satisfied - 4 = -2, floored at 0", so
+// a record meeting two of five ecADR criteria and one meeting none were the same
+// number. Fabrication is no_invented_specifics now, and nothing else may move on
+// it. Neither fault is visible to `validate config`.
+const { execFileSync } = require('node:child_process');
+const cases = JSON.parse(execFileSync('python3', ['-c',
+  'import json,sys,yaml; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)',
+  path.join(__dirname, '..', 'tests/cases.yaml')], { encoding: 'utf8' }));
+const graders = cases.flatMap((c) => c.assert || []);
+
+for (const grader of graders) {
+  if (grader.type !== 'llm-rubric' || grader.metric === 'no_invented_specifics') continue;
+  assert.doesNotMatch(grader.value, /(subtract|cancel)[\s\S]{0,90}?(invent|unsourced|unsupported|fabricat)|(invent|unsourced|unsupported|fabricat)[\s\S]{0,90}?(subtract|cancel)/i,
+    `${grader.metric} fines invention inside its own score; that term belongs to no_invented_specifics`);
+}
+const grounded = cases.filter((c) => (c.assert || []).some((g) => g.metric === 'no_invented_specifics'));
+assert.equal(grounded.length, cases.length,
+  `no_invented_specifics rides on ${grounded.length} of ${cases.length} cases`);
+
+console.log(`adr assertions: ok (${cases.length} cases, ${graders.length} graders)`);
