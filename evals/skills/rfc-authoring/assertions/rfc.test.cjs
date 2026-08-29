@@ -67,15 +67,18 @@ for (const testCase of cases) {
   }
 }
 
-// Fabrication is its own metric, never a subtraction inside a recall rubric.
-// Folded into honest_tradeoffs it cost 0.66 per invention against a 1.00 scale
-// and floored documents that satisfied every graded property, so a recall
-// failure and a fabrication reported the same number.
+// One metric, one property. Only no_invented_specifics may subtract, and its
+// entire score is that subtraction - every other rubric awards and never fines,
+// so a missed criterion and a fabrication can no longer produce the same number.
+// Matched on the arithmetic word rather than on what is being penalised: the
+// phrasings differ per suite ("each INVENTED cancels one satisfied criterion",
+// "subtract 0.2 for each system, number or team the review names") and a pattern
+// keyed to "invent" walks straight past the second one.
 const FABRICATION = new Set(['no_invented_specifics']);
 for (const grader of graders) {
   if (grader.type !== 'llm-rubric' || FABRICATION.has(grader.metric)) continue;
-  assert.doesNotMatch(grader.value, /(subtract|cancel)[\s\S]{0,90}?(invent|unsourced|unsupported|fabricat)|(invent|unsourced|unsupported|fabricat)[\s\S]{0,90}?(subtract|cancel)/i,
-    `${grader.metric} subtracts for invention; that term belongs to its own metric`);
+  assert.doesNotMatch(grader.value, /\b(subtract|subtracts|subtracting|cancel|cancels|cancelling|deduct|deducts)\b/i,
+    `${grader.metric} subtracts inside its own score; only no_invented_specifics may, and its whole score is that subtraction`);
 }
 const grounded = cases.filter((c) => c.assert.some((g) => FABRICATION.has(g.metric)));
 assert.equal(grounded.length, 8, `no_invented_specifics rides on ${grounded.length} cases, not all 8 proposals`);

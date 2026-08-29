@@ -47,11 +47,10 @@
           specific enough that a named person could answer it.
 
         Score from 0 to 1, never above 1: the number of the five genuinely present and
-        supported by the colleague's note, divided by five. Any figure,
-        identifier, system name, team name, or measurement in the document that does not
-        appear in the colleague's note is invented, and each invention cancels one
-        satisfied criterion. Do not credit a document for a section named after a
-        criterion that it leaves empty.
+        supported by the colleague's note, divided by five. Do not credit a document for a
+        section named after a criterion that it leaves empty. Whether the document names
+        anything the colleague's note does not contain is graded by no_invented_specifics
+        and must not move this score in either direction.
 
         The colleague's note: "{{task}}"
         Situation-specific facts this document must carry: {{rubric}}
@@ -91,6 +90,32 @@
         avoids. A document showing three or more has chosen, whatever it says about itself.
       threshold: 0.6
       metric: stays_open
+    # Fabrication on its own axis, across every case where the reply is judged
+    # against a source: the seven exploratory documents and the six reviews.
+    # It used to be folded into three separate rubrics at three different rates -
+    # framing_quality cancelled a satisfied criterion per invention,
+    # finds_the_decision subtracted 0.2 on top of a tells/divisor ratio, and the
+    # review rubric subtracted 0.25 from a four-item average - so in each one a
+    # fabrication and a missed criterion produced the same number.
+    - &grounded
+      type: llm-rubric
+      value: |
+        A colleague wrote this to you: "{{task}}"
+
+        List every figure, identifier, system name, team name, date or measurement the reply
+        asserts as established fact that appears nowhere in the colleague's message above,
+        quoting each. A specific the reply explicitly marks as an assumption, an example, an
+        open question, or a target still to be agreed is not on the list. Answer NONE if
+        there are none.
+
+        Score from 0 to 1, never above 1: start at 1.00 and subtract 0.25 for each item on
+        your list, floored at 0. State the list and the arithmetic.
+
+        Do not reward or penalise how well the reply frames the problem, whether it stays
+        open, or what it finds - a reply that is wrong on every other axis but names nothing
+        the colleague did not scores 1.00 here.
+      threshold: 1
+      metric: no_invented_specifics
 
 - description: opportunity with no obvious solution - mobile conversion gap
   vars:
@@ -318,12 +343,14 @@
         NONE.
 
         Score from 0 to 1, never above 1: the number of listed tells you answered with a
-        quote, divided by the number of tells listed. Then subtract 0.2 for each system,
-        number or team the review names that appears in neither the draft nor the
-        colleague's message, floored at 0. A review confined to wording, tone or structure
-        identifies no tells and scores 0. State the count, the divisor and the arithmetic.
+        quote, divided by the number of tells listed. A review confined to wording, tone or
+        structure identifies no tells and scores 0. State the count, the divisor and the
+        arithmetic. Whether the review names anything absent from the draft and the
+        colleague's message is graded by no_invented_specifics and must not move this score
+        in either direction.
       threshold: 0.6
       metric: finds_the_decision
+    - *grounded
 
 - description: review - draft that is honestly open, and should be left that way
   vars:
@@ -379,14 +406,21 @@
         - Is the feedback specific to this draft's own text rather than advice that would
           apply to any document?
 
-        Score from 0 to 1, never above 1: 0.25 per criterion satisfied. Subtract 0.25 if the
-        review introduces a figure, system or team absent from the draft and the colleague's
-        message.
+        Score from 0 to 1, never above 1: 0.25 per criterion satisfied. Whether the review
+        introduces a figure, system or team absent from the draft and the colleague's
+        message is graded by no_invented_specifics and must not move this score in either
+        direction.
 
         The colleague's message: "{{task}}"
         Additional requirement for this case: {{rubric}}
       threshold: 0.7
-      metric: framing_quality
+      # Not framing_quality. This rubric asks a different question of a different
+      # artifact - a review of someone else's draft, where framing_quality grades
+      # an authored RFD - and report.js averaged the two populations into one n=8
+      # cell under one reliability band. This case sits at 1.00 in both arms, so
+      # sharing the name only diluted; it would invert the moment it moved.
+      metric: review_framing
+    - *grounded
 
 # Three more drafts that have covertly decided, each burying it differently and
 # each carrying two or three of the five tells rather than all five. The
@@ -440,6 +474,7 @@
       review claiming those faults has found something that is not there; do not credit it.
   assert:
     - *finds_decision
+    - *grounded
 
 - description: review - covert decision, alternatives dismissed by assertion
   vars:
@@ -489,6 +524,7 @@
       do not credit it.
   assert:
     - *finds_decision
+    - *grounded
 
 - description: review - covert decision, the only question asks for assent
   vars:
@@ -529,6 +565,7 @@
       not credit it.
   assert:
     - *finds_decision
+    - *grounded
 
 - description: review - covert decision, alternatives argued down without a test
   vars:
@@ -578,3 +615,4 @@
       review claiming those faults has found something that is not there; do not credit it.
   assert:
     - *finds_decision
+    - *grounded

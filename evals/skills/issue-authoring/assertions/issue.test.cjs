@@ -101,10 +101,11 @@ assert.equal(rides('semantic_quality').length, positives.length,
 assert.equal(rides('semantic_quality').filter((c) => /NEGATIVE CONTROL/.test(c.description)).length, 0,
   'semantic_quality must not ride on the negative control');
 // Invention is `no_invented_facts` (computed) and the per-case `case_fidelity`
-// rubric. It must not also be a subtraction inside the recall score.
+// rubric, whose subtractions live in each case's own `rubric` var. This score
+// must award and never fine, so it carries no arithmetic penalty word at all.
 const semantic = (rides('semantic_quality')[0].assert || []).find((g) => g.metric === 'semantic_quality');
-assert.doesNotMatch(semantic.value, /(subtract|cancel)[\s\S]{0,90}?(invent|unsourced|unsupported|fabricat)|(invent|unsourced|unsupported|fabricat)[\s\S]{0,90}?(subtract|cancel)/i,
-  'semantic_quality subtracts for invention; that term belongs to its own metric');
+assert.doesNotMatch(semantic.value, /\b(subtract|subtracts|subtracting|cancel|cancels|cancelling|deduct|deducts)\b/i,
+  'semantic_quality subtracts inside its own score; invention is no_invented_facts and case_fidelity');
 assert.doesNotMatch(semantic.value, /bounded scope/i,
   'semantic_quality restates the computed bounded_scope grader');
 
