@@ -5,7 +5,7 @@
 # (vue), and Go (cobra, chi, gorilla/mux, echo, urfave/cli), plus 2 negative
 # controls. The controls - requests-7006 and echo-3052 - have no source fix at
 # all and carry `"fix": null` in bugfix-fixtures.json, which is what puts
-# touches_real_fix on its inverted branch (a control with a fix SHA and empty
+# finds_the_fix on its inverted branch (a control with a fix SHA and empty
 # sourceFiles scores 0 forever, including for the correct answer;
 # assertions/fixbug.test.cjs pins the shape). requests-7006's traceback
 # fingerprints the reporter's own environment, not a defect in requests;
@@ -30,12 +30,16 @@
 # description of the accepted diff instead of an invented attribution.
 #
 # Metric triage (evals/AGENTS.md's standing rule): no_invented_file_refs and
-# touches_real_fix are javascript graders computed against the fixture's own
+# finds_the_fix are javascript graders computed against the fixture's own
 # tree and the withheld diff - grounded in fetched input, not prose-matched -
 # and are kept as regression guards even though no_invented_file_refs sits
 # near ceiling in both arms; a hallucinated file path is rare but the guard is
 # free (no judge call) and catches the requests-7006/echo-3052 cases where the
-# correct move is citing nothing. root_cause_depth and proportionate_fix were
+# correct move is citing nothing. finds_the_fix was `touches_real_fix` and was
+# recall x precision; the precision half is cut and the metric renamed, because
+# the product reported the opposite sign from both its halves - see the comment
+# on findsTheFix in assertions/fixbug.cjs for the measurement.
+# root_cause_depth and proportionate_fix were
 # considered for a MERGE (both judge the fix's substance) but kept separate:
 # chi-1029's own rows show them diverging in the same output (a fix graded
 # 1.0 for naming the mechanism and 0.0 for landing in the wrong file), so
@@ -93,8 +97,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - &root_cause_depth
       type: llm-rubric
       rubricPrompt:
@@ -382,8 +386,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -446,8 +450,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -526,8 +530,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -558,8 +562,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -586,8 +590,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -634,8 +638,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -658,8 +662,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -721,8 +725,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -810,8 +814,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -966,8 +970,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -1100,8 +1104,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -1176,8 +1180,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -1305,8 +1309,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -1336,8 +1340,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -1360,8 +1364,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -1428,8 +1432,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -1466,8 +1470,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -1514,8 +1518,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
@@ -1599,8 +1603,8 @@
       value: file://assertions/fixbug.cjs:noInventedFileRefs
       metric: no_invented_file_refs
     - type: javascript
-      value: file://assertions/fixbug.cjs:touchesRealFix
-      metric: touches_real_fix
+      value: file://assertions/fixbug.cjs:findsTheFix
+      metric: finds_the_fix
     - *root_cause_depth
     - *regression_proof
     - *proportionate_fix
