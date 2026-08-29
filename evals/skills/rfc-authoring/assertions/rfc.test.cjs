@@ -67,6 +67,19 @@ for (const testCase of cases) {
   }
 }
 
+// Fabrication is its own metric, never a subtraction inside a recall rubric.
+// Folded into honest_tradeoffs it cost 0.66 per invention against a 1.00 scale
+// and floored documents that satisfied every graded property, so a recall
+// failure and a fabrication reported the same number.
+const FABRICATION = new Set(['no_invented_specifics']);
+for (const grader of graders) {
+  if (grader.type !== 'llm-rubric' || FABRICATION.has(grader.metric)) continue;
+  assert.doesNotMatch(grader.value, /subtract[\s\S]{0,90}?(invent|unsourced|fabricat)/i,
+    `${grader.metric} subtracts for invention; that term belongs to its own metric`);
+}
+const grounded = cases.filter((c) => c.assert.some((g) => FABRICATION.has(g.metric)));
+assert.equal(grounded.length, 8, `no_invented_specifics rides on ${grounded.length} cases, not all 8 proposals`);
+
 // The whole point of the control expansion: a metric riding on two cases moves
 // by more than any delta it can report.
 const controls = cases.filter((c) => c.assert.some((g) => g.metric === 'control_quality'));
