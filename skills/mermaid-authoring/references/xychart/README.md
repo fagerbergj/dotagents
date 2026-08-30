@@ -1,7 +1,7 @@
 # XY Chart
 
 - **Keyword(s):** `xychart`, `xychart-beta`
-- **Introduced:** core — in mermaid since 10.9.6 or earlier (verified against the v10.9.6 diagram registry), so it renders on effectively any deployed mermaid — the doc gives no introduction version. The doc itself is inconsistent about beta status: most examples use plain `xychart`, but the "Legend" example uses `xychart-beta`, and that section's own version tag is an unrendered template placeholder (`v<MERMAID_RELEASE_VERSION>+`) rather than a real number — treat as **effectively unstable/beta** until you confirm your renderer's behavior. Bar and line data-label features are v11.14.0+; per-point line labels are v11.16.0+.
+- **Introduced:** core — in mermaid since 10.9.6 or earlier (verified against the v10.9.6 diagram registry), so it renders on effectively any deployed mermaid — the doc gives no introduction version. The doc itself is inconsistent about beta status: most examples use plain `xychart`, but the "Legend" example uses `xychart-beta` — treat that spelling as effectively unstable/beta even though the feature it demonstrates is documented and stable. Bar and line data-label features are v11.14.0+; per-point line labels are v11.16.0+; the legend itself (shown automatically for named `bar`/`line` series) is v11.17.0+ — a renderer older than 11.17 (possibly GitHub — see the skill's version note) ignores series names and shows no legend, but does not reject the diagram.
 - **Use when:** plotting numeric or categorical series on a real x/y axis — bar, line, or both together.
 - **Avoid when:** you have no axis semantics (just proportions) — use `pie`; or a 2x2 bucket grid without a numeric scale — use `quadrantChart`.
 
@@ -56,9 +56,23 @@ xychart
     bar [12, 2, 20, 25]
 ```
 
+## Legend (v11.17.0+)
+
+Naming a `bar` or `line` series (the quoted-string form above) now shows it in an automatic legend; unnamed series are omitted. No new syntax is required beyond naming the series:
+
+```mermaid
+xychart-beta
+    title "An Example Chart"
+    x-axis ["90d", "60d", "30d", "7d", "1d", "Current"]
+    y-axis "Seconds" 0 --> 198.2
+    line "avg" [48.1, 41.5, 45.7, 72.8, 67.7, 59.9]
+    line "p50" [38.2, 36.8, 39.7, 54.5, 49.0, 38.4]
+```
+
+`showLegend` (default `true`), `legendFontSize` (default `14`), and `legendPadding` (default `10`) go in `config.xyChart`, the same place as the data-label config above.
+
 ## Gotchas
 
-- The doc's own template placeholder for the Legend feature version (`v<MERMAID_RELEASE_VERSION>+`) never got substituted — treat any behavior around named-series legends as unverified on older pinned mermaid versions.
 - `y-axis` is numeric-only; you cannot give it categories — only `x-axis` supports categorical values.
 - If you omit both axes, ranges are inferred from the data — fine for a quick sketch, risky if you need a stable axis across regenerated diagrams.
 - Point labels only work on `line`, not `bar`; putting a label on a bar value is silently ignored rather than erroring.
