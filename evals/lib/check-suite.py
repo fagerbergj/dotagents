@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Structural check on a promptfoo suite: every assertion has a metric, no null
-assert block, every file://...:fn resolves to a real export, every rubric carries
-the 0-to-1 clause. `validate config` reports valid on a case with no assertions."""
+assert block, every file://...:fn resolves to a real export - in providers and
+prompts as well as assertions - and every rubric carries the 0-to-1 clause.
+`validate config` reports valid on a case with no assertions."""
 import sys, os, re, glob, yaml
 
 def load(path):
@@ -9,7 +10,14 @@ def load(path):
         return yaml.safe_load(f)
 
 def exports(js_path):
+    """Export names, or None when they cannot be read statically. Three suites
+    re-export a factory call - `module.exports = require('../lib/arms.js')(...)`
+    - and the names only exist at runtime; asserting on them would fail every
+    one of those suites. Callers treat None as "existence checked, names not"."""
     src = open(js_path).read()
+    m = re.search(r'module\.exports\s*=\s*(\S)', src)
+    if m and m.group(1) != '{':
+        return None
     names = set(re.findall(r'^\s*(?:async\s+)?function\s+(\w+)', src, re.M))
     names |= set(re.findall(r'exports\.(\w+)\s*=', src))
     m = re.search(r'module\.exports\s*=\s*\{([^}]*)\}', src, re.S)
@@ -20,9 +28,42 @@ def exports(js_path):
                 names.add(part.split(':')[0].strip())
     return names
 
+def file_ref(where, value, suite, errs):
+    """A `file://path[:fn]` must name a real file, and `:fn` a real export."""
+    ref = value[7:]
+    path, _, fn = ref.rpartition(':')
+    if not path:
+        path, fn = ref, None
+    p = os.path.normpath(os.path.join(suite, path))
+    if not os.path.exists(p):
+        errs.append(f'{where}: missing file {path}')
+        return
+    if fn:
+        names = exports(p)
+        if names is not None and fn not in names:
+            errs.append(f'{where}: {path} does not export {fn}')
+
+def walk_file_refs(where, node, suite, errs):
+    """Same rule outside assertions. A provider or prompt naming a module that
+    does not exist passes every offline gate and only fails after spend."""
+    if isinstance(node, str):
+        if node.startswith('file://'):
+            file_ref(where, node, suite, errs)
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            walk_file_refs(f'{where}[{i}]', v, suite, errs)
+    elif isinstance(node, dict):
+        for k, v in node.items():
+            walk_file_refs(f'{where}.{k}', v, suite, errs)
+
 def check(suite):
     errs = []
     cfg = load(os.path.join(suite, 'promptfooconfig.yaml'))
+    # `tests:` is excluded: those refs are globs, resolved below. defaultTest's
+    # assert block is walked by walk_asserts, so only its options are taken here.
+    for key in ('providers', 'prompts'):
+        walk_file_refs(key, cfg.get(key), suite, errs)
+    walk_file_refs('defaultTest.options', (cfg.get('defaultTest') or {}).get('options'), suite, errs)
     files = []
     for pattern in cfg.get('tests', []):
         if isinstance(pattern, str) and pattern.startswith('file://'):
@@ -61,15 +102,7 @@ def check(suite):
                 errs.append(f'{at}: no metric')
             v = a.get('value')
             if isinstance(v, str) and v.startswith('file://'):
-                ref = v[7:]
-                path, _, fn = ref.rpartition(':')
-                if not path:
-                    path, fn = ref, None
-                p = os.path.normpath(os.path.join(suite, path))
-                if not os.path.exists(p):
-                    errs.append(f'{at}: missing file {path}')
-                elif fn and fn not in exports(p):
-                    errs.append(f'{at}: {path} does not export {fn}')
+                file_ref(at, v, suite, errs)
             if a.get('type') in ('llm-rubric', 'g-eval', 'select-best'):
                 text = v if isinstance(v, str) else '\n'.join(v or [])
                 # A rubric body can be a per-case var; resolve it before looking
