@@ -1,7 +1,7 @@
 # Entity Relationship Diagram
 
 - **Keyword(s):** `erDiagram`
-- **Introduced:** core — in mermaid since 10.9.6 or earlier (verified against the v10.9.6 diagram registry), so it renders on effectively any deployed mermaid (source doc doesn't state it). Per-feature versions: optional/nullable attribute types (`type?`) v11.16.0+; subgraphs (version placeholder unresolved in source doc at fetch time).
+- **Introduced:** core — in mermaid since 10.9.6 or earlier (verified against the v10.9.6 diagram registry), so it renders on effectively any deployed mermaid (source doc doesn't state it). Per-feature versions: optional/nullable attribute types (`type?`) v11.16.0+; subgraphs v11.17.0+ — a renderer older than 11.17 (possibly GitHub — see the skill's version note) rejects them.
 - **Use when:** you need to model data entities and the cardinality of relationships between them (logical or physical DB schema).
 - **Avoid when:** you need to show object behavior/methods - use `classDiagram`; or a process flow - use `flowchart`.
 
@@ -42,7 +42,22 @@ Entity alias: `p[Person] { string firstName }` shows "Person" instead of the int
 
 Direction: `direction LR` (also `TB`, `BT`, `RL`).
 
-Subgraphs group entities: `subgraph title ... end`; multi-word titles need quotes and are referenced by id, not title text, when used in a relationship.
+Subgraphs group entities (v11.17.0+): `subgraph title ... end`, and they nest. A single-word title is used as both id and title; a multi-word title must be quoted (`subgraph "Customer Domain"`) and is still used as both; or give an explicit id with `subgraph id1 [title 1]`. Subgraphs are always referenced by id in relationships, never by title text, and an id containing spaces must be quoted there. A `direction` statement inside a subgraph sets its own layout direction:
+
+```mermaid
+erDiagram
+    subgraph title1
+        CUSTOMER
+        CUSTOMER {
+            string name
+            string custNumber
+        }
+    end
+    subgraph title2
+        CAR ||--o{ NAMED-DRIVER : allows
+    end
+    title1 ||--|| title2 : links
+```
 
 Comments: none documented for this diagram type in the source doc - omit rather than guess.
 

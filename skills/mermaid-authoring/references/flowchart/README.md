@@ -1,7 +1,7 @@
 # Flowchart
 
 - **Keyword(s):** `flowchart` (aliases: `graph`)
-- **Introduced:** core — in mermaid since 10.9.6 or earlier (verified against the v10.9.6 diagram registry), so it renders on effectively any deployed mermaid (source doc doesn't state it). Per-feature versions: expanded shape vocabulary (`@{ shape: ... }`) and icon/image shapes v11.3.0+, FontAwesome icon-pack registration v11.7.0+, edge-level curve style via edge IDs v11.10.0+, collapsible subgraphs (version placeholder unresolved in source doc at fetch time).
+- **Introduced:** core — in mermaid since 10.9.6 or earlier (verified against the v10.9.6 diagram registry), so it renders on effectively any deployed mermaid (source doc doesn't state it). Per-feature versions: expanded shape vocabulary (`@{ shape: ... }`) and icon/image shapes v11.3.0+, FontAwesome icon-pack registration v11.7.0+, edge-level curve style via edge IDs v11.10.0+, collapsible subgraphs and the `person`/`folder`/`bucket`/`console`/`browser` shapes v11.17.0+ — a renderer older than 11.17 (possibly GitHub — see the skill's version note) rejects both.
 - **Use when:** you need to show a process, decision tree, or dependency graph as nodes and directed/undirected edges.
 - **Avoid when:** you need time-ordered messages between actors - use `sequenceDiagram` instead.
 
@@ -58,6 +58,21 @@ flowchart TB
 ```
 
 Give a subgraph an explicit id with `subgraph ide1 [one]`. A `direction` statement inside a subgraph sets its own layout direction, but is ignored if any of the subgraph's nodes link outside it (the subgraph then inherits the parent's direction).
+
+Collapsible subgraphs (v11.17.0+): attach `id@{ view: collapsed }` to a subgraph's id to draw it as a single node carrying the subgraph's title, hiding its internals. Edges crossing the boundary redirect to the collapsed node; edges entirely internal to it are dropped. `view: expanded` is the default:
+
+```mermaid
+flowchart TD
+    Start --> one
+    subgraph one [My Group]
+        A --> B
+        B --> C
+    end
+    one --> End
+    one@{ view: collapsed }
+```
+
+For nested subgraphs, a collapse resolves to the outermost collapsed ancestor — an edge to a deeply nested node lands on that outermost group.
 
 Styling: `style id1 fill:#f9f,stroke:#333`; reusable via `classDef name fill:#f9f,...` then `class id1 name` or the shorthand `id1:::name`.
 

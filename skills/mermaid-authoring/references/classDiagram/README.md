@@ -2,6 +2,7 @@
 
 - **Keyword(s):** `classDiagram`
 - **Introduced:** core — in mermaid since 10.9.6 or earlier (verified against the v10.9.6 diagram registry), so it renders on effectively any deployed mermaid (source doc doesn't state it). Per-feature versions: click/link tooltips v0.5.2+, namespace display labels and nested namespaces v11.15.0+.
+- **Renderer default changed in v11.17.0:** `classDiagram` now routes to the unified (v2) renderer by default. Syntax is unaffected, but layout/spacing can shift visually. Restore the legacy renderer with `class: { defaultRenderer: 'dagre-d3' }` in `config` if a diagram depends on the old layout.
 - **Use when:** you need to model object-oriented structure - classes, interfaces, members, and the relationships between them.
 - **Avoid when:** you need to show call order/timing between objects - use `sequenceDiagram`; or a relational data schema - use `erDiagram`.
 

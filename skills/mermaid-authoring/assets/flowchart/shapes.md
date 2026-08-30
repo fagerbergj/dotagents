@@ -71,6 +71,11 @@ New shapes use `id@{ shape: <name>, label: "text" }` instead of bracket syntax, 
 | `cross-circ` | Summary (crossed circle) |
 | `tag-doc` | Tagged document |
 | `tag-rect` | Tagged process (tagged rectangle) |
+| `folder` (alias `directory`) | Folder or directory (v11.17.0+) |
+| `bucket` | Object storage bucket (v11.17.0+) |
+| `console` | Console/terminal window (v11.17.0+) |
+| `browser` | Browser window (v11.17.0+) |
+| `person` | Person — circular head above a rounded body (v11.17.0+) |
 
 ```mermaid
 flowchart RL
@@ -82,6 +87,17 @@ flowchart RL
 ```
 
 Note: `manual-file`, `manual-input`, and `procs` appear in the source doc's example only; the canonical short-name table above (`flip-tri`, `sl-rect`, `processes`) is the documented mapping - prefer the table names.
+
+```mermaid
+flowchart LR
+    U@{ shape: person, label: "User" }
+    D@{ shape: folder, label: "Docs" }
+    S@{ shape: bucket, label: "S3 Bucket" }
+    T@{ shape: console, label: "CLI" }
+    B@{ shape: browser, label: "Web App" }
+    U --> B --> S
+    T --> D
+```
 
 ## Special shapes: icon and image (v11.3.0+)
 

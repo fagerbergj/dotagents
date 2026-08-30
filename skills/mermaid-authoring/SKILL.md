@@ -1,13 +1,13 @@
 ---
 name: mermaid-authoring
-description: Authors mermaid diagrams that actually render on the target platform. Covers all 31 diagram types in mermaid 11.16.0 — flowchart, sequence, class, state, ER, gantt, gitGraph, C4, architecture, mindmap, and the long tail — with per-diagram syntax, node shapes, and worked examples. Use when writing or fixing any ```mermaid block, choosing which diagram type fits, debugging a diagram that renders as a broken box on GitHub, or deciding whether a diagram type is supported by the renderer you are targeting.
+description: Authors mermaid diagrams that actually render on the target platform. Covers all 31 diagram types in mermaid 11.17.1 — flowchart, sequence, class, state, ER, gantt, gitGraph, C4, architecture, mindmap, and the long tail — with per-diagram syntax, node shapes, and worked examples. Use when writing or fixing any ```mermaid block, choosing which diagram type fits, debugging a diagram that renders as a broken box on GitHub, or deciding whether a diagram type is supported by the renderer you are targeting.
 license: MIT
 metadata:
   author: fagerbergj
   version: "1.0"
-  mermaid_docs_version: "11.16.0"
+  mermaid_docs_version: "11.17.1"
   github_mermaid_version: "11.16.0"
-  github_version_verified: "2026-07-26 via the info probe"
+  github_version_verified: "not re-verified since 2026-07-26"
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
 ---
@@ -16,7 +16,7 @@ metadata:
 
 Mermaid diagrams fail in two ways, and they look identical from the author's side: the syntax is wrong, or the syntax is fine but the target renderer is too old to know that diagram type. This skill covers both — per-diagram syntax under `references/`, and a version-support model so a diagram is chosen for the platform it has to render on.
 
-**GitHub runs mermaid 11.16.0** (verified 2026-07-26), which is current — so on GitHub, every diagram type documented here renders, and version skew is not your problem. It still is elsewhere: GitLab, self-hosted GitHub Enterprise, docs generators, and IDE previewers all pin their own versions and routinely lag. Check the target before assuming, and re-check GitHub itself periodically — this number is a measurement with a date on it, not a guarantee.
+**GitHub ran mermaid 11.16.0 as of 2026-07-26**, not re-verified since. This skill's docs now cover through 11.17.1, so anything marked **Introduced: 11.17** may not render on GitHub until it upgrades — re-run the `info` probe below before relying on an 11.17 feature there. Off GitHub the gap is wider by default: GitLab, self-hosted GitHub Enterprise, docs generators, and IDE previewers all pin their own versions and routinely lag further behind.
 
 To read any renderer's version, give it a mermaid block containing only `info` — it renders the deployed version number. On GitHub, paste it into a comment box and hit Preview; there is no need to post. That number is what the **Introduced** field in each `references/` entry should be compared against.
 
@@ -38,7 +38,7 @@ With version handled, the failures that remain are syntax and escaping — see G
 ## Procedure
 
 1. **Pick the diagram type** from the Stable index below. If two fit, prefer the older one — it renders in more places. Only drop to the beta table when nothing stable expresses what you need.
-2. **Check the target's version tolerance.** On GitHub, skip this — it is current. Anywhere else, compare the type's **Introduced** version against that renderer's version and pick a different type if it is older; do not ship a diagram that renders as a broken box. Beta types (`-beta` suffix) stay risky everywhere: their syntax changes between releases regardless of how new the renderer is.
+2. **Check the target's version tolerance.** Treat GitHub like any other pinned target: compare the type's **Introduced** version against the renderer's version from the info probe (11.16.0 as of 2026-07-26) and pick a different type if it is older; do not ship a diagram that renders as a broken box. Beta types (`-beta` suffix) stay risky everywhere: their syntax changes between releases regardless of how new the renderer is.
 3. **Read `references/<diagramId>/README.md`** for the type you picked, before writing. It carries the core syntax and the per-type gotchas.
 4. **Load deeper material only if you need it:**
    - `assets/<diagramId>/shapes.md` — when you need the full node/element vocabulary rather than the common few.
@@ -133,7 +133,7 @@ If a label needs quotes, quote the whole label and escape the inner ones. If it 
 
 **The fence info string must be `mermaid`.** GitHub matches it case-insensitively, so `Mermaid` works, but any other tag — `mmd`, `mermaidjs` — renders as a plain code block with no diagram and no error.
 
-**Version skew is silent.** A too-new diagram type does not warn; it renders as a broken box or empty space. GitHub is current so this will not bite you there, but it is the usual cause of "renders locally, not on the wiki/GitLab/Confluence".
+**Version skew is silent.** A too-new diagram type does not warn; it renders as a broken box or empty space. It is the usual cause of "renders locally, not on the wiki/GitLab/Confluence" — and since GitHub itself may lag the docs (see the version note above), that now includes GitHub.
 
 **Beta syntax is not stable.** Any keyword ending `-beta` can change syntax in a minor release. Avoid in anything long-lived.
 
