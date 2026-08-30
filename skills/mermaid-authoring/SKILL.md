@@ -38,7 +38,7 @@ With version handled, the failures that remain are syntax and escaping — see G
 ## Procedure
 
 1. **Pick the diagram type** from the Stable index below. If two fit, prefer the older one — it renders in more places. Only drop to the beta table when nothing stable expresses what you need.
-2. **Check the target's version tolerance.** On GitHub, skip this — it is current. Anywhere else, compare the type's **Introduced** version against that renderer's version and pick a different type if it is older; do not ship a diagram that renders as a broken box. Beta types (`-beta` suffix) stay risky everywhere: their syntax changes between releases regardless of how new the renderer is.
+2. **Check the target's version tolerance.** Treat GitHub like any other pinned target: compare the type's **Introduced** version against the renderer's version from the info probe (11.16.0 as of 2026-07-26) and pick a different type if it is older; do not ship a diagram that renders as a broken box. Beta types (`-beta` suffix) stay risky everywhere: their syntax changes between releases regardless of how new the renderer is.
 3. **Read `references/<diagramId>/README.md`** for the type you picked, before writing. It carries the core syntax and the per-type gotchas.
 4. **Load deeper material only if you need it:**
    - `assets/<diagramId>/shapes.md` — when you need the full node/element vocabulary rather than the common few.
@@ -133,7 +133,7 @@ If a label needs quotes, quote the whole label and escape the inner ones. If it 
 
 **The fence info string must be `mermaid`.** GitHub matches it case-insensitively, so `Mermaid` works, but any other tag — `mmd`, `mermaidjs` — renders as a plain code block with no diagram and no error.
 
-**Version skew is silent.** A too-new diagram type does not warn; it renders as a broken box or empty space. GitHub is current so this will not bite you there, but it is the usual cause of "renders locally, not on the wiki/GitLab/Confluence".
+**Version skew is silent.** A too-new diagram type does not warn; it renders as a broken box or empty space. It is the usual cause of "renders locally, not on the wiki/GitLab/Confluence" — and since GitHub itself may lag the docs (see the version note above), that now includes GitHub.
 
 **Beta syntax is not stable.** Any keyword ending `-beta` can change syntax in a minor release. Avoid in anything long-lived.
 
