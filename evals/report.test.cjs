@@ -66,5 +66,29 @@ const ok = run(write('healthy.json', build({ 'no-skill': 8, 'skill-current': 8 }
 assert.strictEqual(ok.code, 0);
 assert.strictEqual(ok.err, '', `healthy run printed to stderr: ${ok.err}`);
 
+// Process columns appear only when a provider records them, and a capped row is
+// counted rather than averaged away. Cost is the largest measured effect of a
+// context file, so it has to be visible; an existing suite must gain no empty row.
+{
+  const plain = run(write('no-meta.json', build({ 'no-skill': 8, 'skill-current': 8 })));
+  assert.doesNotMatch(plain.out, /commands \(avg\)/, 'a provider recording nothing must not gain an empty row');
+
+  const withMeta = build({ 'no-skill': 8, 'skill-current': 8 }).map((r, i) => ({
+    ...r,
+    metadata: {
+      bashRounds: 5,
+      outputBytes: 2048,
+      commands: [{ cmd: 'ls' }, { cmd: 'make test' }],
+      ...(i === 0 ? { capHit: 'rounds' } : {}),
+    },
+  }));
+  const m = run(write('meta.json', withMeta));
+  assert.strictEqual(m.code, 0);
+  assert.match(m.out, /commands \(avg\) *2\.0/, 'commands per row must reach the report');
+  assert.match(m.out, /tool rounds \(avg\) *5\.0/, 'steps must reach the report');
+  assert.match(m.out, /output bytes \(avg\) *2048\.0/);
+  assert.match(m.out, /rows at a cap/, 'a censored row must be counted, not silently averaged');
+}
+
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('report.js degenerate-result checks pass');

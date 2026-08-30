@@ -297,6 +297,33 @@ const latCell = (a) => { const l = lat(a); return l === null ? 'not measured' : 
 console.log(pad('latency (s avg)', w) + arms.map((a) => pad(latCell(a), 16)).join(''));
 console.log(pad('cached rows', w) + arms.map((a) => pad(`${cachedCount(a)}/${rows.filter((r) => r.prompt.label === a).length}`, 16)).join(''));
 console.log(pad('tokens (avg)', w) + arms.map((a) => pad(Math.round(tok(a)), 16)).join(''));
+// Process, reported and never scored: process is not outcome, so none of this
+// is a metric. It still has to reach the report, because the largest real
+// effect anyone has measured for a context file is a cost one - ETH Zurich
+// (arXiv:2602.11988) found "increasing inference cost by over 20% on average",
+// p<0.001 in every setting, plus +2.45 to +3.92 steps - and a suite that only
+// scores correctness would report a null and miss it entirely. Printed only
+// when a provider records these, so no existing suite gains an empty row.
+const META = [
+  ['tool rounds (avg)', (m) => m.toolRounds ?? m.bashRounds],
+  ['commands (avg)', (m) => (Array.isArray(m.commands) ? m.commands.length : undefined)],
+  ['files read (avg)', (m) => (Array.isArray(m.resourcesLoaded) ? m.resourcesLoaded.length : undefined)],
+  ['output bytes (avg)', (m) => m.outputBytes],
+];
+// A row that hit a cap is censored, not slow: averaging it in understates a
+// real difference, and if the arms hit the cap at different rates the mean is
+// not comparable at all. Counted separately so that is visible.
+const capHits = (arm) => rows.filter((r) => r.prompt.label === arm && r.metadata?.capHit).length;
+const metaCell = (arm, read) => {
+  const v = rows.filter((r) => r.prompt.label === arm).map((r) => read(r.metadata || {})).filter((x) => typeof x === 'number');
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+};
+const metaRows = META.filter(([, read]) => arms.some((a) => metaCell(a, read) !== null));
+for (const [label, read] of metaRows) {
+  console.log(pad(label, w) + arms.map((a) => pad(metaCell(a, read) === null ? '-' : metaCell(a, read).toFixed(1), 16)).join(''));
+}
+const anyCap = arms.some((a) => capHits(a) > 0);
+if (anyCap) console.log(pad('rows at a cap', w) + arms.map((a) => pad(`${capHits(a)}/${rows.filter((r) => r.prompt.label === a).length}`, 16)).join(''));
 
 const worst = rows.filter((r) => (r.gradingResult?.componentResults || [])
   .some((c) => !c.pass && c.assertion?.type !== 'select-best'));
@@ -330,6 +357,10 @@ if (mdPath) {
   const mdLat = (a) => { const l = lat(a); return l === null ? 'not measured' : l.carried ? `${l.s.toFixed(1)} _(previous run)_` : l.s.toFixed(1); };
   md.push(`| latency (s avg) | ${arms.map(mdLat).join(' | ')} | | |`);
   md.push(`| tokens (avg) | ${arms.map((a) => Math.round(tok(a))).join(' | ')} | | |`);
+  for (const [label, read] of metaRows) {
+    md.push(`| ${label} | ${arms.map((a) => (metaCell(a, read) === null ? '-' : metaCell(a, read).toFixed(1))).join(' | ')} | | |`);
+  }
+  if (anyCap) md.push(`| rows at a cap | ${arms.map((a) => `${capHits(a)}/${rows.filter((r) => r.prompt.label === a).length}`).join(' | ')} | | |`);
   if (diag.length) {
     md.push('', `<details><summary>${diag.length} metric${diag.length === 1 ? ' has' : 's have'} too few cases to make a reliable determination</summary>`, '',
       ...head, ...diag.map(line), '',

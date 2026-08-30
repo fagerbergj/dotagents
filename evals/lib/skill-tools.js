@@ -10,7 +10,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { Sandbox } = require('./sandbox.js');
+// Read off the module object rather than destructured, so a test can swap in a
+// fake container without Docker. No test-only export, no injection parameter.
+const sandboxMod = require('./sandbox.js');
 
 const DEFAULTS = {
   // SKILL.md asks for one README per diagram; a careful author also pulls
@@ -360,6 +362,13 @@ class SkillToolsProvider {
     // COPIED into a container, never mounted. Symmetric across arms for the same
     // reason repoDir is.
     const workspaceDir = context.prompt?.config?.workspaceDir || null;
+    // The case's own post-turn check. Run in the SAME container after the model's
+    // last turn, so a suite can grade whether the work is RIGHT rather than
+    // whether the answer named the right command - the distinction Gloaguen et
+    // al. found decisive, since instruction-following is already high. It never
+    // reaches the model: it arrives as provider config, not in the prompt, and
+    // it is not charged against the command budget.
+    const verifyCommand = context.prompt?.config?.verify || null;
     const real = (dir, label) => {
       try {
         return fs.realpathSync(dir);
@@ -396,7 +405,20 @@ class SkillToolsProvider {
     // a model that burns its rounds on refused questions would otherwise throw
     // with an empty `requested:` and hide the real cause.
     let askAttempts = 0;
-    const commands = { count: 0, timedOut: 0, truncated: 0 };
+    // `list` alongside the counts: WHAT a row ran is the behavioural record a
+    // spillover metric needs - ETH's finding is that a context file makes agents
+    // "run more tests... search more files (grep), read more files" - and a bare
+    // count cannot distinguish exploring from straying.
+    const commands = { count: 0, timedOut: 0, truncated: 0, list: [] };
+    // Started on the first command, not up front, so a row that never runs one
+    // pays nothing - the model cannot tell, the tool is offered either way.
+    // Throws, and is never caught into a host fallback: the whole point of the
+    // tool is that the command did not run on this machine.
+    const startSandbox = async () => {
+      if (!session.sandbox) {
+        session.sandbox = await sandboxMod.Sandbox.start({ ...(this.config.sandbox || {}), workspaceDir });
+      }
+    };
     const runBash = async (command) => {
       if (commands.count >= maxCommands) {
         return `refused: the command budget of ${maxCommands} is spent. Stop running commands and answer from what you have already seen.`;
@@ -404,14 +426,9 @@ class SkillToolsProvider {
       if (usage.total >= maxTokens) {
         return `refused: this task has spent its ${maxTokens}-token ceiling. Stop running commands and answer now.`;
       }
-      if (!session.sandbox) {
-        // Started on the first command, not up front, so a row that never runs
-        // one pays nothing - the model cannot tell, the tool is offered either
-        // way. Throws, and is never caught into a host fallback: the whole point
-        // of the tool is that the command did not run on this machine.
-        session.sandbox = await Sandbox.start({ ...(this.config.sandbox || {}), workspaceDir });
-      }
+      await startSandbox();
       commands.count += 1;
+      commands.list.push(String(command));
       const r = await session.sandbox.run(command);
       if (r.timedOut) commands.timedOut += 1;
       if (r.truncated) commands.truncated += 1;
@@ -440,6 +457,24 @@ class SkillToolsProvider {
       const message = json.choices[0].message || {};
       const calls = message.tool_calls || [];
       if (!calls.length) {
+        // A verified row buys its check whether or not the model ran anything:
+        // "did nothing" has to be gradeable, so the container is started here
+        // when the model never touched it.
+        let verify = null;
+        if (verifyCommand && workspaceDir) {
+          await startSandbox();
+          const v = await session.sandbox.run(verifyCommand);
+          verify = {
+            cmd: verifyCommand,
+            exitCode: v.exitCode,
+            timedOut: v.timedOut,
+            // A spent wall clock refuses the check. That is a harness condition,
+            // not a wrong answer, and it rides through so a grader can error
+            // rather than record a zero that looks like a failed task.
+            refused: v.refused,
+            stdout: `${v.stdout}${v.stderr}`.trim().slice(-2000),
+          };
+        }
         // A `tools` key makes the gateway's tool-calling chat template prefix the
         // reply with blank lines, and only the skill arm sends one - so untrimmed
         // output leaves the arms differing by whitespace as well as by the skill.
@@ -468,6 +503,8 @@ class SkillToolsProvider {
             commandsRun: commands.count,
             commandsTimedOut: commands.timedOut,
             commandsTruncated: commands.truncated,
+            commands: commands.list,
+            ...(verify ? { verify } : {}),
           },
         };
       }

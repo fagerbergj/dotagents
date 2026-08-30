@@ -1,0 +1,153 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: does a repository's AGENTS.md change what an agent does
+
+# ---------------------------------------------------------------------------
+# What this suite is, and what it is not
+# ---------------------------------------------------------------------------
+#
+# Arms: no AGENTS.md vs with AGENTS.md, same repo, same tasks, same shell. The
+# file is the only difference. Arm labels stay `no-skill`/`skill-current`
+# because run.sh, report.js and rollup.js key off those strings; the SUBJECT is
+# set by EVAL_SUBJECT to the repo's AGENTS.md, not to a SKILL.md.
+#
+# TWO POPULATIONS. They are reported separately and NEVER averaged:
+#
+#   A. GENERIC TASK CASES (`population: generic`) - the primary measurement.
+#      Real work, chosen INDEPENDENTLY of what the AGENTS.md says: set the
+#      project up, run the tests and report what failed, answer a factual
+#      question about the codebase, debug something from the repo's own
+#      history, make a small change end to end. These are the honest headline
+#      and the ETH replication.
+#
+#   B. LINE-PROBE CASES (`population: line-probe`) - a DIAGNOSTIC, for the
+#      file's author. One per AGENTS.md line. **These cannot support a claim
+#      that the file helps**: the task was selected because the file addresses
+#      it, so the test is rigged in the file's favour. They measure only
+#      whether a line is followed, which Gloaguen et al. (arXiv:2602.11988)
+#      already measured as high - a tool mentioned in the file is used 1.6
+#      times per instance against under 0.01 when unmentioned. Their job is
+#      authoring: telling the owner which lines to cut. Do not quote a
+#      line-probe number as evidence the file works.
+#
+# Every case also carries `discoverable: true|false` - is the fact recoverable
+# from the repo, or could it only be told to you? Report the two populations
+# split by that tag. Grounded in ETH's redundancy ablation: stripping the
+# repo's other documentation moved the same context file from -2% to +2.7%,
+# and their conclusion is that a file "should only contain specific additional
+# instructions beyond what is already available in the codebase". Discoverable
+# cases should show flat quality with a cost change; undiscoverable ones a real
+# quality gap. Lulla et al. (arXiv:2601.20404) name this as the open gap:
+# "Beyond a binary treatment of AGENTS.md as present or absent, we also plan to
+# examine how properties of these files... relate to agent outcomes."
+#
+# NOT set: PROMPTFOO_DISABLE_TEMPLATING. The judged metric's rubricPrompt needs
+# {{answer_key}} interpolated from the case vars, and that flag turns off var
+# interpolation into assertion values. lib/check-case-vars.py therefore gates
+# every var against `{{`/`{%` on each run - keep the cases free of them.
+
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # The shared provider from lib/skill-tools.js. `run_bash` is offered on
+  # `workspaceDir` alone and therefore reaches BOTH arms: executing the build is
+  # the subject matter of "does this file help", not an affordance the file
+  # earns. Gating it on the arm would make every exit code a measure of tool
+  # access. Commands run in a disposable container - --network=none, read-only
+  # root, tmpfs workspace, nothing of the host in the namespace (lib/sandbox.js).
+  #
+  # `read_source` is deliberately NOT offered alongside it. The shell already
+  # reads the tree, and two ways to read one repo would split the behaviour the
+  # command columns exist to measure.
+  #
+  # Caps are the shipped defaults, identical across arms on purpose: a per-arm
+  # cap is a per-arm environment and the delta stops being the file. They exist
+  # so one thrashing row cannot set the cost comparison, which is the largest
+  # real effect anyone has measured here (ETH's +20%).
+  - id: file://../../lib/skill-tools.js
+    label: deepseek-v4-flash+bash
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      maxCommands: 25
+      maxTokens: 150000
+      maxToolCalls: 40
+      sandbox:
+        # Repo-specific and PINNED to the quack SHA the cases describe. A suite
+        # naming an image is trusted and nothing checks what the image holds, so
+        # the Dockerfile is committed beside these cases and prepare-workspace.sh
+        # builds both together. A stale image silently measures a stale
+        # dependency set against a current AGENTS.md.
+        image: quack-eval:a19807d
+        # Measured on quack, warm cache, `go test -count=1 ./...`:
+        #   12 cores  71 s      4 cores  74 s      1 core  162 s
+        # 1.0 CPU cannot finish the real workload inside any sane timeout, and
+        # concurrency is 1 on a 12-core host, so 4 costs nothing and leaves 8
+        # for the harness. 180 s is 2.4x the measured 74 s.
+        cpus: '4.0'
+        commandTimeoutMs: 180000
+        # The debug case runs the suite at least twice - once to see the failure,
+        # once to confirm the fix - so the row's ceiling is several `make test`s
+        # plus exploration, not one.
+        wallClockMs: 900000
+        maxOutputBytes: 8192
+        # Workspace holds the tracked tree (40 MB by `git archive`, NOT the
+        # 224 MB working tree), the plugin mirrors (~3 MB) and the warm GOCACHE
+        # (757 MB). The build cache cannot go in the image: the rootfs is
+        # --read-only and a read-only GOCACHE fails on the first miss, measured -
+        # "permission denied" on a cache write - and every row misses, because
+        # the debug case edits source and `make test` compiles test binaries.
+        # GOMODCACHE (1.5 GB) IS read-only-safe, verified, so it stays in the
+        # image and costs no container memory at all.
+        workspaceMB: 1280
+        tmpMB: 256
+        # Workspace tmpfs is charged here, plus the Go linker's own working set.
+        memoryMB: 2560
+
+# RUN THIS AT --max-concurrency 1.
+#   EVAL_WORKSPACE_DIR=<ws> ./run.sh agents-md --max-concurrency 1
+# ~2.6 GB per container against 7 GB of host memory. The text suites run at 24;
+# this one must not. Build the image and the workspace first with
+# ./prepare-workspace.sh <quack-checkout> <workspace-dir>.
+#
+# WALL-CLOCK IS NOT A MEASURE IN THIS SUITE. The image ships a warm build cache,
+# equally to both arms, so how long a build takes is a fact about the cache and
+# not about the AGENTS.md. Command counts and token counts stay valid - they are
+# what ETH's +20% is about - and report.js prints latency, which should be read
+# as run-shape only. Nothing scores it.
+
+defaultTest:
+  options:
+    transform: file://../../lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # Unnamed run-shape guard, not a scored metric - naming it would charge
+    # slowness twice, once here and again through the truncation it causes.
+    # Generous: a row here compiles Go. Cost, steps and command counts reach
+    # the report through report.js's unscored rows, not through an assertion.
+    - type: latency
+      threshold: 900000
+
+tests:
+  - file://tests/*.yaml

@@ -22,7 +22,12 @@ function skillVersion(body) {
   return body.match(/^\s*version:\s*["']?([^"'\n]+)/m)?.[1]?.trim() || 'unversioned';
 }
 
-module.exports = function arms(skillName, taskTemplate) {
+// `opts.inject(body)` overrides how the subject file is wrapped into the system
+// message. The default names it a skill, which is right for skills/<name>/SKILL.md
+// and wrong for a repository AGENTS.md - a real agent is handed that as ambient
+// repo context, not as "a skill to follow", and telling the model it is a skill
+// would make the arm differ by framing as well as by the file.
+module.exports = function arms(skillName, taskTemplate, opts = {}) {
   // On a PR that edits the skill, the checkout IS the new version, so comparing
   // it against the shipped one needs that shipped copy extracted somewhere and
   // named here. Unset (the normal case) both fall through to the checkout.
@@ -30,10 +35,13 @@ module.exports = function arms(skillName, taskTemplate) {
   const next = process.env.SKILL_NEXT || path.join(SKILLS, skillName, 'SKILL.next.md');
   const task = (vars) => taskTemplate(vars);
 
+  const inject = opts.inject
+    || ((body) => `The following skill (version ${skillVersion(body)}) is active. Follow it for the user task.\n\n${body}`);
+
   const withSkill = (file, vars) => {
     const body = fs.readFileSync(file, 'utf8');
     return [
-      { role: 'system', content: `${PREAMBLE}\n\nThe following skill (version ${skillVersion(body)}) is active. Follow it for the user task.\n\n${body}` },
+      { role: 'system', content: `${PREAMBLE}\n\n${inject(body)}` },
       { role: 'user', content: task(vars) },
     ];
   };
