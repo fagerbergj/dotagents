@@ -10,6 +10,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { Sandbox } = require('./sandbox.js');
 
 const DEFAULTS = {
   // SKILL.md asks for one README per diagram; a careful author also pulls
@@ -22,6 +23,21 @@ const DEFAULTS = {
   // "Batch your questions and ask early" is only a real claim if asking has a
   // cost. Small enough that a chatty arm visibly pays for it in questionsAsked.
   maxQuestions: 3,
+  // A clone-build-test-debug-retest loop is ~8 commands; 25 leaves room for two
+  // wrong theories and still stops a row that has started guessing at the shell.
+  // Identical for every arm - a per-arm cap would make the delta measure budget.
+  maxCommands: 25,
+  // Cumulative prompt+completion tokens for the row, the sandbox tools included.
+  // Command output re-enters the transcript on every later round, so an
+  // execution row's cost grows quadratically; this bounds the tail so the
+  // per-arm cost comparison stays attributable rather than dominated by one
+  // thrashing row. It should bind rarely - 150k is ~10x a text-only row.
+  maxTokens: 150_000,
+  // Rounds, not commands: run_bash rows need more than the text-only 8, and this
+  // applies only when a workspace is configured, so no existing suite's budget
+  // moves. maxCommands is what should stop a row; this is the runaway guard
+  // behind it, and it throws rather than refusing.
+  maxToolCallsWithBash: 40,
 };
 
 const TOOL = {
@@ -53,6 +69,27 @@ const SOURCE_TOOL = {
       type: 'object',
       properties: { path: { type: 'string', description: 'Path relative to the repository root.' } },
       required: ['path'],
+      additionalProperties: false,
+    },
+  },
+};
+
+// Offered whenever the prompt hands the provider a `workspaceDir`, on exactly the
+// same terms as read_source: running the build is the subject matter of a case
+// that asks whether a repo's instructions help, not an affordance a skill or an
+// AGENTS.md earns. Gate it on the arm and every exit code the suite grades
+// measures tool access instead. Commands run in a throwaway container with no
+// network and nothing of the host in it - see lib/sandbox.js.
+const RUN_BASH_TOOL = {
+  type: 'function',
+  function: {
+    name: 'run_bash',
+    description:
+      'Run a shell command in the project workspace. It runs in a disposable container with NO network access, so nothing can be downloaded or installed - work with what the workspace and the image already contain. State persists between calls. Returns the exit code, stdout and stderr; output is tail-truncated, so pipe through head/grep when you expect a lot.',
+    parameters: {
+      type: 'object',
+      properties: { command: { type: 'string', description: 'The shell command, run with `sh -c` from the workspace root.' } },
+      required: ['command'],
       additionalProperties: false,
     },
   },
@@ -179,6 +216,22 @@ function loadResource(root, rel, budget, cache) {
   return fs.readFileSync(r.target, 'utf8');
 }
 
+// Tail-truncation is named in the result rather than left silent: a model that
+// cannot see the head of a 4MB build log should pipe through grep, and one that
+// thinks it read the whole thing will conclude the wrong thing from it.
+function formatCommandResult(r) {
+  if (r.refused) return `refused: ${r.refused}`;
+  const section = (name, text, dropped) => {
+    const head = dropped ? `--- ${name} (truncated, ${dropped} earlier bytes dropped) ---` : `--- ${name} ---`;
+    return `${head}\n${text.trim() ? text.replace(/\s+$/, '') : '(empty)'}`;
+  };
+  return [
+    `exit_code: ${r.exitCode}${r.timedOut ? ' (killed - the command exceeded its per-command timeout)' : ''}`,
+    section('stdout', r.stdout, r.droppedStdout),
+    section('stderr', r.stderr, r.droppedStderr),
+  ].join('\n');
+}
+
 class SkillToolsProvider {
   constructor(options = {}) {
     this.config = options.config || {};
@@ -271,7 +324,19 @@ class SkillToolsProvider {
     return typeof content === 'string' ? content.trim() : content;
   }
 
+  // Thin wrapper so the container is torn down on every exit from the turn,
+  // including a thrown LoopError. A leaked container would keep a tmpfs of the
+  // row's workspace alive on the host until its own sleep expires.
   async callApi(prompt, context = {}) {
+    const session = { sandbox: null };
+    try {
+      return await this.turn(prompt, context, session);
+    } finally {
+      if (session.sandbox) await session.sandbox.stop();
+    }
+  }
+
+  async turn(prompt, context, session) {
     let messages;
     try {
       messages = JSON.parse(prompt);
@@ -291,6 +356,10 @@ class SkillToolsProvider {
     // tool access, not the skill - the exact reasoning read_source already
     // applies to the repo tree.
     const persona = context.prompt?.config?.userPersona || null;
+    // The workspace a run_bash tool would execute in - a host directory that is
+    // COPIED into a container, never mounted. Symmetric across arms for the same
+    // reason repoDir is.
+    const workspaceDir = context.prompt?.config?.workspaceDir || null;
     const real = (dir, label) => {
       try {
         return fs.realpathSync(dir);
@@ -308,8 +377,12 @@ class SkillToolsProvider {
       ...(roots[TOOL.function.name] ? [TOOL] : []),
       ...(roots[SOURCE_TOOL.function.name] ? [SOURCE_TOOL] : []),
       ...(persona && questionBudget(persona) > 0 ? [ASK_USER_TOOL] : []),
+      ...(workspaceDir ? [RUN_BASH_TOOL] : []),
     ];
-    const maxToolCalls = this.config.maxToolCalls ?? DEFAULTS.maxToolCalls;
+    const maxToolCalls = this.config.maxToolCalls
+      ?? (workspaceDir ? DEFAULTS.maxToolCallsWithBash : DEFAULTS.maxToolCalls);
+    const maxCommands = this.config.maxCommands ?? DEFAULTS.maxCommands;
+    const maxTokens = this.config.maxTokens ?? DEFAULTS.maxTokens;
     const maxBytes = this.config.maxResourceBytes ?? DEFAULTS.maxResourceBytes;
     const budget = { total: maxBytes, remaining: maxBytes };
     const questions = { count: 0, usage: { prompt: 0, completion: 0, total: 0, cached: 0, numRequests: 0 } };
@@ -323,6 +396,28 @@ class SkillToolsProvider {
     // a model that burns its rounds on refused questions would otherwise throw
     // with an empty `requested:` and hide the real cause.
     let askAttempts = 0;
+    const commands = { count: 0, timedOut: 0, truncated: 0 };
+    const runBash = async (command) => {
+      if (commands.count >= maxCommands) {
+        return `refused: the command budget of ${maxCommands} is spent. Stop running commands and answer from what you have already seen.`;
+      }
+      if (usage.total >= maxTokens) {
+        return `refused: this task has spent its ${maxTokens}-token ceiling. Stop running commands and answer now.`;
+      }
+      if (!session.sandbox) {
+        // Started on the first command, not up front, so a row that never runs
+        // one pays nothing - the model cannot tell, the tool is offered either
+        // way. Throws, and is never caught into a host fallback: the whole point
+        // of the tool is that the command did not run on this machine.
+        session.sandbox = await Sandbox.start({ ...(this.config.sandbox || {}), workspaceDir });
+      }
+      commands.count += 1;
+      const r = await session.sandbox.run(command);
+      if (r.timedOut) commands.timedOut += 1;
+      if (r.truncated) commands.truncated += 1;
+      return formatCommandResult(r);
+    };
+
     for (let round = 0; ; round += 1) {
       const body = {
         model: this.config.model,
@@ -363,11 +458,22 @@ class SkillToolsProvider {
         return {
           output: typeof content === 'string' ? content.trim() : content,
           tokenUsage: usage,
-          metadata: { resourcesLoaded: loaded, toolRounds: round, questionsAsked: questions.count, resourcesDeduped },
+          metadata: {
+            resourcesLoaded: loaded,
+            toolRounds: round,
+            questionsAsked: questions.count,
+            resourcesDeduped,
+            // Execution effort, the counterpart of resourcesLoaded: how much a
+            // row actually ran, how much of that hit a wall.
+            commandsRun: commands.count,
+            commandsTimedOut: commands.timedOut,
+            commandsTruncated: commands.truncated,
+          },
         };
       }
       if (round >= maxToolCalls) {
-        const hint = askAttempts ? `; ${askAttempts} were ask_user` : '';
+        const hint = [askAttempts && `${askAttempts} were ask_user`, commands.count && `${commands.count} were run_bash`]
+          .filter(Boolean).map((s) => `; ${s}`).join('');
         throw new LoopError(`tool loop exceeded ${maxToolCalls} rounds (requested: ${loaded.join(', ')}${hint})`);
       }
       messages = messages.concat([message]);
@@ -383,6 +489,8 @@ class SkillToolsProvider {
         if (called === ASK_USER_TOOL.function.name) {
           askAttempts += 1;
           content = await this.askUser(args.question, persona || {}, questions, context);
+        } else if (called === RUN_BASH_TOOL.function.name && workspaceDir) {
+          content = await runBash(args.command);
         } else {
           const requested = args.path;
           content = roots[called]
@@ -400,3 +508,5 @@ module.exports = SkillToolsProvider;
 module.exports.loadResource = loadResource;
 module.exports.resolveInside = resolveInside;
 module.exports.DEFAULTS = DEFAULTS;
+module.exports.formatCommandResult = formatCommandResult;
+module.exports.RUN_BASH_TOOL = RUN_BASH_TOOL;
