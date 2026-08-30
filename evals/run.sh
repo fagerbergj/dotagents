@@ -107,7 +107,11 @@ node "$here/report.test.cjs"
 python3 "$here/lib/check-case-vars.py" tests/*.yaml
 # `validate config` reports "Configuration is valid" for a case whose last
 # assertion was deleted, and for an assertion with no metric or a dangling
-# file://...:fn. This walks the parsed tree instead.
+# file://...:fn in an assertion, a provider or a prompt. This walks the parsed
+# tree instead. Its own self-check runs first: a gate that passes everything is
+# the exact defect it exists to catch, and running it over sound suites only
+# ever proves the green half.
+python3 "$here/lib/check-suite.test.py"
 python3 "$here/lib/check-suite.py" .
 # Real pull requests as input: clone the repo at the pinned SHAs and materialise
 # the diff plus the tree the change was opened against. No-op for a suite with no
