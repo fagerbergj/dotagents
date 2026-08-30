@@ -68,7 +68,8 @@ assert.strictEqual(ok.err, '', `healthy run printed to stderr: ${ok.err}`);
 
 // Process columns appear only when a provider records them, and a capped row is
 // counted rather than averaged away. Cost is the largest measured effect of a
-// context file, so it has to be visible; an existing suite must gain no empty row.
+// context file and promptfoo's `cost` field reads 0 here, so process and tokens
+// are what carry it; an existing suite must gain no empty row.
 {
   const plain = run(write('no-meta.json', build({ 'no-skill': 8, 'skill-current': 8 })));
   assert.doesNotMatch(plain.out, /commands \(avg\)/, 'a provider recording nothing must not gain an empty row');

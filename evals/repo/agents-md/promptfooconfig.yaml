@@ -144,8 +144,11 @@ defaultTest:
   assert:
     # Unnamed run-shape guard, not a scored metric - naming it would charge
     # slowness twice, once here and again through the truncation it causes.
-    # Generous: a row here compiles Go. Cost, steps and command counts reach
+    # Generous: a row here compiles Go. Tokens, steps and command counts reach
     # the report through report.js's unscored rows, not through an assertion.
+    # Tokens stand in for ETH's cost figure: promptfoo's per-row `cost` is 0
+    # unless the provider declares a per-token price, and none here does - it
+    # reads 0 on all 1562 rows of the 21 stored results under results/.
     - type: latency
       threshold: 900000
 

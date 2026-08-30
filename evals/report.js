@@ -302,8 +302,11 @@ console.log(pad('tokens (avg)', w) + arms.map((a) => pad(Math.round(tok(a)), 16)
 // effect anyone has measured for a context file is a cost one - ETH Zurich
 // (arXiv:2602.11988) found "increasing inference cost by over 20% on average",
 // p<0.001 in every setting, plus +2.45 to +3.92 steps - and a suite that only
-// scores correctness would report a null and miss it entirely. Printed only
-// when a provider records these, so no existing suite gains an empty row.
+// scores correctness would report a null and miss it entirely. Tokens above are
+// the stand-in for the money: promptfoo's per-row `cost` is 0 unless a provider
+// declares a per-token price, so a cost row here would read 0.00 in both arms
+// and be mistaken for no difference. Printed only when a provider records
+// these, so no existing suite gains an empty row.
 const META = [
   ['tool rounds (avg)', (m) => m.toolRounds ?? m.bashRounds],
   ['commands (avg)', (m) => (Array.isArray(m.commands) ? m.commands.length : undefined)],
