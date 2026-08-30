@@ -29,9 +29,9 @@ function git(dir, args) {
   return execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
 
-// Network. Run this once via `node lib/fetch-repo.js` before an eval - never
-// from a prompt function, which runs per row and must not reach out. Every
-// case shares one tree, so one call here covers the whole suite.
+// Network. Runs once via `node lib/fetch-repo.js`, which run.sh calls before an
+// eval - never from a prompt function, which runs per row and must not reach
+// out. Every case shares one tree, so one call here covers the whole suite.
 function materialise(log = () => {}) {
   if (!fs.existsSync(GIT_DIR)) {
     fs.mkdirSync(GIT_DIR, { recursive: true });

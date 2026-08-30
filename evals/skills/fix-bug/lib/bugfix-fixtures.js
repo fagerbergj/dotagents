@@ -23,8 +23,8 @@
 // evals/lib/fixtures.js's PR-shaped materialise() on whatever it finds there.
 // This suite's fixtures have no `pr` field, so that call would fail loudly on
 // every run. Naming this file differently makes the shared fetch step a
-// no-op here instead, so `node lib/fetch-bugfix-fixtures.js .` has to be run
-// by hand before `promptfoo eval`.
+// no-op here instead; lib/fetch-bugfix-fixtures.js does the real work, and
+// run.sh calls it by the `lib/fetch-*.js` name.
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');

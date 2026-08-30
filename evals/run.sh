@@ -111,9 +111,14 @@ python3 "$here/lib/check-case-vars.py" tests/*.yaml
 python3 "$here/lib/check-suite.py" .
 # Real pull requests as input: clone the repo at the pinned SHAs and materialise
 # the diff plus the tree the change was opened against. No-op for a suite with no
-# tests/fixtures.json, which is every suite but review-code. Network, so it runs
-# after the free checks and before a single token is bought.
+# tests/fixtures.json - only pr-authoring and review-code have one. Network, so it
+# runs after the free checks and before a single token is bought.
 node "$here/lib/fetch-fixtures.js" .
+# A suite whose fixtures are not PR-shaped carries its own fetcher instead. Any
+# `lib/fetch-*.js` in the suite dir is that setup step, and nothing else calls it:
+# develop-feature and fix-bug were green locally off hand-run fetchers and errored
+# every row in CI, which always starts from a clean checkout.
+for fetcher in lib/fetch-*.js; do [ -e "$fetcher" ] || continue; node "$fetcher" .; done
 npx -y promptfoo@latest eval -c "$config" -o "$out" \
   $cache_flag --no-share --max-concurrency "${EVAL_CONCURRENCY:-8}" "$@" || true
 node "$here/report.js" "$out" --md "${out%.json}.md"
