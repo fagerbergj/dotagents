@@ -1,16 +1,15 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-// llama-swap's /v1/models reports ids only, so context sizes live here.
-// Values from home-server/llm/llm-swap.yaml's -c flags; default is conservative.
-const CTX: Record<string, number> = {
-  "qwen3-coder-next": 262144,
-  "qwen3.6-35b": 262144,
-  "gpt-oss-120b": 131072,
-  "qwen3.6-27b": 131072,
-  "gemma4-26b-a4b": 131072,
-  "gemma4-12b": 16384,
+// llama-swap's /v1/models reports ids only, so windows and capabilities live here: the -c
+// flags in home-server's llm-swap.yaml (jaison) and llm-swap-media.yaml (media).
+const MODELS: Record<string, { ctx: number; vision?: boolean; reasoning?: boolean }> = {
+  "qwen3.8-27b": { ctx: 262144, vision: true, reasoning: true }, // vLLM, so ctx is its MAXLEN env
+  "qwen3.8-flash-next": { ctx: 131072, vision: true, reasoning: true },
+  "muse-glimmer-30b": { ctx: 131072, vision: true, reasoning: true },
+  "qwen3-omni-30b": { ctx: 32768, vision: true, reasoning: true },
+  "qwen3.5-9b": { ctx: 65536 }, // the only one with thinking off in its chat template
 };
-const VISION = new Set(["qwen3-vl-32b", "qwen3-omni-30b"]);
+const DEFAULT_CTX = 32768;
 
 // Same llama-swap two ways in: Traefik's public route checks a bearer token,
 // the tailnet host is reachable only from the trusted network and checks nothing.
@@ -48,14 +47,19 @@ export default async function (pi: ExtensionAPI) {
     api: "openai-completions",
     models: models
       .filter((m) => m.id !== "qwen3-embed") // embedding-only, can't chat
-      .map((m) => ({
-        id: m.id,
-        name: m.id,
-        reasoning: m.id === "gpt-oss-120b",
-        input: VISION.has(m.id) ? ["text", "image"] : ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: CTX[m.id] ?? 32768,
-        maxTokens: 16384,
-      })),
+      .map((m) => {
+        const known = MODELS[m.id];
+        return {
+          id: m.id,
+          // A swapped-in model falls back to guesses. Say so in the picker rather than
+          // silently serving a wrong window, which is how this table last went stale.
+          name: known ? m.id : `${m.id} (unlisted: ctx ${DEFAULT_CTX}?)`,
+          reasoning: known?.reasoning ?? false,
+          input: known?.vision ? (["text", "image"] as const) : (["text"] as const),
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: known?.ctx ?? DEFAULT_CTX,
+          maxTokens: 16384,
+        };
+      }),
   });
 }
