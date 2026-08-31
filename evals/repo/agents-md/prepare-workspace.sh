@@ -47,28 +47,38 @@ git -C "$repo" show "$BUG_FIX_SHA^:internal/dag/admission.go"     > "$ws/interna
 # clone. Seeding .agents/vendor/dotagents directly instead would make bare
 # `go test ./...` succeed and delete the point of the AGENTS.md line under test.
 # The rewritten URL is the only infidelity in the whole workspace.
+#
+# WORKSPACE-RELATIVE, not "$ws". The workspace is streamed into the container at
+# /workspace, so a host path baked in here does not exist where it is used, and
+# every Go case died on "dotagents: clone failed and no tree on disk" - measured,
+# not assumed. scripts/plugins.sh cds to the repo root before cloning, so a
+# relative path resolves in both places and neither has to know the mount point.
 mkdir -p "$ws/.plugin-mirror"
 while IFS=$'\t' read -r name url; do
   [ -n "$name" ] || continue
   git clone --quiet --bare "$url" "$ws/.plugin-mirror/$name.git"
   # -i with a literal URL: the pins are full https URLs, so anchor on the whole
   # value rather than pattern-matching a substring of it.
-  sed -i "s|url: $url\$|url: $ws/.plugin-mirror/$name.git|" "$ws/.agents/vendor/plugins.yaml"
+  sed -i "s|url: $url\$|url: .plugin-mirror/$name.git|" "$ws/.agents/vendor/plugins.yaml"
 done < <(awk '/^  - name:/{n=$3} /^    url:/{if(n)print n"\t"$2; n=""}' "$ws/.agents/vendor/plugins.yaml")
 
 # Verified with a real YAML parser, not eyeballed: a sed over a structured file
 # that silently matches nothing leaves the pins pointing at GitHub, and the
 # failure would then surface as an unexplained `make plugins` failure inside a
 # row rather than here. Checks both that every url is local and that the refs
-# survived the edit.
+# survived the edit, and that the path each one names is actually there.
 python3 -c "
-import sys, yaml
+import os, sys, yaml
+root = os.path.dirname(os.path.dirname(os.path.dirname(sys.argv[1])))
 ps = yaml.safe_load(open(sys.argv[1]))['plugins']
-bad = [p for p in ps if not p['url'].startswith(sys.argv[2]) or not p.get('ref')]
+bad = [p for p in ps
+       if not p['url'].startswith('.plugin-mirror/')
+       or not p.get('ref')
+       or not os.path.isdir(os.path.join(root, p['url']))]
 if bad or not ps:
     sys.exit('plugins.yaml rewrite did not take: %r' % (bad or 'no plugins parsed'))
 print('    pins now local:', ', '.join(p['name'] for p in ps))
-" "$ws/.agents/vendor/plugins.yaml" "$ws/.plugin-mirror/"
+" "$ws/.agents/vendor/plugins.yaml"
 
 # The prebuilt binary the L7 probe expects at the workspace root. quack's own
 # .gitignore already lists /quack, so the commit below leaves it untracked and a
@@ -76,10 +86,15 @@ print('    pins now local:', ', '.join(p['name'] for p in ps))
 docker run --rm "$IMAGE" cat /opt/quack-bin/quack > "$ws/quack"
 chmod +x "$ws/quack"
 
-# Excluded BEFORE the commit below, or `git add -A` would pull an 800 MB build
-# cache into .git and double the workspace. Neither is part of the repo under
-# test, and neither must show up as the model's own changes.
-{ echo '.cache/'; echo '.plugin-mirror/'; } >> "$ws/.git/info/exclude"
+# Excluded BEFORE the commit below, or `git add -A` would pull a ~1 GB build
+# cache into .git and double the workspace. None of these is part of the repo
+# under test, and none must show up as the model's own changes.
+#
+# .config/ is not created here: HOME is /workspace in the container and the go
+# tool writes .config/go/env on first use, so `git status` shows `?? .config/`
+# from a command the model did not think it was running. The rename control
+# tells it to change nothing else, and untracked noise invites a tidy-up.
+{ echo '.cache/'; echo '.plugin-mirror/'; echo '.config/'; } >> "$ws/.git/info/exclude"
 
 # One clean commit covering every mutation above, so a case can verify itself
 # with `git diff` against a tree that starts empty-handed. Amended rather than
@@ -100,4 +115,12 @@ docker run --rm "$IMAGE" tar -c -C /opt/gocache-seed . | tar -x -C "$ws/.cache/g
 
 du -sh "$ws" "$ws/.cache/go-build"
 echo "workspace ready: $ws"
-echo "run with: EVAL_WORKSPACE_DIR=$ws ./run.sh agents-md --max-concurrency 1"
+# All three vars are required. run.sh looks for suites under evals/skills/ and
+# for a subject at ../skills/{suite}/SKILL.md; this suite lives under repo/ and
+# its subject is a repository AGENTS.md, so both defaults are wrong and the run
+# dies at "subject not found" before it reaches the workspace.
+echo "run with:"
+echo "  EVAL_SUITES_DIR=repo \\"
+echo "  EVAL_SUBJECT=$repo/AGENTS.md \\"
+echo "  EVAL_WORKSPACE_DIR=$ws \\"
+echo "  ./run.sh agents-md --max-concurrency 1"
