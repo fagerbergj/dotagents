@@ -20,14 +20,14 @@ link() {
 }
 
 # Claude Code (skills arrive via the dotagents plugin, not a symlink - see README)
-link "$AGENTS_DIR/AGENTS.md" "$HOME/.claude/CLAUDE.md"
-link "$AGENTS_DIR/AGENTS.md" "$HOME/.claude/AGENTS.md"
+link "$AGENTS_DIR/AGENTS.user.md" "$HOME/.claude/CLAUDE.md"
+link "$AGENTS_DIR/AGENTS.user.md" "$HOME/.claude/AGENTS.md"
 
 # opencode needs no link: it falls back to ~/.claude/CLAUDE.md (linked above)
 # for global rules, and reads skills from ~/.agents/skills natively.
 
 # pi (skills arrive via the dotagents plugin, not a symlink - see README)
-link "$AGENTS_DIR/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
+link "$AGENTS_DIR/AGENTS.user.md" "$HOME/.pi/agent/AGENTS.md"
 # llm-swap moved to the llm-swap package (install-pi-packages.sh); drop the old link
 if [ -L "$HOME/.pi/agent/extensions/llm-swap.ts" ]; then rm "$HOME/.pi/agent/extensions/llm-swap.ts"; fi
 # pi-lsp server declarations stay a symlink: pi-lsp reads only ~/.pi/agent/lsp.json
@@ -35,4 +35,4 @@ if [ -L "$HOME/.pi/agent/extensions/llm-swap.ts" ]; then rm "$HOME/.pi/agent/ext
 link "$AGENTS_DIR/.pi/lsp.json" "$HOME/.pi/agent/lsp.json"
 
 # codex
-link "$AGENTS_DIR/AGENTS.md" "$HOME/.codex/AGENTS.md"
+link "$AGENTS_DIR/AGENTS.user.md" "$HOME/.codex/AGENTS.md"
