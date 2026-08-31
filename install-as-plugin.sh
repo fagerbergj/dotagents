@@ -5,6 +5,10 @@
 set -eu
 
 DOTAGENTS_REPO="https://github.com/fagerbergj/dotagents.git"
+AGENTS_DIR="$(cd "$(dirname "$0")" && pwd)"
+# The marketplace splits the skills into these; apc generates the list's
+# source (.claude-plugin/marketplace.json) from plugin.json's grouping.
+PLUGINS="dotagents-documentation dotagents-coding dotagents-contributing"
 
 # Optional arg limits to one harness. bootstrap passes "claude" - the only
 # harness that needs the plugin; run with no arg to be offered the rest.
@@ -23,15 +27,19 @@ ask() {
 
 # --- Claude Code (does NOT read ~/.agents: the plugin is how skills + mcp.json arrive) ---
 if want claude && command -v claude >/dev/null 2>&1; then
-  if claude plugin list 2>/dev/null | grep -q "dotagents@dotagents"; then
-    echo "Claude Code: dotagents already installed"
-  elif ask "Claude Code: install dotagents as a plugin? (Claude doesn't read ~/.agents natively)"; then
+  if claude plugin list 2>/dev/null | grep -q "dotagents-.*@dotagents"; then
+    echo "Claude Code: dotagents plugins already installed"
+  elif ask "Claude Code: install the dotagents plugins? (Claude doesn't read ~/.agents natively)"; then
+    # The local clone IS the marketplace, so its plugin list always matches
+    # the checked-out branch; the git URL would serve main's copy instead.
     echo "Claude Code: adding dotagents marketplace ..."
-    claude plugin marketplace add "$DOTAGENTS_REPO" >/dev/null 2>&1 || true
-    echo "Claude Code: installing dotagents ..."
-    if ! claude plugin install dotagents@dotagents; then
-      echo "warn: dotagents install failed; inside Claude Code run: /plugin install dotagents@dotagents" >&2
-    fi
+    claude plugin marketplace add "$AGENTS_DIR" >/dev/null 2>&1 || true
+    for p in $PLUGINS; do
+      echo "Claude Code: installing $p ..."
+      if ! claude plugin install "$p@dotagents"; then
+        echo "warn: $p install failed; inside Claude Code run: /plugin install $p@dotagents" >&2
+      fi
+    done
   fi
 else
   echo "warn: claude CLI not found; skipping dotagents for Claude Code" >&2
