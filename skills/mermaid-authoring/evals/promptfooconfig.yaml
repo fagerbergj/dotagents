@@ -1,0 +1,134 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: Mermaid authoring skill effectiveness
+
+# Three arms over the same tasks. Arm labels come from the skill's frontmatter
+# version, so bumping metadata.version in SKILL.md relabels the comparison.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+# Custom provider, not `openai:chat:*`: it runs the same OpenAI-compatible call
+# but exposes a `load_resource` tool over the skill's own directory, so the skill
+# arm can follow SKILL.md's "read references/<diagramId>/README.md" instead of
+# writing specialised syntax from memory. The tool appears only when the prompt
+# supplies `skillDir` (see prompts/arms.js), so the baseline arm is unchanged.
+# It reads `message.content` only, which is what showThinking: false bought here.
+providers:
+  - id: file://../../../evals/lib/skill-tools.js
+    label: deepseek-v4-flash+resources
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      maxToolCalls: 8
+      maxResourceBytes: 65536
+
+defaultTest:
+  options:
+    # rubricPrompt lives on the g-eval assertion below, not here: promptfoo's
+    # schema only accepts a string/array for defaultTest.options.rubricPrompt,
+    # the {evaluate:...} object g-eval needs is only valid at the assertion level.
+    # The llm-swap gateway returns reasoning as message content; strip it so the
+    # graders see the answer, not the leak.
+    transform: file://../../../evals/lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # 1. Does it render. `rendersWithMermaid` also reports a missing block, so
+    # a separate fence assertion measured nothing across 66 rows.
+    - type: javascript
+      value: file://assertions/mermaid.cjs:rendersWithMermaid
+      metric: mermaid_renders
+    # 2. Is it the right diagram - per-case `allowed` list, several may be right.
+    # 3. Does it answer the request, readably, at the right scope. g-eval derives
+    # its own steps from these criteria rather than scoring one flat rubric.
+    #
+    # No comparative pick-a-winner assertion here. It used to sit beside this
+    # g-eval, criterion "the diagram that most accurately and readably answers
+    # the request, judged as delivered rather than by how it was built" -
+    # which is exactly the g-eval criteria below in comparative phrasing,
+    # nothing unique. It also never compared rendered images: that grader type
+    # judges the raw model output (the markdown/mermaid source), the same text
+    # this g-eval sees, not a PNG. The genuinely visual question - legibility,
+    # overlap, layout - belongs to `visualQuality` below, which actually
+    # renders and asks a vision model, and keeps the judge's full reason
+    # instead of a bare parsed integer.
+    - type: llm-rubric
+      value: |
+        Someone asked for a diagram with this request:
+        "{{task}}"
+
+        Judge the diagram as a reader sees it rendered. Never credit or penalise how
+        the source is written: node id names, indentation, comments, the direction
+        keyword, classDef, subgraphs, styling, or which mermaid features were used
+        are all out of scope.
+
+        Work through these three in order. For each, quote the exact diagram text or
+        name the exact visual element that supports your answer, or answer NONE.
+
+        1. Every fact stated in the request appears in the diagram.
+        2. {{rubric}}
+        3. A reader who has not seen the request could say what each element and each
+           connector represents from its own label alone.
+
+        Score from 0 to 1, never above 1: the number of the three genuinely satisfied
+        and evidenced by a quote, divided by three. An item you could not quote for
+        scores as absent. Whether the diagram carries anything the request never
+        stated is graded by no_invented_elements and must not move this score in
+        either direction.
+      threshold: 0.7
+      metric: semantic_quality
+    # 4. Fabrication on its own axis. It used to be item 2 of the four above AND
+    # a cancellation applied to the rest, so an invented element cost the same
+    # number twice and a diagram that answered the request could report 0.00 -
+    # "Three invented elements (OrderService, Warehouse, ShippingView as named
+    # systems) cancel item 1, leaving 0 satisfied items", on a row whose item 1
+    # the same judge had just quoted as satisfied.
+    - type: llm-rubric
+      value: |
+        Someone asked for a diagram with this request:
+        "{{task}}"
+
+        Judge the diagram as a reader sees it rendered. Never credit or penalise how
+        the source is written: node id names, indentation, comments, the direction
+        keyword, classDef, subgraphs, styling, or which mermaid features were used
+        are all out of scope - a node id is not an element a reader sees.
+
+        List every figure, date, identifier, quantity, named system, actor or step
+        that a reader sees on the rendered diagram and that the request never states,
+        quoting each label. A structural element the chosen diagram type requires -
+        a start or end marker, an axis, a lane - is not on the list. Answer NONE if
+        there are none. Then say whether anything on the diagram contradicts the
+        request, quoting it.
+
+        Score from 0 to 1, never above 1: start at 1.00, subtract 0.25 for each item
+        on your list and 0.25 for each contradiction, floored at 0. State the list
+        and the arithmetic.
+
+        Do not reward or penalise whether the diagram answers the request, is
+        readable, or is the right type - a diagram that is wrong on every other axis
+        but adds nothing the request did not state scores 1.00 here.
+      threshold: 1
+      metric: no_invented_elements
+    # Loading a SKILL.md costs wall time; this flags a pathological arm rather
+    # than a normal one. Token overhead is read from the results JSON - promptfoo
+    # has no token assertion, and `cost` is 0 on a self-hosted gateway.
+
+tests:
+  - file://tests/*.yaml

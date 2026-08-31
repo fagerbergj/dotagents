@@ -1,0 +1,88 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: REST API and OpenAPI authoring skill effectiveness
+
+# Three arms over the same tasks. Arm labels come from the skill's frontmatter
+# version, so bumping metadata.version in SKILL.md relabels the comparison.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # Custom provider, not `openai:chat:*`: same OpenAI-compatible call, plus a
+  # `load_resource` tool over the skill's own directory so the skill arm can
+  # follow SKILL.md's instructions to read its bundled files. The tool exists
+  # only when the prompt supplies `skillDir` (see prompts/arms.js), so the
+  # baseline arm sends no `tools` key and is called exactly as before.
+  - id: file://../../../evals/lib/skill-tools.js
+    label: deepseek-v4-flash+resources
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      # 10 references, 44 KB bundled. Steps 2-6 of SKILL.md each name one, so a
+      # thorough answer pulls 4-6; 32 KB fits the largest of those and still stops
+      # short of the whole tree, and 8 rounds leaves room for a wrong guess.
+      maxToolCalls: 8
+      maxResourceBytes: 32768
+
+defaultTest:
+  options:
+    # Every judged assertion is llm-rubric; no g-eval survives in this suite, so
+    # no rubricPrompt override is needed anywhere.
+    # The llm-swap gateway returns reasoning as message content. This pulls the
+    # fenced document out of the leak and normalises it to JSON, so every native
+    # assertion below grades the contract rather than the chatter around it.
+    # Output that yields no document passes through untouched and fails is-json.
+    transform: file://assertions/restapi.cjs:normalizeToJson
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        # Kept deliberately. It was suspected of breaking judge parsing and an
+        # isolated A/B cleared it: llm-rubric brace-matches its verdict and is
+        # unaffected either way. Removing it is a change with no upside.
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # Only the latency ceiling is universal. Everything else lives per case in
+    # tests/cases.yaml, anchored on the first case and aliased into the cases
+    # that earn it: four of the negative controls have no document as their
+    # right answer, and a defaultTest assertion would score them with three
+    # graders that can only report "no OpenAPI document found" against correct
+    # behaviour. tests/cases.yaml is therefore the whole metric surface.
+    #
+    # design_quality and contract_requirements are the two that carry this
+    # suite. They grade the same per-case requirement from two directions -
+    # one judged, one computed against the parsed document - and eight metrics
+    # carried by a single case each were merged into the computed one, because
+    # a metric on fewer than five cases moved sd 0.37 across identical runs.
+    # semantic_quality was cut: it was holistic, had no arithmetic, and sat at
+    # the ceiling on 15 of 20 rows; its per-case coverage question is now
+    # design_quality's question 5.
+    #
+    # No comparative pick-a-winner assertion: its "richer contract wins"
+    # criterion restated design_quality one-for-one.
+    #
+    # Loading a SKILL.md costs wall time; that overhead is part of what this
+    # suite measures. Not `cost` - the provider declares no per-token price, so
+    # a cost assertion reads 0 and passes trivially. This one carries no metric
+    # deliberately: it is a ceiling that fails a row, not a score to average.
+    - type: latency
+      threshold: 240000
+
+tests:
+  - file://tests/*.yaml

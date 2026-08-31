@@ -9,8 +9,12 @@
 #
 # Usage: detect-suites.sh <repo-root> [suites-dir] [subject-template] < changed-files.txt
 #   repo-root:        absolute path to the checkout.
-#   suites-dir:       where suites live under evals/, e.g. `skills` for
-#                      evals/skills/<name>/. Default: skills (this repo's layout).
+#   suites-dir:       where suites live. With a `{suite}` placeholder it is a
+#                      repo-root-relative per-suite directory template, e.g.
+#                      `skills/{suite}/evals` for suites beside their skills.
+#                      Without one it is the legacy layout: a directory under
+#                      evals/, e.g. `skills` for evals/skills/<name>/.
+#                      Default: skills/{suite}/evals (this repo's layout).
 #   subject-template: path to the file under test, relative to repo root,
 #                      with `{suite}` standing in for the suite name, e.g.
 #                      `skills/{suite}/SKILL.md`. A template with NO `{suite}`
@@ -29,7 +33,21 @@
 # Prints a JSON array: [{"name":..., "skill_paths":[...], "suite_paths":[...]}, ...]
 set -euo pipefail
 root="${1:?usage: detect-suites.sh <repo-root> [suites-dir] [subject-template] < changed-files.txt}"
-suites_dir="${2:-skills}"
+# Two steps for the same `}`-in-default trap as subject_tpl below.
+suites_dir="${2:-}"
+[ -n "$suites_dir" ] || suites_dir='skills/{suite}/evals'
+# Resolve the suites location to a prefix/suffix pair around the suite name,
+# so enumeration and path matching below need no layout branches.
+case "$suites_dir" in
+  *'{suite}'*)
+    suites_pre="${suites_dir%%\{suite\}*}"
+    suites_post="${suites_dir#*\{suite\}}"
+    ;;
+  *)
+    suites_pre="evals/${suites_dir}/"
+    suites_post=""
+    ;;
+esac
 # Two steps on purpose: a `}` inside a ${var:-default} closes the expansion
 # early, so the inline default silently became "skills/{suite" (de72eb4 hit
 # the same trap in run.sh's EVAL_SUBJECT default).
@@ -64,9 +82,10 @@ case "$(basename "$subject_tpl")" in *'{suite}'*) suite_in_filename=true ;; esac
 
 first=true
 echo -n '['
-for suite_dir in "$root"/evals/"$suites_dir"/*/; do
+for suite_dir in "$root"/${suites_pre}*${suites_post}/; do
   [ -d "$suite_dir" ] || continue
-  name="$(basename "$suite_dir")"
+  name="${suite_dir#"$root/$suites_pre"}"
+  name="${name%"$suites_post"/}"
   if "$has_suite_placeholder"; then
     subject_path="${subject_tpl//\{suite\}/$name}"
     if "$suite_in_filename"; then
@@ -85,7 +104,7 @@ for suite_dir in "$root"/evals/"$suites_dir"/*/; do
   fi
   # index(), not grep -E, for the same reason: suites_dir and name are user/
   # filesystem input, not a pattern.
-  suite_prefix="evals/${suites_dir}/${name}/"
+  suite_prefix="${suites_pre}${name}${suites_post}/"
   suite_paths="$(printf '%s\n' "$changed_files" | awk -v p="$suite_prefix" 'index($0, p) == 1')"
   [ -z "$skill_paths" ] && [ -z "$suite_paths" ] && [ -z "$shared" ] && continue
   $first || echo -n ','

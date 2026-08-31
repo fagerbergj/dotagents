@@ -1,0 +1,80 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: RFD authoring skill effectiveness
+
+# Two arms over the same tasks. skill-next stays out until a SKILL.next.md
+# exists, or it duplicates skill-current and dilutes the judge signal.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # Custom provider, not `openai:chat:*`: same OpenAI-compatible call, plus a
+  # `load_resource` tool over the skill's own directory so the skill arm can
+  # follow SKILL.md's instructions to read its bundled files. The tool exists
+  # only when the prompt supplies `skillDir` (see prompts/arms.js), so the
+  # baseline arm sends no `tools` key and is called exactly as before.
+  - id: file://../../../evals/lib/skill-tools.js
+    label: deepseek-v4-flash+resources
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      # One reference plus one example RFD, 5.4 KB together - the budget is a ceiling
+      # on a runaway loop, not a rationing of two small files.
+      maxToolCalls: 4
+      maxResourceBytes: 8192
+
+defaultTest:
+  options:
+    # No rubricPrompt here on purpose. The one that used to live here was
+    # written for g-eval; every grader is llm-rubric now, and llm-rubric DOES
+    # honour options.rubricPrompt - it would have replaced the built-in prompt
+    # with one asking for a 0-to-{{maxScore}} integer, so every row would have
+    # come back unscorable or out of range.
+
+    # The llm-swap gateway returns reasoning as message content; strip it so the
+    # graders see the answer, not the leak. There is no fence to anchor on here,
+    # only a preamble talking *about* the request is removed. Bare openers like
+    # "Okay," are left alone: a review of a draft legitimately starts that way.
+    transform: file://../../../evals/lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        # Keeps the judge emitting JSON, which llm-rubric parses for {pass, score,
+        # reason}. json_object, not json_schema - the latter makes promptfoo
+        # pre-parse the reply into an object, which the grader rejects as
+        # 'not a string'.
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # Every substantive grader is per-case and lives in tests/cases.yaml: what
+    # counts as right differs between an unresolved situation and one that is
+    # already settled, so a negative control that correctly declines has no
+    # framing to grade against a rubric written for an open document. The seven
+    # exploratory cases share framing_quality and stays_open; the review cases
+    # get finds_the_decision and their own framing_quality; the five negative
+    # controls get control_quality.
+    #
+    # Loading a SKILL.md costs tokens and time; that overhead is part of what
+    # the arm comparison is measuring.
+    - type: latency
+      threshold: 120000
+      metric: latency
+
+tests:
+  - file://tests/*.yaml

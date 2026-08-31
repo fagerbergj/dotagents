@@ -1,6 +1,6 @@
 # Eval suites
 
-Each directory under `skills/` measures one skill in `../../skills/`. The question a suite answers is narrow: does loading this skill change the artifact the model produces?
+Each skill's suite lives beside it at `skills/<name>/evals/` and measures that skill. The question a suite answers is narrow: does loading this skill change the artifact the model produces?
 
 ## Design rules
 

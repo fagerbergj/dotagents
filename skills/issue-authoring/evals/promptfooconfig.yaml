@@ -1,0 +1,87 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: Issue authoring skill effectiveness
+
+# Three arms over the same tasks. Arm labels come from the skill's frontmatter
+# version, so bumping metadata.version in SKILL.md relabels the comparison.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # Custom provider, not `openai:chat:*`: same OpenAI-compatible call, plus a
+  # `load_resource` tool over the skill's own directory so the skill arm can
+  # follow SKILL.md's instructions to read its bundled files. The tool exists
+  # only when the prompt supplies `skillDir` (see prompts/arms.js), so the
+  # baseline arm sends no `tools` key and is called exactly as before.
+  - id: file://../../../evals/lib/skill-tools.js
+    label: deepseek-v4-flash+resources
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      # Two references totalling 10.5 KB, and step 2 picks exactly one by work type.
+      # 12 KB fits both if it wants them; 4 rounds covers a wrong guess and a listing.
+      maxToolCalls: 4
+      maxResourceBytes: 12288
+
+defaultTest:
+  options:
+    # The llm-swap gateway returns reasoning as message content; strip it so the
+    # graders see the issue, not the leak. There is no fence to anchor on, so
+    # cut everything before the first heading or title label, then drop a
+    # leading conversational line so a bare first-line title is the title.
+    transform: file://../../../evals/lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        # json_object, not json_schema - the latter makes promptfoo pre-parse the
+        # reply into an object, which the grader then rejects as 'not a string'.
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # 1. Is the context in the issue the context the report actually supplied.
+    #    A set difference against the input, so it stays in JavaScript.
+    - type: javascript
+      value: file://assertions/issue.cjs:noInventedFacts
+      metric: no_invented_facts
+    # 2. semantic_quality is NOT here. It grades a write-up against the four
+    #    properties the description claims, which is the wrong question to ask of
+    #    the Jira negative control, where the right answer is to refuse to write
+    #    a ticket at all. Sitting in defaultTest it graded that control anyway:
+    #    one skill row scored semantic_quality=1.00 ("clear outcome ... bounded
+    #    scope ... testable completion conditions") and case_fidelity=0.00
+    #    ("fabricates a product area ... never states that the report is
+    #    insufficient") - full marks and zero for the same output. It now rides
+    #    on the ten positive cases, anchored in tests/cases.yaml; the control is
+    #    graded by case_fidelity, which was written for it.
+    #
+    # 3. The case's own property, scored on its own axis rather than folded
+    #    into one of the three above.
+    - type: llm-rubric
+      value: |
+        The reply below was produced from this raw report:
+        "{{report}}"
+
+        {{rubric}}
+      threshold: 0.7
+      metric: case_fidelity
+    - type: latency
+      threshold: 120000
+
+tests:
+  - file://tests/*.yaml

@@ -12,11 +12,13 @@ on:
         default: 'skills/{suite}/SKILL.md'
       suites-dir:
         description: >
-          Where the suites live, relative to the caller's `evals/` directory -
-          the harness is installed there and resolves suites relative to itself.
+          Where the suites live. With a `{suite}` placeholder it is a per-suite
+          directory template relative to the repo root, e.g.
+          `skills/{suite}/evals` for suites beside their skills. Without one it
+          is the legacy layout - a directory under the caller's `evals/`, so
           `evals/skills` on disk means `skills` here.
         type: string
-        default: 'skills'
+        default: 'skills/{suite}/evals'
       harness-repo:
         description: >
           Repo holding evals/lib, run.sh, report.js and rollup.js. Leave EMPTY
@@ -159,7 +161,7 @@ jobs:
             echo "## Eval suites for this PR"
             echo
             if [ "$count" -eq 0 ]; then
-              echo "No eval suites are affected by the changed files (checked against \`${{ inputs.subject-template }}\` and \`evals/${{ inputs.suites-dir }}/**\`). Nothing will run."
+              echo "No eval suites are affected by the changed files (checked against \`${{ inputs.subject-template }}\` and \`${{ inputs.suites-dir }}\`). Nothing will run."
             else
               echo "This PR affects **$count** eval suite(s):"
               echo
@@ -296,6 +298,13 @@ jobs:
           # Exposed as a step output so the cache key below can hash the exact
           # subject path without re-deriving the substitution a second time.
           echo "subject_path=$file" >> "$GITHUB_OUTPUT"
+          # Same for the suite's own directory (template vs legacy layout).
+          if [ "${{ contains(inputs.suites-dir, '{suite}') }}" = "true" ]; then
+            sdir="$(printf '%s' "${{ inputs.suites-dir }}" | sed "s/{suite}/${{ matrix.suite }}/g")"
+          else
+            sdir="evals/${{ inputs.suites-dir }}/${{ matrix.suite }}"
+          fi
+          echo "suite_dir=$sdir" >> "$GITHUB_OUTPUT"
           git show "$base:$file" > /tmp/shipped-SKILL.md 2>/dev/null || exit 0
           if diff -q /tmp/shipped-SKILL.md "$file" >/dev/null 2>&1; then
             echo "skill unchanged against $base - two arms"; exit 0
@@ -336,7 +345,7 @@ jobs:
           #
           # Deliberately NOT keyed on a run id or a commit sha: that would miss
           # on every single run and make the cache decorative.
-          key: promptfoo-${{ matrix.suite }}-${{ hashFiles(format('evals/{0}/{1}/**', inputs.suites-dir, matrix.suite), steps.stage.outputs.subject_path) }}
+          key: promptfoo-${{ matrix.suite }}-${{ hashFiles(format('{0}/**', steps.stage.outputs.suite_dir), steps.stage.outputs.subject_path) }}
           restore-keys: |
             promptfoo-${{ matrix.suite }}-
 
@@ -357,8 +366,10 @@ jobs:
           # collapsing the matrix into a single job stays safe.
           PROMPTFOO_CONFIG_DIR: /tmp/pf-${{ matrix.suite }}
           # run.sh resolves these relative to itself, and it now sits in evals/.
+          # A template suites-dir is repo-root-relative in this interface, hence
+          # the ../ hop; a legacy value is already evals/-relative.
           EVAL_SUBJECT: ../${{ inputs.subject-template }}
-          EVAL_SUITES_DIR: ${{ inputs.suites-dir }}
+          EVAL_SUITES_DIR: ${{ contains(inputs.suites-dir, '{suite}') && format('../{0}', inputs.suites-dir) || inputs.suites-dir }}
           EVAL_API_KEY_ENVAR: ${{ inputs.api-key-envar }}
         # run.sh is the same entry point used locally, and it already does the
         # free checks first: the suite's offline self-test (node assertions/

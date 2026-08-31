@@ -1,6 +1,6 @@
 # Skill evals
 
-Each directory under `skills/` measures one skill in `../skills/` using [promptfoo](https://www.promptfoo.dev) against a self-hosted llm-swap gateway.
+Each skill's suite lives beside it at `skills/<name>/evals/`, measuring that skill using [promptfoo](https://www.promptfoo.dev) against a self-hosted llm-swap gateway.
 
 The question every suite answers is narrow: **does loading this skill change the artifact the model produces?** Not whether the skill reads well or the model followed its steps—the artifact.
 

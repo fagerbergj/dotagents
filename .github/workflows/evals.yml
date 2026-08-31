@@ -27,7 +27,7 @@ jobs:
       # changing the prefix would orphan every comment already on an open PR.
       comment-prefix: dotagents-evals
       subject-template: 'skills/{suite}/SKILL.md'
-      suites-dir: 'skills'
+      suites-dir: 'skills/{suite}/evals'
       api-key-envar: 'OPENROUTER_API_KEY'
     secrets:
       gateway-key: ${{ secrets.OPENROUTER_API_KEY }}

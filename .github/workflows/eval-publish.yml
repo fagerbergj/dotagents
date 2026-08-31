@@ -59,7 +59,7 @@ jobs:
             # Every suite, not just the ones a diff touched: this path re-measures
             # the tree that actually merged, which is what clears a `measured
             # against` SHA that is not the merge SHA.
-            suites="$(ls -d evals/skills/*/ | xargs -n1 basename | jq -R . | jq -sc .)"
+            suites="$(ls -d skills/*/evals/ | awk -F/ '{print $2}' | jq -R . | jq -sc .)"
           else
             suites="$(.github/scripts/detect-suites.sh "$GITHUB_WORKSPACE" < /tmp/changed-files.txt | jq -c '[.[].name]')"
           fi

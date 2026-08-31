@@ -1,0 +1,228 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: Commit authoring skill effectiveness
+
+# Both arms run the same diffs. Arm labels come from the skill's frontmatter
+# version, so bumping metadata.version in SKILL.md relabels the comparison.
+# skill-next stays out until a SKILL.next.md exists - lib/arms.js falls back to
+# the current skill, so the arm would be a duplicate that costs a third of the run.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  - id: openai:chat:deepseek/deepseek-v4-flash
+    config:
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      max_completion_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      showThinking: false
+      omitDefaults: true
+      # Self-hosted model with no published price. The rate is nominal, so the
+      # `cost` assertion reads as a token-count proxy: what matters is the gap
+      # between the arms, since loading SKILL.md is itself part of the cost.
+      cost: 0.0000002
+
+defaultTest:
+  options:
+    # The llm-swap gateway returns reasoning as message content; strip it so the
+    # graders see the message, not the leak. Anchors on the first fence, which
+    # is where the answer starts; a fenceless answer passes through untouched.
+    transform: file://../../../evals/lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        # Kept deliberately. It was blamed for judge rows dying with the verdict
+        # intact; an isolated A/B cleared it, and llm-rubric is unaffected either way.
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # Conventional Commits v1.0.0 conformance, decided by the reference parser
+    # (the engine commitlint runs on) rather than a pattern: the spec allows any
+    # noun type (§14), is case-insensitive except for BREAKING CHANGE (§15),
+    # and sets no length or punctuation rule. The §6 blank line before the body
+    # is folded in here too.
+    - type: javascript
+      value: file://assertions/commit.cjs:conventionalHeader
+      metric: conventional_header
+    # Whether the body carries the motivation is a semantic question, judged
+    # against the diff. An overlap-with-the-diff heuristic was tried and cut: a
+    # body that correctly explains why necessarily reuses the diff's nouns, so
+    # the proxy scored real commit bodies below fluent narration.
+    #
+    # Three of the original six items are gone, because a metric scores one
+    # property and no two criteria score one behaviour with opposite signs:
+    #
+    # - Item 6 (flag a mixed diff) is `splits_mixed_change`'s job, and that
+    #   metric runs only on the cases where it applies. Here it was a free 0.2
+    #   on every single-change case - credited on 64 of the 90 rows of
+    #   results/commit-authoring@1.0.json, more often to no-skill (34/45) than
+    #   to skill-current (30/45), so it padded the baseline and compressed the
+    #   delta. It was not even judgeable: this rubric never sees the diff, and
+    #   on 5 of the 24 genuinely mixed rows the judge wrote "N/A (single piece
+    #   of work)" and took the 0.2 anyway. One row totalled "6 x 0.2 = 1.2".
+    # - Item 4 (body length matched to the change) graded a second property,
+    #   size, and pointed against items 1 and 2. On the dependency-bump case
+    #   its "no body where the change is a version bump" half PAYS for the
+    #   missing body that items 1 and 2 score NONE for - one behaviour, two
+    #   signs. Its other half is redundant: a body carrying a concrete why is
+    #   "matched to the change" by construction. It was awarded on 22 of the 57
+    #   parsable stored rows where items 1 and 2 were both NONE, i.e. it paid
+    #   0.2 for a body those items had just rejected as content-free. Cut
+    #   rather than re-scoped: the harmful direction, padding a trivial change
+    #   with reasons nobody has, is what `no_invented_claims` below catches,
+    #   and nothing else in the suite rewards length.
+    # - Item 5 was an unbounded subtraction sitting inside another metric's
+    #   score; it is now its own metric.
+    - type: llm-rubric
+      value: |
+        The developer said this about the change:
+        "{{context}}"
+
+        Judge the commit message as delivered. Do not reward or penalise how it was
+        built, which features it used, or whether it followed any particular authoring
+        convention. Do not reward or penalise Conventional Commits formatting itself -
+        the type, the scope, the `!`, the colon spacing - which a parser checks
+        separately.
+
+        Two things are graded elsewhere and must not move this score. Length: a short
+        message carrying the reason and a long one carrying it score the same, and
+        brevity is never a deduction. Truth: take the message's factual claims at face
+        value here - whether the diff and the developer's note support them is a
+        separate question with its own score. Judge only whether the reason is present
+        and concrete.
+
+        Answer each of the three below with a quote from the message, or NONE. Answer all
+        three before scoring.
+
+        1. Something the diff does not already show: what prompted the change, the constraint
+           that forced it, the incident behind it, the option rejected, or what breaks without
+           it. Restating the diff in any wording is NONE.
+        2. The specifics - the system, rule, number, error, or person involved - named
+           concretely enough that a reader could repeat the reason back. Hedged, unnamed, or
+           degree-only phrasing is NONE: "a certain class of agent", "improves clarity", "to
+           fix an issue". If the body would still read true pasted under a completely
+           different diff, answer NONE.
+        3. A first line that describes what this change does specifically, such that a reader
+           could tell it from a generic or wrong one only by checking it against the diff.
+
+        Score from 0 to 1, never above 1: 0.4 for item 1, 0.3 for item 2, 0.3 for item 3.
+        Item 1 carries the most because it is the property being measured. Award nothing
+        for an item you could not quote for. State the arithmetic.
+      threshold: 0.7
+      metric: why_quality
+    # Split out of why_quality, where it was an open-ended subtraction from a
+    # total earned by unrelated items: two inventions took 0.4 off, and one
+    # stored row records "Score: 0.2 for item 6, minus 0.4 for two inventions,
+    # floored at 0" - a message scored 0.00 whose only credit was an item that
+    # was N/A. Fabrication is its own property and gets its own number.
+    #
+    # Yes/no, like fix-bug's `no_invented_file_refs`: a message either made
+    # something up or it did not, and a fraction over "how many" would rank a
+    # message that invented one cause above one that invented two while both
+    # are unusable. This is the only metric here that judges whether a claim is
+    # TRUE; why_quality judges whether a reason is present and concrete, so a
+    # fabricated-but-concrete why scores well there and 0 here - two different
+    # questions about one sentence, not two signs on one property.
+    #
+    # Unlike why_quality this one is given the diff. A rubric only sees what is
+    # interpolated into it (evals/AGENTS.md), so "the diff does not support it"
+    # was inert where this criterion used to sit, and the judge guessed.
+    #
+    # Two things it must not fine, both measured on
+    # results/commit-authoring@1.0.json, where this metric read -0.21:
+    #
+    # - An unfilled placeholder ticket ref. `SKILL.md` prescribes a `Refs
+    #   #<issue>` footer, so the skill arm emits one and the judge quoted
+    #   `#<issue>`, `Refs #<TBD>`, `Refs #<ticket-number>` back as "an invented
+    #   reference to an issue number that does not exist" - 9 skill-arm zeros
+    #   against 0 in the baseline, i.e. the arm was fined for its own template
+    #   slot. A slot asserts nothing. pr-authoring's `restraint` already carries
+    #   this exemption and, like it, this one stops at a CONCRETE number.
+    # - Recommending a split. `splits_mixed_change` pays +0.47 for exactly that,
+    #   and this metric took it off again on ~4 skill rows - one reason reads
+    #   "this is a recommendation about how to commit it, which is explicitly
+    #   excluded from consideration" and scores 0 anyway, because the judge went
+    #   on to fine a sentence the recommendation is MADE of. So the exemption
+    #   now names the parts, not just the act.
+    - type: llm-rubric
+      value: |
+        The developer said this about the change:
+        "{{context}}"
+
+        The diff the message describes:
+        {{diff}}
+
+        Judge the commit message as delivered. Do not reward or penalise how it was
+        built, how long it is, whether it explains the change well, or its Conventional
+        Commits formatting - all of that is scored separately. The single question here
+        is whether the message asserts anything that is not there.
+
+        List every cause, actor, number, identifier, issue or ticket reference, version,
+        date, or consequence the message states that neither the diff nor the developer's
+        note supports. Then score.
+
+        Not an invention, and must not be listed: anything the diff shows or the note
+        says, however differently worded; a plain description of what the diff does; a
+        judgement about the change ("this is a breaking change", "the old behaviour was
+        wrong") that follows from the diff.
+
+        Two exemptions, both narrow, both about the message as a template rather than
+        as a claim about the code.
+
+        First, an UNFILLED placeholder slot asserts nothing and is not a reference:
+        `Refs #<issue>`, `#TBD`, `#NNN`, `#???`, `Co-authored-by: [Your Name]`. It is a
+        slot for a value the author fills in against the tracker, so it belongs on no
+        list however obviously the diff carries no ticket number. A CONCRETE value in
+        that slot is judged normally - `Refs #4471` where neither the diff nor the note
+        names 4471 is an invention and goes on the list. This exemption is this suite's
+        own house position, matching pr-authoring's `restraint`; no published convention
+        speaks to an unfilled one.
+
+        Second, a recommendation about HOW TO COMMIT the change is not a claim about the
+        code, and neither is anything the recommendation is made of: saying the tree
+        holds unrelated work, proposing a boundary between commits, writing out the
+        subject and body of each proposed commit, and the standing reasons for splitting
+        (a reviewable diff, a bisect that lands on one change, an independent revert,
+        each commit building on its own). Read a proposed commit's own body for
+        inventions the same way you read a single message's - a fabricated cause inside
+        it still counts - but never list the proposal, its boundary, or its rationale.
+        Splitting a mixed diff is a behaviour this suite pays for elsewhere; it cannot
+        also be fined here.
+
+        A message that asserts nothing beyond the diff at all lists nothing and scores 1.
+
+        Score from 0 to 1, never above 1: 1 if your list is empty, 0 if it is not.
+        There is no partial credit - a message that invented one cause and one that
+        invented three are both unusable for the same reason. State the list, or
+        say it is empty.
+      threshold: 1
+      metric: no_invented_claims
+    # Loading a SKILL.md costs tokens and wall time; that overhead is part of
+    # what is being measured. Needs `--no-cache` to mean anything.
+    #
+    # Unnamed: a run-shape guard, not a scored metric. As `latency_overhead` it
+    # read 1.00/1.00 on all 162 rows of results/commit-authoring@1.0.json and
+    # had no way to say anything else - a commit message at 120s is a message
+    # the completion cap cut off, which `why_quality` and `conventional_header`
+    # already fine. The timing survives: report.js prints `latency (s avg)` and
+    # rollup.js records `latency_s` straight off latencyMs.
+    - type: latency
+      threshold: 120000
+
+tests:
+  - file://tests/*.yaml

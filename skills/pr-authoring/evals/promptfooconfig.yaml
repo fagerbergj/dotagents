@@ -1,0 +1,118 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: PR authoring skill effectiveness
+
+# The arms are JavaScript prompt functions and need no templating; a real diff
+# can contain `{{` (Go composite literals, Jinja/Go templates a PR itself
+# touches) which parses as a nunjucks interpolation and kills the case in both
+# arms silently - the exact failure pr-authoring hit before fixtures.js existed.
+# Graders are exempt from this flag (promptfoo checks `!isGrader`), so rubric
+# prompts still render {{output}}, {{rubric}}, and the case's own vars - see the
+# coverage and restraint anchors in tests/cases.yaml, which both need
+# {{author_description}}.
+env:
+  PROMPTFOO_DISABLE_TEMPLATING: "1"
+
+# Two arms over the same tasks. Arm labels come from the skill's frontmatter
+# version, so bumping metadata.version in SKILL.md relabels the comparison.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # Custom provider, not `openai:chat:*`: same OpenAI-compatible call, plus
+  # `read_source` over the PR's own tree (repoDir, goes to BOTH arms - the code
+  # under review is the subject matter, not a skill affordance) and
+  # `load_resource` over the skill's own directory (skillDir, skill arm only,
+  # so it can follow SKILL.md's instructions to read its bundled files -
+  # notably the repo's own `.github/pull_request_template.md` first and
+  # `assets/default-pr-template.md` as fallback, both file reads neither arm
+  # could make without a tool).
+  - id: file://../../../evals/lib/skill-tools.js
+    label: deepseek-v4-flash+resources
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      # Writing a PR description means reading the surrounding code the diff
+      # touches, same as reviewing it, so this is a ceiling on a runaway loop,
+      # not a rationing of the reading the skill exists to prompt. Matches
+      # review-code's budget - the failure mode (a model asking for one file
+      # per round, every round resending everything already read) is identical.
+      maxToolCalls: 40
+      maxResourceBytes: 65536
+
+defaultTest:
+  options:
+    # The llm-swap gateway returns reasoning as message content; strip it so the
+    # graders see the PR, not the leak. There is no fence to anchor on here, so
+    # this drops a closed reasoning block, a leading "Here is ..." preamble, and
+    # an outer code fence wrapped around the whole answer.
+    transform: file://../../../evals/lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        # Kept deliberately. It was blamed for a run of llm-rubric extraction
+        # failures and an isolated A/B cleared it; the real cause is unidentified
+        # and gets re-checked on the next run. Not json_schema - that makes
+        # promptfoo pre-parse the reply into an object.
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # 1. Every name in the description exists in the change, or in the tree the
+    #    change lands in - both arms can read that tree, so a file they read is
+    #    not invented. Needs code: it cross-references identifiers in the body
+    #    against the diff and that tree. Named for what it can see - invented
+    #    NAMES. A fabricated causal claim carrying no identifier is outside it,
+    #    and so is a false claim about a file that does exist; both are left to
+    #    `restraint`, which fines them without this one paying for them. This
+    #    suite's strongest grader, computed against input rather than judged.
+    #
+    #    Not a ceiling metric, despite reading 0.97/0.97 in the published table.
+    #    Identical arm MEANS are not sd=0: on results/pr-authoring@1.0.2.json it
+    #    fires on 2 of 60 rows, one in each arm (no-skill idx7 "mount/mount.md",
+    #    skill-current idx23 "1/8th"), so its within-arm sd is 0.183. Same for
+    #    `proportionality` in tests/cases.yaml - 3 of 60 rows below 1.00, all in
+    #    the skill arm. Read the row distribution before cutting either as
+    #    unmoving; the means coincide, the rows do not.
+    - type: javascript
+      value: file://assertions/pr.cjs:noFabricatedIdentifiers
+      metric: no_invented_identifiers
+
+    # 2. proportionality (javascript, per-case maxWords) and coverage/restraint
+    #    (llm-rubric, per-case ground truth) live in tests/cases.yaml, not here -
+    #    every one of them needs data specific to the fixture (a size-scaled
+    #    word ceiling, the withheld author_description) that this file has no
+    #    access to.
+
+    # 3. What the skill costs to carry, and what reading the tree costs on top
+    #    of that. 300s, not the 180s the pre-fixture suite used: every case now
+    #    hands both arms a real repository tree over `read_source`, which is
+    #    the same overhead review-code's suite budgets 300s for.
+    #
+    #    Unnamed, so it guards without being graded. As `latency_ceiling` it
+    #    reported 1.00/1.00 on all 60 rows of results/pr-authoring@1.0.2.json -
+    #    a column that cannot move, taking a fifth of a five-metric table. The
+    #    guard itself is worth keeping: it costs no call, and the day it does
+    #    trip it will trip on a truncated row that `coverage` and `restraint`
+    #    are already failing, which is exactly the double charge fix-bug paid
+    #    for naming its latency metric.
+    - type: latency
+      threshold: 300000
+
+tests:
+  - file://tests/*.yaml

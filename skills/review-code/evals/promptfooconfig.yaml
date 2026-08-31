@@ -1,0 +1,110 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: review-code skill effectiveness
+
+# A real Go diff contains nunjucks. `[]RawNode{{ID: "n1", ...}}` in the #1013
+# fixture parsed as an interpolation and killed both arms of that case with
+# "expected variable end" - the same failure a Go table-driven test caused in
+# pr-authoring. lib/check-case-vars.py did not catch it because it scans case
+# vars, and here the diff arrives from a fixture instead.
+#
+# Safe to take, but not for the reason first written here: tests/cases.yaml does
+# interpolate case vars, in the two anchored rubricPrompts that carry
+# {{expected}} and {{verdict}}. That works only because graders are exempt -
+# promptfoo checks !isGrader - so the grading prompt still renders while the
+# model prompt, built in JavaScript, never goes through nunjucks at all. An
+# assertion *value* interpolating a case var would still arrive as a literal.
+env:
+  PROMPTFOO_DISABLE_TEMPLATING: "1"
+
+# Arms over real pull requests. Labels come from the skill's frontmatter version,
+# so bumping metadata.version in SKILL.md relabels the comparison.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  # Custom provider: the same OpenAI-compatible call, plus tools over two roots.
+  # `read_source` serves the repository at the commit the PR was opened against
+  # and goes to BOTH arms - the code under review is the subject matter, and
+  # gating it on the skill would make the delta measure file access. Only
+  # `load_resource`, over the skill's own directory, is skill-only.
+  - id: file://../../../evals/lib/skill-tools.js
+    label: deepseek-v4-flash+resources
+    config:
+      model: deepseek/deepseek-v4-flash
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      # Reviewing a change means opening the files around it, so these are
+      # ceilings on a runaway loop, not a rationing of the reading the skill
+      # exists to require. maxToolCalls was 12 and the skill arm blew through it
+      # on the first real PR - the model asks for one file per round, so a dozen
+      # files is a dozen rounds, and the row died while the baseline reviewed the
+      # hunks alone and scored. Bytes are the real limiter; rounds only catch a
+      # loop that never converges.
+      #
+      # Cost is superlinear, not linear: every round resends every file already
+      # read, so 31 files over 22 rounds cost 1.02M tokens on one row against the
+      # baseline's 3.4k. Halving the byte budget halves the context that gets
+      # resent and quarters the total. It is set where a reviewer can still read
+      # a dozen real Go files, because capping the reading caps precisely what
+      # this skill claims to add - a tighter budget would buy a cheaper run by
+      # measuring less of the thing under test.
+      maxToolCalls: 40
+      # 64 KB is still eight to ten real Go files - a substantial read, not a
+      # token-shaped one. It was 192 KB, where one row cost 1.02M tokens against
+      # the baseline's 3.4k, because every round resends every file already read.
+      # Noise, not read depth, is what this suite is short of: nine cases at a
+      # shallower read separate the arms where three at a deep one could not, so
+      # the budget buys n instead of depth.
+      maxResourceBytes: 65536
+
+defaultTest:
+  options:
+    # llm-rubric everywhere, never g-eval: g-eval extracts with /{.+}/, which
+    # cannot cross newlines, so a pretty-printed verdict is discarded and the row
+    # records 0.00 where the judge wrote full marks.
+    #
+    # No rubricPrompt at THIS level - promptfoo's schema rejects anything but a
+    # string / string list / {role,content} list under defaultTest.options, and
+    # the two rubrics that need case vars (`finds_the_defect`,
+    # `no_false_blocker`) carry their own on the assertion instead. Each restates
+    # the system half of DEFAULT_GRADING_PROMPT; without it the judge answers in
+    # prose and the row dies as "Could not extract JSON". The other two rubrics
+    # (`reasons_beyond_diff`, `severity_discipline`) interpolate no case var, so
+    # they take promptfoo's default prompt untouched, which cannot drift from it.
+    transform: file://../../../evals/lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # Reading the surrounding code costs round-trips, and that overhead is part
+    # of what the arms are compared on. No `cost` assertion: this gateway
+    # declares no per-token price, so it would read zero and pass trivially.
+    #
+    # Unnamed, so it guards the run shape without being graded as quality.
+    # Named it scored 1.00/1.00 on all 96 rows of results/review-code@1.2.json,
+    # a column that cannot move; and when it does move it will move on a row the
+    # completion cap truncated, which `finds_the_defect` and `severity_discipline`
+    # already fine. report.js prints `latency (s avg)` either way.
+    - type: latency
+      threshold: 300000
+
+tests:
+  - file://tests/*.yaml

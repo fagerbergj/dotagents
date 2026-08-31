@@ -25,9 +25,20 @@ subject="$here/${subject_tpl//\{suite\}/$suite}"
 subject="$(cd "$(dirname "$subject")" && pwd)/$(basename "$subject")"
 export EVAL_SUBJECT_PATH="$subject"
 
-# Where the suites live, relative to this script. Separate from the subject: a
-# repo can keep suites anywhere without moving the files under test.
-suites_dir="$here/${EVAL_SUITES_DIR:-skills}"
+# Where the suite lives, relative to this script. `{suite}` expands to the
+# suite name; the default matches this repo's suite-beside-skill layout
+# (skills/<name>/evals/). A value with NO `{suite}` is the legacy layout - a
+# flat directory of suites under evals/, e.g. EVAL_SUITES_DIR=skills for
+# evals/skills/<name>/. Two-step assignment for the same `}` trap as above.
+suites_tpl="${EVAL_SUITES_DIR:-}"
+[ -n "$suites_tpl" ] || suites_tpl='../skills/{suite}/evals'
+case "$suites_tpl" in
+  *'{suite}'*) suite_dir="$here/${suites_tpl//\{suite\}/$suite}" ;;
+  *) suite_dir="$here/$suites_tpl/$suite" ;;
+esac
+[ -d "$suite_dir" ] || { echo "run.sh: suite dir not found: $suite_dir" >&2; exit 2; }
+# Shared npm deps reach suites through evals/lib/npm.cjs, which anchors
+# resolution in evals/node_modules - no NODE_PATH, which ESM imports ignore.
 
 # Frontmatter version where there is one; otherwise the file's own blob hash, so
 # a subject without frontmatter still gets a stable per-content label instead of
@@ -63,7 +74,7 @@ for arg in "$@"; do
 done
 set -- "${args[@]+"${args[@]}"}"
 
-cd "$suites_dir/$suite"
+cd "$suite_dir"
 # Three arms only when there is a second skill version to compare against.
 # SKILL_CURRENT names the shipped copy; the checkout is then the new one, and the
 # third prompt is appended to a throwaway config so the ten committed ones stay
@@ -81,7 +92,7 @@ if 'skill-next' not in labels:
     c['prompts'].append({'id': 'file://prompts/arms.js:skillNext', 'label': 'skill-next'})
 yaml.safe_dump(c, open(sys.argv[1], 'w'), sort_keys=False, width=10**6)
 PYCFG
-  trap 'rm -f "$suites_dir/$suite/.promptfooconfig.3arm.yaml"' EXIT
+  trap 'rm -f "$suite_dir/.promptfooconfig.3arm.yaml"' EXIT
 fi
 node assertions/*.test.cjs
 # The load_resource provider is shared harness code, so its self-check runs for
@@ -90,7 +101,7 @@ node "$here/lib/skill-tools.test.cjs"
 # The sandbox behind run_bash is security-relevant, so its self-check attempts
 # every escape for real - which costs ~20 containers and a minute. Only a suite
 # that actually hands the model a shell pays for it.
-if grep -rqs workspaceDir "$suites_dir/$suite"; then
+if grep -rqs workspaceDir "$suite_dir"; then
   node "$here/lib/sandbox.test.cjs"
 fi
 # Fixture materialisation has its own offline check - a local repo stands in for
