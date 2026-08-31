@@ -1,0 +1,16 @@
+{
+  "//": "Shared llm-swap catalog: llm-swap.ts (pi) and install.mjs (opencode, codex) read this. llama-swap's /v1/models reports ids only, so context sizes live here - values from home-server/llm/llm-swap.yaml's -c flags; default is conservative.",
+  "baseUrl": "http://jason-server:11436/v1",
+  "defaultContext": 32768,
+  "maxTokens": 16384,
+  "models": {
+    "qwen3-coder-next": { "context": 262144 },
+    "qwen3.6-35b": { "context": 262144 },
+    "gpt-oss-120b": { "context": 131072, "reasoning": true },
+    "qwen3.6-27b": { "context": 131072 },
+    "gemma4-26b-a4b": { "context": 131072 },
+    "gemma4-12b": { "context": 16384 },
+    "qwen3-vl-32b": { "vision": true },
+    "qwen3-omni-30b": { "vision": true }
+  }
+}

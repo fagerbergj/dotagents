@@ -28,9 +28,10 @@ link "$AGENTS_DIR/AGENTS.md" "$HOME/.claude/AGENTS.md"
 
 # pi (skills arrive via the dotagents plugin, not a symlink - see README)
 link "$AGENTS_DIR/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
-# pi custom-provider extension (personal, not part of the plugin surface - see .pi/)
-link "$AGENTS_DIR/.pi/extensions/llm-swap.ts" "$HOME/.pi/agent/extensions/llm-swap.ts"
-# pi-lsp server declarations (bins installed by install-lsp-servers.sh)
+# llm-swap moved to the llm-swap package (install-pi-packages.sh); drop the old link
+if [ -L "$HOME/.pi/agent/extensions/llm-swap.ts" ]; then rm "$HOME/.pi/agent/extensions/llm-swap.ts"; fi
+# pi-lsp server declarations stay a symlink: pi-lsp reads only ~/.pi/agent/lsp.json
+# (or project .pi/lsp.json), a pi package cannot ship it. Bins: install-lsp-servers.sh.
 link "$AGENTS_DIR/.pi/lsp.json" "$HOME/.pi/agent/lsp.json"
 
 # codex

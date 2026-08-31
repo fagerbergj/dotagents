@@ -1,0 +1,8 @@
+{
+  "name": "llm-swap",
+  "version": "0.1.0",
+  "description": "Personal llm-swap provider for pi, opencode, and codex. Not part of the dotagents plugin surface.",
+  "pi": {
+    "extensions": ["./llm-swap.ts"]
+  }
+}

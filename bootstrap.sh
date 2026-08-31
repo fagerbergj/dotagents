@@ -10,4 +10,7 @@ AGENTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 "$AGENTS_DIR/install-as-plugin.sh" claude
 "$AGENTS_DIR/install-plugins.sh"
 "$AGENTS_DIR/install-pi-packages.sh"
+# llm-swap for opencode + codex: providers are config there, not plugins -
+# merge into their configs (self-gates on which CLIs exist)
+node "$AGENTS_DIR/llm-swap/install.mjs" || echo "warn: llm-swap config merge failed" >&2
 "$AGENTS_DIR/install-lsp-servers.sh"

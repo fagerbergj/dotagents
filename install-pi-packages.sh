@@ -31,3 +31,7 @@ jq --slurpfile want "$CONFIG" \
   "$SETTINGS" > "$tmp"
 mv "$tmp" "$SETTINGS"
 echo "Pi: packages merged into $SETTINGS"
+
+# Personal llm-swap provider: its own local pi package (machine config, not
+# part of the published dotagents surface). Path install, so no registry.
+pi install "$SCRIPT_DIR/llm-swap" || echo "warn: llm-swap install failed" >&2
