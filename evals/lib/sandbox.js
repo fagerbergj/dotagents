@@ -44,8 +44,15 @@ function containerArgs(c, seconds) {
     '--network=none',
     // Read-only root, writable tmpfs workspace. mode=1777 so the unprivileged
     // user can write it; nothing survives the container.
+    //
+    // uid/gid are not decoration. populate() streams `tar -c .`, whose first
+    // entry is the top directory itself, and GNU tar then restores that entry's
+    // mode and mtime onto /workspace. Owned by root that is EPERM for uid 1000,
+    // tar exits 2, and Sandbox.start throws "could not populate /workspace" -
+    // every row, on any image with GNU tar. busybox tar does not try, which is
+    // why alpine (the default, and all sandbox.test.cjs uses) never showed it.
     '--read-only',
-    '--tmpfs', `/workspace:rw,exec,size=${c.workspaceMB}m,mode=1777`,
+    '--tmpfs', `/workspace:rw,exec,size=${c.workspaceMB}m,mode=1777,uid=1000,gid=1000`,
     '--tmpfs', `/tmp:rw,exec,size=${c.tmpMB}m,mode=1777`,
     '--user', '1000:1000',
     '--cap-drop=ALL',
