@@ -1,0 +1,15 @@
+name: apc
+on:
+  push:
+    paths: [plugin.json, mcp.json, "skills/**", apc.mjs, ".claude-plugin/**", .mcp.json, package.json]
+  pull_request:
+    paths: [plugin.json, mcp.json, "skills/**", apc.mjs, ".claude-plugin/**", .mcp.json, package.json]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      # Fails when a generated manifest drifts from plugin.json/mcp.json/skills
+      - run: node apc.mjs --check

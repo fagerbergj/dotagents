@@ -1,7 +1,7 @@
 {
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "$schema": "https://agent-plugins.org/schemas/1.1.0/plugin.schema.json",
   "name": "dotagents",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Writing-style ruleset (AGENTS.md) and general-purpose agent skills for Claude Code, opencode, pi, and codex.",
   "author": {
     "name": "Jason Fagerberg",
@@ -16,5 +16,58 @@
     "claude-code",
     "opencode",
     "pi"
-  ]
+  ],
+  "extensions": {
+    "com.anthropic.claude-code": {
+      "description": "General-purpose agent skills: commit/PR authoring, feature development, bug fixing, code review, markdown/mermaid formatting, agent-card and skill authoring, git repo research.",
+      "keywords": [
+        "skills",
+        "code-review",
+        "commit-authoring",
+        "pr-authoring"
+      ],
+      "marketplace": {
+        "description": "General-purpose agent skills for Claude Code.",
+        "category": "productivity"
+      },
+      "plugins": {
+        "dotagents-documentation": {
+          "description": "Document authoring skills: ADRs, RFCs, RFDs, AGENTS.md, agent cards, agent skills, markdown formatting, mermaid diagrams.",
+          "skills": [
+            "adr-authoring",
+            "rfc-authoring",
+            "rfd-authoring",
+            "agents-md-authoring",
+            "agent-card-authoring",
+            "agent-skill-authoring",
+            "format-markdown",
+            "mermaid-authoring"
+          ]
+        },
+        "dotagents-coding": {
+          "description": "Coding workflow skills: feature development, bug fixing, code review, git repo research, REST API design, code comments.",
+          "skills": [
+            "develop-feature",
+            "fix-bug",
+            "research-git-repos",
+            "rest-api-authoring",
+            "comment-authoring",
+            "review-code"
+          ]
+        },
+        "dotagents-contributing": {
+          "description": "Contribution skills: commit authoring, pull requests, issues.",
+          "skills": [
+            "commit-authoring",
+            "pr-authoring",
+            "issue-authoring"
+          ]
+        }
+      }
+    },
+    "dev.pi.coding-agent": {
+      "description": "General-purpose agent skills, packaged as a pi package."
+    },
+    "ai.opencode": {}
+  }
 }

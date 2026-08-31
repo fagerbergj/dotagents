@@ -8,10 +8,48 @@
   },
   "plugins": [
     {
-      "name": "dotagents",
-      "description": "Commit/PR authoring, feature development, bug fixing, code review, markdown/mermaid formatting, agent-card and skill authoring, git repo research skills.",
+      "name": "dotagents-documentation",
+      "version": "0.3.0",
+      "description": "Document authoring skills: ADRs, RFCs, RFDs, AGENTS.md, agent cards, agent skills, markdown formatting, mermaid diagrams.",
       "source": "./",
-      "category": "productivity"
+      "category": "productivity",
+      "skills": [
+        "./skills/adr-authoring",
+        "./skills/rfc-authoring",
+        "./skills/rfd-authoring",
+        "./skills/agents-md-authoring",
+        "./skills/agent-card-authoring",
+        "./skills/agent-skill-authoring",
+        "./skills/format-markdown",
+        "./skills/mermaid-authoring"
+      ]
+    },
+    {
+      "name": "dotagents-coding",
+      "version": "0.3.0",
+      "description": "Coding workflow skills: feature development, bug fixing, code review, git repo research, REST API design, code comments.",
+      "source": "./",
+      "category": "productivity",
+      "skills": [
+        "./skills/develop-feature",
+        "./skills/fix-bug",
+        "./skills/research-git-repos",
+        "./skills/rest-api-authoring",
+        "./skills/comment-authoring",
+        "./skills/review-code"
+      ]
+    },
+    {
+      "name": "dotagents-contributing",
+      "version": "0.3.0",
+      "description": "Contribution skills: commit authoring, pull requests, issues.",
+      "source": "./",
+      "category": "productivity",
+      "skills": [
+        "./skills/commit-authoring",
+        "./skills/pr-authoring",
+        "./skills/issue-authoring"
+      ]
     }
   ]
 }
