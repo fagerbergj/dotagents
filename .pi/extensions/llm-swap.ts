@@ -48,7 +48,9 @@ export default async function (pi: ExtensionAPI) {
     models: models
       .filter((m) => m.id !== "qwen3-embed") // embedding-only, can't chat
       .map((m) => {
-        const known = MODELS[m.id];
+        // Peer-hosted ids come back "<peerId>/<model>" (llama-swap peer routing); the table is keyed bare.
+        const bareId = m.id.includes("/") ? m.id.slice(m.id.indexOf("/") + 1) : m.id;
+        const known = MODELS[bareId];
         return {
           id: m.id,
           // A swapped-in model falls back to guesses. Say so in the picker rather than
