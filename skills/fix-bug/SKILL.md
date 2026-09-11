@@ -10,7 +10,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
-  version: "1.0.1"
+  version: "1.0.2"
 ---
 
 # Fix a bug: theory → failing test → green
@@ -42,6 +42,7 @@ Now - and only now - change the code. Make the failing test go green with the sm
 
 - Then run the **broader suite** (`go test ./...`, the frontend tests) to prove you fixed the bug without breaking anything else. A green new test plus a red old one is not a fix.
 - Keep the reproducing test - it's now a regression guard. A future change that reintroduces the bug fails loudly.
+- Before you commit, run the `slop-detection` checks over your diff. A fix patched into the function that already held the most branches is the standard way a fix erodes a codebase.
 
 ## Why this order
 

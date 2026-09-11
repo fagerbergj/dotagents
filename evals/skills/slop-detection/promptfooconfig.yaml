@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: Slop detection skill effectiveness
+
+# Both arms see the same file and the same ask. Arm labels come from the skill's
+# frontmatter version, so bumping metadata.version in SKILL.md relabels the
+# comparison. skill-next stays out until a SKILL.next.md exists - lib/arms.js
+# falls back to the current skill, so the arm would be a duplicate costing a
+# third of the run.
+prompts:
+  - id: file://prompts/arms.js:noSkill
+    label: no-skill
+  - id: file://prompts/arms.js:skillCurrent
+    label: skill-current
+
+providers:
+  - id: openai:chat:deepseek/deepseek-v4-flash
+    config:
+      apiBaseUrl: https://openrouter.ai/api/v1
+      max_tokens: 8192
+      max_completion_tokens: 8192
+      passthrough:
+        reasoning:
+          enabled: false
+      apiKeyEnvar: OPENROUTER_API_KEY
+      showThinking: false
+      omitDefaults: true
+      cost: 0.0000002
+
+defaultTest:
+  options:
+    # The gateway returns reasoning as message content; strip it so the graders
+    # see the answer. Anchors on the first fence; a fenceless answer passes
+    # through untouched.
+    transform: file://../../lib/strip-reasoning.js:stripReasoning
+    provider:
+      id: openai:chat:deepseek/deepseek-v4-flash
+      config:
+        response_format:
+          type: json_object
+        apiBaseUrl: https://openrouter.ai/api/v1
+        max_tokens: 8192
+        max_completion_tokens: 8192
+        passthrough:
+          reasoning:
+            enabled: false
+        apiKeyEnvar: OPENROUTER_API_KEY
+        showThinking: false
+        omitDefaults: true
+  assert:
+    # A run-shape guard, not a scored metric: a rewritten file at 120s is a file
+    # the completion cap cut off, which the graders in tests/cases.yaml already
+    # fine. report.js prints the timing regardless.
+    - type: latency
+      threshold: 120000
+
+# Every scored assertion is per case. The three defect cases and the two
+# controls score opposite properties, and a metric that ran on both would pay
+# an arm for one behaviour and fine it for the other on the same run.
+tests:
+  - file://tests/*.yaml
