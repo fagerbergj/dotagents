@@ -24,9 +24,10 @@ assert.ok(s.cloneRatio(source('cli.py')).ratio > 0.7, JSON.stringify(s.cloneRati
 assert.equal(s.cloneRatio(source('dialcodes.py')).ratio, 0);
 assert.equal(s.cloneRatio(source('lexer.py')).ratio, 0);
 
-// Nested helpers carry their own branches, not their parent's.
-const nested = 'def outer(x):\n    def inner(y):\n        if y:\n            return 1 and 2\n        return 0\n    return inner(x)\n';
+// A nested helper is its own function, so its assignments are not its parent's.
+const nested = 'def outer(x):\n    def inner(y):\n        seen = x\n        return seen\n    return inner(x)\n';
 assert.deepEqual(s.pythonFunctions(nested).map((f) => f.name).sort(), ['inner', 'outer']);
+assert.equal(s.singleUseVars(nested), 1);
 
 assert.equal(s.answerCode('```sh\npytest -q\n```\n'), '');
 assert.ok(s.answerCode(fenced('def f():\n    return 1\n')).includes('def f'));
