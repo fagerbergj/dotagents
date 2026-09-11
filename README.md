@@ -14,6 +14,8 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 | `agents-md-authoring` | [agents-md-authoring.md](results/agents-md-authoring.md) | `ff444c2` :warning: | `7ccf646` | reused |
 | `comment-authoring` | [comment-authoring.md](results/comment-authoring.md) | `ff444c2` :warning: | `7ccf646` | reused |
 | `commit-authoring` | [commit-authoring.md](results/commit-authoring.md) | `ff444c2` :warning: | `7ccf646` | reused |
+| `develop-feature` | [develop-feature.md](results/develop-feature.md) | `31a066b` :warning: | `c886ce1` | reused |
+| `fix-bug` | [fix-bug.md](results/fix-bug.md) | `31a066b` :warning: | `c886ce1` | reused |
 | `format-markdown` | [format-markdown.md](results/format-markdown.md) | `96ebc20` :warning: | `2f5e7f7` | reused |
 | `issue-authoring` | [issue-authoring.md](results/issue-authoring.md) | `ff444c2` :warning: | `7ccf646` | reused |
 | `mermaid-authoring` | [mermaid-authoring.md](results/mermaid-authoring.md) | `172b59b` | `172b59b` | rerun |
@@ -22,6 +24,7 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 | `review-code` | [review-code.md](results/review-code.md) | `ff444c2` :warning: | `7ccf646` | reused |
 | `rfc-authoring` | [rfc-authoring.md](results/rfc-authoring.md) | `ff444c2` :warning: | `7ccf646` | reused |
 | `rfd-authoring` | [rfd-authoring.md](results/rfd-authoring.md) | `ff444c2` :warning: | `7ccf646` | reused |
+| `slop-detection` | [slop-detection.md](results/slop-detection.md) | `31a066b` :warning: | `c886ce1` | reused |
 
 :warning: means the numbers were produced against a different commit than the one that merged.
 That is the `reused` path: the PR's artifact was built from the PR head, and if `main` moved

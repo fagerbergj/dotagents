@@ -1,0 +1,13 @@
+model,mode,metric,value,n,sd
+ci:deepseek-v4-flash,no-skill,clone_ratio_reduced,1,1,
+ci:deepseek-v4-flash,skill@1.0,clone_ratio_reduced,1,1,
+ci:deepseek-v4-flash,no-skill,names_defect,0,3,
+ci:deepseek-v4-flash,skill@1.0,names_defect,0.6667,3,
+ci:deepseek-v4-flash,no-skill,restraint,0.5,2,
+ci:deepseek-v4-flash,skill@1.0,restraint,0.5,2,
+ci:deepseek-v4-flash,no-skill,single_use_vars_reduced,0,1,
+ci:deepseek-v4-flash,skill@1.0,single_use_vars_reduced,1,1,
+ci:deepseek-v4-flash,no-skill,tokens p50,988,0,
+ci:deepseek-v4-flash,skill@1.0,tokens p50,8046,0,
+ci:deepseek-v4-flash,no-skill,tokens total,4023,0,
+ci:deepseek-v4-flash,skill@1.0,tokens total,40744,0,
