@@ -105,12 +105,16 @@ function dataRegionLines(lines) {
 // Comments and whitespace only: blanking string literals the way the single-use
 // counter does collapses a table of data into one repeated line. Literals kept
 // means exact copies, which is what a clone line is.
-function cloneRatio(src) {
-  const all = src
+function normalisedLines(src) {
+  return src
     .replace(/#[^\n]*/g, '')
     .split('\n')
     .map((l) => l.trim().replace(/\s+/g, ' '))
     .filter(Boolean);
+}
+
+function cloneRatio(src) {
+  const all = normalisedLines(src);
   const region = dataRegionLines(all);
   const lines = all.filter((_, i) => !region.has(i));
   const runs = new Map();
@@ -143,13 +147,17 @@ function singleUseVars(src) {
 }
 
 // Only fenced blocks that declare a function, so a shell transcript beside the
-// rewrite is not measured as code.
+// rewrite is not measured as code - and one copy of each distinct block, last
+// one wins. A model that emits its rewrite twice is repeating a fence, not
+// proposing duplicated code, and concatenating both made the clone metric
+// measure the presentation instead of the answer.
 function answerCode(output) {
-  const blocks = [];
+  const byContent = new Map();
   for (const { body } of fenceBlocks(String(output), /^/)) {
-    if (/^\s*(?:async\s+)?def\s+\w+\s*\(/m.test(body)) blocks.push(body);
+    if (!/^\s*(?:async\s+)?def\s+\w+\s*\(/m.test(body)) continue;
+    byContent.set(normalisedLines(body).join('\n'), body);
   }
-  return blocks.join('\n');
+  return [...byContent.values()].join('\n');
 }
 
 // The floor every metric sits behind: an answer with no code, or one that kept
@@ -199,6 +207,7 @@ module.exports = {
   singleUseVarsReduced,
   cloneRatio,
   dataRegionLines,
+  normalisedLines,
   singleUseVars,
   pythonFunctions,
   answerCode,

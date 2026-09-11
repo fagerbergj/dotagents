@@ -147,6 +147,23 @@ def main(argv):
 `;
 assert.equal(s.cloneRatioReduced(fenced(deduped), ctx('cli.py')).pass, true);
 
+// The real skill-arm answer from the first CI run emitted the same rewrite in
+// two fences with prose after. Concatenating them made every line a clone of
+// its own copy, so the metric measured the presentation, not the code.
+const twice = `Here is the rewrite.\n\n\`\`\`python\n${deduped}\`\`\`\n\nAnd the whole file:\n\n\`\`\`python\n${deduped}\`\`\`\n\nThat removes the repeated parsing.`;
+assert.equal(s.cloneRatio(`${deduped}\n${deduped}`).ratio, 1);
+assert.equal(s.answerCode(twice), deduped.trimEnd());
+assert.deepEqual(s.cloneRatio(s.answerCode(twice)), s.cloneRatio(deduped));
+assert.equal(s.cloneRatioReduced(twice, ctx('cli.py')).pass, true);
+
+// Deduplicating fences must not hand a deleted answer a way past the floor:
+// one copy of nothing is still nothing.
+const gutted = 'def main(argv):\n    return COMMANDS[argv[1]](*argv[2:])\n';
+assert.match(
+  s.cloneRatioReduced(`\`\`\`python\n${gutted}\`\`\`\n\n\`\`\`python\n${gutted}\`\`\`\n`, ctx('cli.py')).reason,
+  /too little survives/,
+);
+
 // An echo of the input must not pass, and prose must fail saying why.
 assert.equal(s.cloneRatioReduced(fenced(source('cli.py')), ctx('cli.py')).pass, false);
 const prose = s.cloneRatioReduced('You should pull the flag parsing out.', ctx('cli.py'));
@@ -155,7 +172,7 @@ assert.match(prose.reason, /No function definition/);
 
 // Deleting the dispatcher takes the clone ratio to 0, a win on the delta alone,
 // so the identifier floor is what has to reject it.
-const deleted = s.cloneRatioReduced(fenced('def main(argv):\n    return COMMANDS[argv[1]](*argv[2:])\n'), ctx('cli.py'));
+const deleted = s.cloneRatioReduced(fenced(gutted), ctx('cli.py'));
 assert.equal(deleted.pass, false);
 assert.match(deleted.reason, /too little survives/);
 assert.equal(s.retention(source('cli.py'), deduped) > s.MIN_RETENTION, true);

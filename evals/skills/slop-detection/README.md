@@ -29,7 +29,12 @@ The skill arm gets `load_resource` over the skill's own directory, so its two "r
 
 Cost: 805 -> 8,149 tokens and 5.7s -> 24.5s per row. The harness printed "too few cases to make a reliable determination" against every metric, which is the honest summary of all five rows above.
 
-**The clone row was the grader's fault, not the skill's.** The skill arm did what the skill asks - collapsed the four repeated argument-parsing blocks into one uniform table plus one parse loop - and the grader read `clone ratio 0.77 (66/86) -> 1.00 (82/82)`, because normalised rows of a uniform table are exact copies of each other. It scored the correct fix as total duplication, on the same "repetition that is data" shape `SKILL.md`'s own exclusion list names. `cloneRatio` now drops any run of six or more contiguous lines that carry data and no control flow, so a table costs nothing and four repeated procedural blocks still count 66 of 86. Both directions are pinned.
+**The clone row was the grader's fault, not the skill's - twice over.** The skill arm did what the skill asks, collapsing the four repeated argument-parsing blocks into one parse plus a command table, and the grader read `clone ratio 0.77 (66/86) -> 1.00 (82/82)`. Two separate causes, both now fixed and pinned:
+
+- **Presentation, not code.** The saved answer emitted the same 48-line rewrite in *two* fenced blocks with prose after. `answerCode` concatenated every fence, so the grader saw 96 lines of which 86 were clones - it was measuring the model repeating its own code fence. It now keeps one copy of each distinct block, last one wins, which every grader that reads answer code benefits from. This was the actual cause of the failing row.
+- **Uniform tables.** Normalised rows of a literal table are exact copies of each other, so a table would have counted as duplication in its own right - the "repetition that is data" shape `SKILL.md`'s own exclusion list names. `cloneRatio` now drops any run of six or more contiguous lines that carry data and no control flow, so a table costs nothing and four repeated procedural blocks still count 66 of 86.
+
+Graded locally against the saved rows with both fixes, the no-skill row reads `0.77 (66/86) -> 0.00 (0/39)` and passes.
 
 `max_cc_reduced` is gone: 1.00 in both arms, because a baseline asked to rewrite a CC-22 function splits it as readily as an instructed one does. The complexity counter went with it. A case with headroom on that signal would have to bring the counter back.
 
