@@ -97,7 +97,7 @@ async function check(name, fn) {
 
   await withMutation(
     SANDBOX_SRC,
-    "    '--tmpfs', `/workspace:rw,exec,size=${c.workspaceMB}m,mode=1777`,\n",
+    "    '--tmpfs', `/workspace:rw,exec,size=${c.workspaceMB}m,mode=1777,uid=1000,gid=1000`,\n",
     "    '-v', `${c.workspaceDir}:/workspace`,\n",
     async (mod) => check('MUTANT (workspace bind-mounted instead of copied) is caught', async () => {
       await inSandbox(mod, {}, async (box) => { await box.run('echo destroyed > wrecked.txt'); });
@@ -151,6 +151,28 @@ async function check(name, fn) {
       assert.ok(r.stdout.includes('sk-canary'), 'the mutation did not leak, so the credential test proves nothing');
     }),
   );
+
+  // --- capabilities -------------------------------------------------------------
+  // The one guard with no escape to attempt: uid 1000 holds no capabilities to
+  // begin with, so nothing --cap-drop=ALL forbids is reachable to try. What it
+  // buys is the BOUNDING set - the ceiling on what any path to privilege could
+  // hand back - and that is directly observable, so assert on it rather than
+  // leave the flag unanchored.
+  const capBnd = 'grep CapBnd /proc/self/status';
+  await check('the capability bounding set is empty', async () => {
+    await inSandbox({ Sandbox }, {}, async (box) => {
+      const r = await box.run(capBnd);
+      assert.equal(r.exitCode, 0, r.stderr);
+      assert.match(r.stdout, /CapBnd:\s+0+\s*$/m, `capabilities survive in the bounding set:\n${r.stdout}`);
+    });
+  });
+
+  await withMutation(SANDBOX_SRC, "    '--cap-drop=ALL',\n", "    '--cap-drop=NET_RAW',\n",
+    async (mod) => check('MUTANT (--cap-drop=ALL weakened to NET_RAW) is caught', async () => {
+      const r = await inSandbox(mod, {}, (box) => box.run(capBnd));
+      assert.doesNotMatch(r.stdout, /CapBnd:\s+0+\s*$/m,
+        `the mutant's bounding set is empty too, so the capability test proves nothing:\n${r.stdout}`);
+    }));
 
   // --- the host filesystem ----------------------------------------------------
   const QUACK = '/home/jason/workspace/quack-fix';
