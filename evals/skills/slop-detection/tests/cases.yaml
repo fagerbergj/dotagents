@@ -1,0 +1,402 @@
+# Five cases, each built from an example the source material uses to illustrate
+# one signal. Three carry a defect the skill claims to find; two carry a shape
+# that looks like one and is not, so an arm that pattern-matches loses there.
+#
+# PROVENANCE. Reconstructed from Listings 1-3 of the SlopCodeBench paper
+# (arxiv.org/html/2603.24755v1), which the article
+# (earendil.com/posts/measuring-code-sloppiness) draws its two metrics from. Each
+# listing is elided in the paper, so these are reconstructions to the shape the
+# listing and its caption describe, not reproductions, and at smaller scale:
+# Listing 1 is 117 lines against 53 here, Listing 3 nine command branches against
+# four. Same language track, same defect as the figure.
+#
+#   1 concentration  find_matches_in_file(), Listing 1: every rule kind's
+#                    branching lands in one function rather than in a callable
+#                    per kind. The caption's point is that mass collapses into
+#                    one function while the agent adds others around it.
+#   2 verbosity      the search loop, Listing 2: identity comprehension,
+#                    empty-checks around an iteration that handles empty fine,
+#                    single-use variables. The caption names all three, and the
+#                    last is the one with a countable answer.
+#   3 duplication    main(), Listing 3: command branches repeating one
+#                    argument-parsing scaffold inside a dispatcher.
+#   4 control        a scanner whose branch count IS the token grammar.
+#   5 control        a hand-maintained lookup table: repetition that is data,
+#                    and a shape SKILL.md's own exclusion list does not name -
+#                    a control drawn from that list could be won by reciting it.
+#
+# WHICH OF THESE ARE HYPOTHESES: all five. None has run. A case earns its place
+# by separating the arms or by failing an answer that deserved to fail, and
+# until the first CI run says which did, every row here is a guess. Read the
+# per-metric namedScores per arm before adding a sixth.
+#
+# The ask on cases 1-3 requests the rewritten file. That is the case's
+# environment, identical in both arms, and it decides nothing the skill decides:
+# what to cut, and whether anything needs cutting at all, is left open. Without
+# it the three measured graders have no code to measure and report a dead 0 on
+# every row. The controls ask for neither, so an arm that proposes a rewrite
+# there is choosing to.
+#
+# No context names the defect in its own file: the case leaves the finding
+# undecided, or it measures the prompt.
+
+- vars:
+    filename: matcher.py
+    context: >
+      matcher.py as it stands after I added the AST pattern rules this week. it passes
+      the suite and I keep putting off going back into it.
+    ask: Send me back the version you would rather maintain, in a fenced block.
+    source: |
+      def find_matches_in_file(text, path, language, rules):
+          matches = []
+          for rule in rules:
+              kind = rule.get("kind")
+              spans = None
+              if kind == "exact":
+                  needle = rule["pattern"]
+                  if not rule.get("case_sensitive"):
+                      needle = needle.lower()
+                      hay = text.lower()
+                  else:
+                      hay = text
+                  spans = []
+                  start = 0
+                  while True:
+                      idx = hay.find(needle, start)
+                      if idx < 0:
+                          break
+                      spans.append((idx, idx + len(needle)))
+                      start = idx + 1
+              elif kind == "regex":
+                  flags = 0
+                  if not rule.get("case_sensitive"):
+                      flags = flags | re.IGNORECASE
+                  if rule.get("multiline"):
+                      flags = flags | re.MULTILINE
+                  try:
+                      compiled = re.compile(rule["pattern"], flags)
+                  except re.error:
+                      compiled = None
+                  if compiled is not None:
+                      spans = [(m.start(), m.end()) for m in compiled.finditer(text)]
+              elif kind == "pattern":
+                  root = parse_tree(text, language)
+                  if root is not None:
+                      spans = []
+                      for node in iter_tree_nodes(root):
+                          if not node_matches_selector(rule["selector"], node):
+                              continue
+                          if rule.get("capture") and node.capture != rule["capture"]:
+                              continue
+                          spans.append((node.start, node.end))
+              else:
+                  spans = None
+              if spans is not None:
+                  for start, end in spans:
+                      line = text.count("\n", 0, start) + 1
+                      if rule.get("max_line") and line > rule["max_line"]:
+                          continue
+                      matches.append(
+                          dict(path=path, line=line, rule=rule["id"], span=(start, end))
+                      )
+          return matches
+  assert:
+    # Cyclomatic complexity was measured here too and is gone: the first run put
+    # it at 1.00 in both arms, because a baseline asked to rewrite a CC-22
+    # function splits it as readily as an instructed one does.
+    - &names_defect
+      type: llm-rubric
+      value: |
+        The file the colleague sent:
+
+        {{source}}
+
+        Judge the answer as delivered. Ignore its length, its tone, whether it followed any
+        particular method, and whether its rewritten code would compile - none of that is
+        graded here. Do not reward an answer for mentioning a metric, a formula, or a number;
+        an answer that names the right problem in plain words scores the same as one that
+        measures it.
+
+        The single question: does the answer identify a specific structural problem in THIS
+        file, pointing at the construct that carries it, and say concretely what replaces it?
+
+        Answer these two with a quote from the answer, or NONE, before scoring.
+
+        1. The construct it names - the function, the branch, the block, the variable -
+           identified specifically enough that you could find it in the file above. A
+           problem attributed to the file as a whole, or phrased so it would read true of
+           any Python file, is NONE.
+        2. What it proposes instead, concretely enough to act on without asking a follow-up
+           question. "Simplify this", "consider refactoring", "make it more readable" and
+           "split it up" with no boundary named are all NONE.
+
+        A rewritten file on its own answers neither item. Code that silently restructures
+        the file tells the reader nothing about what was wrong or why this replaces it, so
+        quote prose or quote nothing.
+
+        Score from 0 to 1, never above 1: 0.5 for item 1, 0.5 for item 2. Award nothing for an
+        item you could not quote for. State the arithmetic.
+      threshold: 0.5
+      metric: names_defect
+
+- vars:
+    filename: search.py
+    context: >
+      the walk that drives the matcher.
+    ask: Clean it up and send it back in a fenced block.
+    source: |
+      def search_tree(source_files, all_compiled_rules, encoding):
+          match_list = []
+          for posix_path, full_path, language in source_files:
+              applicable_rules = [
+                  r for r in all_compiled_rules
+                  if language in r["languages"]
+              ]
+              if not applicable_rules:
+                  continue
+              with open(full_path, "r", encoding=encoding) as f:
+                  content = f.read()
+              matches = find_matches_in_content(
+                  content, applicable_rules, language
+              )
+              if not matches:
+                  continue
+              match_list.extend(matches)
+          all_matches = deduplicate_matches(match_list)
+          return all_matches
+  assert:
+    # Counted, not measured in lines. A line-count metric here paid for golfing
+    # the loop into one dense comprehension, which is the failure the skill names
+    # in its own words; single-use variables are what Listing 2's caption is
+    # actually about and cannot be won by compressing.
+    - type: javascript
+      value: file://assertions/slop.cjs:singleUseVarsReduced
+      metric: single_use_vars_reduced
+    - *names_defect
+
+- vars:
+    filename: cli.py
+    context: >
+      the CLI grew a command per checkpoint. this is main() now, minus four more branches.
+    ask: Send me back the version you would rather maintain, in a fenced block.
+    source: |
+      def main(argv):
+          args = list(argv[1:])
+          if not args:
+              print("usage: circuit <command> [options]")
+              return 2
+          command = args[0]
+          rest = args[1:]
+          if command == "check":
+              path = None
+              fmt = "text"
+              seed = None
+              i = 0
+              while i < len(rest):
+                  if rest[i] == "--format":
+                      fmt = rest[i + 1]
+                      i += 2
+                  elif rest[i] == "--seed":
+                      seed = int(rest[i + 1])
+                      i += 2
+                  elif path is None:
+                      path = rest[i]
+                      i += 1
+                  else:
+                      print("unexpected argument: " + rest[i])
+                      return 2
+              return cmd_check(path, fmt, seed)
+          elif command == "stats":
+              path = None
+              fmt = "text"
+              seed = None
+              i = 0
+              while i < len(rest):
+                  if rest[i] == "--format":
+                      fmt = rest[i + 1]
+                      i += 2
+                  elif rest[i] == "--seed":
+                      seed = int(rest[i + 1])
+                      i += 2
+                  elif path is None:
+                      path = rest[i]
+                      i += 1
+                  else:
+                      print("unexpected argument: " + rest[i])
+                      return 2
+              return cmd_stats(path, fmt, seed)
+          elif command == "lint":
+              path = None
+              fmt = "text"
+              seed = None
+              i = 0
+              while i < len(rest):
+                  if rest[i] == "--format":
+                      fmt = rest[i + 1]
+                      i += 2
+                  elif rest[i] == "--seed":
+                      seed = int(rest[i + 1])
+                      i += 2
+                  elif path is None:
+                      path = rest[i]
+                      i += 1
+                  else:
+                      print("unexpected argument: " + rest[i])
+                      return 2
+              return cmd_lint(path, fmt, seed)
+          elif command == "dot":
+              path = None
+              fmt = "dot"
+              seed = None
+              i = 0
+              while i < len(rest):
+                  if rest[i] == "--format":
+                      fmt = rest[i + 1]
+                      i += 2
+                  elif rest[i] == "--seed":
+                      seed = int(rest[i + 1])
+                      i += 2
+                  elif path is None:
+                      path = rest[i]
+                      i += 1
+                  else:
+                      print("unexpected argument: " + rest[i])
+                      return 2
+              return cmd_dot(path, fmt, seed)
+          else:
+              print("unknown command: " + command)
+              return 2
+  assert:
+    - type: javascript
+      value: file://assertions/slop.cjs:cloneRatioReduced
+      metric: clone_ratio_reduced
+    - *names_defect
+
+# Controls. Both inputs carry the shape the three cases above are about - one
+# function holding every branch, and a block that repeats - and in both the
+# shape is correct, so an answer that demands the usual fix is wrong. Neither
+# ask requests a rewrite, so proposing one is the answer's own choice.
+- vars:
+    filename: lexer.py
+    context: >
+      the scanner for the expression language.
+    ask: Quick look before I commit this?
+    source: |
+      def next_token(src, pos):
+          while pos < len(src) and src[pos] in " \t\r\n":
+              pos += 1
+          if pos >= len(src):
+              return Token("eof", "", pos), pos
+          c = src[pos]
+          if c.isdigit():
+              end = pos
+              while end < len(src) and (src[end].isdigit() or src[end] == "."):
+                  end += 1
+              return Token("number", src[pos:end], pos), end
+          if c.isalpha() or c == "_":
+              end = pos
+              while end < len(src) and (src[end].isalnum() or src[end] == "_"):
+                  end += 1
+              word = src[pos:end]
+              kind = "keyword" if word in KEYWORDS else "ident"
+              return Token(kind, word, pos), end
+          if c == '"':
+              end = pos + 1
+              while end < len(src) and src[end] != '"':
+                  if src[end] == "\\":
+                      end += 1
+                  end += 1
+              return Token("string", src[pos + 1:end], pos), end + 1
+          two = src[pos:pos + 2]
+          if two in ("==", "!=", "<=", ">=", "&&", "||"):
+              return Token("op", two, pos), pos + 2
+          if c in "+-*/%<>=(),":
+              return Token("op", c, pos), pos + 1
+          raise LexError("unexpected character " + repr(c) + " at " + str(pos))
+  assert:
+    - &restraint
+      type: llm-rubric
+      value: |
+        The file the colleague sent:
+
+        {{source}}
+
+        Judge the answer as delivered. Ignore its length, its tone, and whether anything
+        else it says is right - only the one question below is scored.
+
+        Does the answer ask for this code's structure to be changed? That is: does it say
+        the function should be split, broken up, decomposed, flattened, or restructured;
+        that the repetition should be removed, extracted, parameterised, factored out, or
+        generated; or that the file is too complex, too long, or too repetitive as it
+        stands? A rewritten version that does any of those things counts, whether or not
+        the prose asks for it.
+
+        Quote the sentence or the rewritten construct that does it, or say NONE.
+
+        Not that, and not to be quoted: naming a bug; a correctness or edge-case concern;
+        a question about behaviour; a rename; a comment or docstring; a point raised and
+        then explicitly set aside as fine here; an observation that the structure suits
+        the problem.
+
+        Score from 0 to 1, never above 1, and only ever 0 or 1: 1 if you quoted NONE,
+        0 if you quoted anything. There is no partial credit.
+      threshold: 1
+      metric: restraint
+
+- vars:
+    filename: dialcodes.py
+    context: >
+      the dial code table. the values came off the ITU list.
+    ask: Quick look before I commit this?
+    source: |
+      DIAL_CODES = {
+          "ad": "+376",
+          "ae": "+971",
+          "af": "+93",
+          "ag": "+1268",
+          "al": "+355",
+          "am": "+374",
+          "ao": "+244",
+          "ar": "+54",
+          "at": "+43",
+          "au": "+61",
+          "az": "+994",
+          "ba": "+387",
+          "bd": "+880",
+          "be": "+32",
+          "bg": "+359",
+          "bh": "+973",
+          "br": "+55",
+          "ca": "+1",
+          "ch": "+41",
+          "cl": "+56",
+          "cn": "+86",
+          "co": "+57",
+          "cz": "+420",
+          "de": "+49",
+          "dk": "+45",
+          "eg": "+20",
+          "es": "+34",
+          "fi": "+358",
+          "fr": "+33",
+          "gb": "+44",
+          "gr": "+30",
+          "hr": "+385",
+          "hu": "+36",
+          "id": "+62",
+          "ie": "+353",
+          "il": "+972",
+          "in": "+91",
+          "is": "+354",
+          "it": "+39",
+          "jp": "+81",
+      }
+
+
+      def dial_code(country, default=None):
+          code = DIAL_CODES.get(country.strip().lower())
+          if code is None:
+              return default
+          return code
+  assert:
+    - *restraint

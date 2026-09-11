@@ -12,7 +12,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
-  version: "1.2"
+  version: "1.2.1"
 ---
 
 # Review code: understand → verify → categorize → structure
@@ -53,7 +53,7 @@ Weight your scrutiny by impact on code health, top-down:
 2. **Correctness** - Think like a user. Edge cases (empty input, network failure), concurrency (races, deadlocks), unhandled error paths.
 3. **Security** - Injection, missing authorization, secret handling, unsafe input. A real security flaw is blocking.
 4. **Tests** - see step 5; tests get their own pass.
-5. **Complexity & readability** - If you must trace every variable to understand a function, it's too complex; ask the author to simplify.
+5. **Complexity & readability** - If you must trace every variable to understand a function, it's too complex; ask the author to simplify. Load `slop-detection` to put numbers on duplication and per-function complexity here; its findings are `suggestion:`-grade, never blocking.
 6. **Naming, docs, style (lowest)** - Usually nits. On style, the project's linter/style guide is the authority; if there's none, accept the author's preference - don't invent one.
 
 ### 5. Check the tests as rigorously as the code

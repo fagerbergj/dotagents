@@ -11,7 +11,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
-  version: "1.0.1"
+  version: "1.0.2"
 ---
 
 # Develop a feature: understand → reuse → tests-as-gate → green
@@ -63,6 +63,8 @@ Write the tests that define "the feature works" before the implementation. They 
 ### 6. Implement until the tests pass
 
 Write the minimum code that turns the tests green. No speculative abstraction, no scaffolding "for later" - the tests define the scope; build to them and stop. Then run the broader suite to confirm nothing else broke.
+
+Before you commit, run the `slop-detection` checks over your own diff: duplication and complexity land in a new feature more easily than anywhere else, and the numbers say which part to cut.
 
 ## Why this order
 
