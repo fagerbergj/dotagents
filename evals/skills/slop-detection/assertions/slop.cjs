@@ -2,11 +2,32 @@
 // change and a bias in the counter cancels. Python only: counting decision-point
 // keywords stands in for a CC parser, which is why slop.test.cjs pins it against
 // the suite's real cases instead of trusting it.
+//
+// Every number here falls when code is deleted, so each metric runs behind
+// `measurable`: without it an answer that drops the work outscores one that
+// leaves it alone, which is the opposite of what the suite is for.
 
 const { fenceBlocks } = require('../../../lib/strip-reasoning.js');
 
+// `case` is anchored: it is not reserved in Python and appears as a plain
+// identifier. `try:` is no decision point on its own - `except` is, and counts.
 const DECISION = /\b(?:if|elif|for|while|except|and|or|assert)\b/g;
+const CASE_ARM = /^[ \t]*case\s+[^\n=]*:/gm;
 const CLONE_RUN = 6;
+
+// Keywords are retained by any Python at all, so counting them would credit a
+// deleted answer for the words it could not avoid.
+const KEYWORDS = new Set(
+  ('and as assert async await break class continue def del elif else except finally for from global if ' +
+    'import in is lambda none nonlocal not or pass raise return true false try while with yield match case self')
+    .split(' '),
+);
+
+// Below this share of the input's identifiers, too little of the work survives
+// for a before/after comparison to mean anything. Set where a real rewrite of
+// this suite's own cases clears it and a deletion or a cut-off file does not;
+// both directions are pinned in slop.test.cjs.
+const MIN_RETENTION = 0.5;
 
 function result(pass, reason) {
   return { pass, score: pass ? 1 : 0, reason };
@@ -42,7 +63,8 @@ function pythonFunctions(src) {
 }
 
 function complexity(fn) {
-  return 1 + (fn.lines.join('\n').match(DECISION) || []).length;
+  const body = fn.lines.join('\n');
+  return 1 + (body.match(DECISION) || []).length + (body.match(CASE_ARM) || []).length;
 }
 
 function maxComplexity(src) {
@@ -50,14 +72,37 @@ function maxComplexity(src) {
   return fns.reduce((worst, fn) => (fn.cc > worst.cc ? fn : worst), { name: '(none)', cc: 0 });
 }
 
-// Normalising drops comments and whitespace, so a reindented copy still reads
-// as a copy.
+function definesFunction(src, name) {
+  return new RegExp(`^\\s*(?:async\\s+)?def\\s+${name}\\s*\\(`, 'm').test(src);
+}
+
+function identifiers(src) {
+  const found = new Set();
+  for (const m of stripNoise(src).matchAll(/[A-Za-z_]\w*/g)) {
+    const word = m[0].toLowerCase();
+    if (!KEYWORDS.has(word)) found.add(word);
+  }
+  return found;
+}
+
+function retention(source, code) {
+  const before = identifiers(source);
+  if (!before.size) return 1;
+  const after = identifiers(code);
+  let kept = 0;
+  for (const name of before) if (after.has(name)) kept++;
+  return kept / before.size;
+}
+
+// Comments and whitespace only: blanking string literals the way the complexity
+// counter does collapses a table of data into one repeated line. Literals kept
+// means exact copies, which is what a clone line is.
 function cloneRatio(src) {
-  const lines = stripNoise(src)
+  const lines = src
+    .replace(/#[^\n]*/g, '')
     .split('\n')
     .map((l) => l.trim().replace(/\s+/g, ' '))
     .filter(Boolean);
-  if (lines.length < CLONE_RUN * 2) return { ratio: 0, cloned: 0, total: lines.length };
   const runs = new Map();
   for (let i = 0; i + CLONE_RUN <= lines.length; i++) {
     const key = lines.slice(i, i + CLONE_RUN).join('\n');
@@ -68,7 +113,23 @@ function cloneRatio(src) {
     if (starts.length < 2) continue;
     for (const start of starts) for (let k = 0; k < CLONE_RUN; k++) cloned.add(start + k);
   }
-  return { ratio: cloned.size / lines.length, cloned: cloned.size, total: lines.length };
+  return { ratio: lines.length ? cloned.size / lines.length : 0, cloned: cloned.size, total: lines.length };
+}
+
+// A name assigned once and read exactly once after: the padding Listing 2 is
+// about. Counted per function, so a module constant is not one.
+function singleUseVars(src) {
+  let count = 0;
+  for (const fn of pythonFunctions(src)) {
+    const body = fn.lines.join('\n');
+    const assigned = [...body.matchAll(/^\s*([A-Za-z_]\w*)\s*=(?!=)/gm)].map((m) => m[1]);
+    for (const name of new Set(assigned)) {
+      const assigns = assigned.filter((a) => a === name).length;
+      const uses = (body.match(new RegExp(`\\b${name}\\b`, 'g')) || []).length;
+      if (assigns === 1 && uses === 2) count++;
+    }
+  }
+  return count;
 }
 
 // Only fenced blocks that declare a function, so a shell transcript beside the
@@ -81,38 +142,68 @@ function answerCode(output) {
   return blocks.join('\n');
 }
 
+// The floor every metric sits behind: an answer with no code, or one that kept
+// too little of the file, is scored on that rather than on a delta it won by
+// shrinking the denominator.
+function measurable(output, context) {
+  const code = answerCode(output);
+  if (!code.trim()) return { fail: result(false, 'No function definition in the answer to measure.') };
+  const kept = retention(context.vars.source, code);
+  if (kept < MIN_RETENTION) {
+    return {
+      fail: result(
+        false,
+        `Answer keeps ${(kept * 100).toFixed(0)}% of the file's identifiers - too little survives to compare.`,
+      ),
+    };
+  }
+  return { code, kept };
+}
+
 function maxCcReduced(output, context) {
-  const code = answerCode(output);
-  if (!code.trim()) return result(false, 'No function definition in the answer to measure.');
+  const { code, fail } = measurable(output, context);
+  if (fail) return fail;
   const before = maxComplexity(context.vars.source);
+  if (!definesFunction(code, before.name)) {
+    return result(false, `Answer no longer defines ${before.name}, so its CC ${before.cc} has nothing to compare against.`);
+  }
   const after = maxComplexity(code);
-  return result(
-    after.cc < before.cc,
-    `max CC ${before.cc} (${before.name}) -> ${after.cc} (${after.name})`,
-  );
+  return result(after.cc < before.cc, `max CC ${before.cc} (${before.name}) -> ${after.cc} (${after.name})`);
 }
 
-// Scored on the verbosity case only. As a standing target this rewards golfing,
-// which is the same defect in the other direction.
-function codeLinesReduced(output, context) {
-  const code = answerCode(output);
-  if (!code.trim()) return result(false, 'No function definition in the answer to measure.');
-  const count = (src) => stripNoise(src).split('\n').filter((l) => l.trim()).length;
-  const before = count(context.vars.source);
-  const after = count(code);
-  return result(after < before, `code lines ${before} -> ${after}`);
-}
-
+// Both the share and the count have to fall. The share alone is bought by
+// padding the answer with unique lines, which removes no duplication.
 function cloneRatioReduced(output, context) {
-  const code = answerCode(output);
-  if (!code.trim()) return result(false, 'No function definition in the answer to measure.');
+  const { code, fail } = measurable(output, context);
+  if (fail) return fail;
   const before = cloneRatio(context.vars.source);
   const after = cloneRatio(code);
   return result(
-    after.ratio < before.ratio,
+    after.ratio < before.ratio && after.cloned < before.cloned,
     `clone ratio ${before.ratio.toFixed(2)} (${before.cloned}/${before.total} lines) -> ` +
       `${after.ratio.toFixed(2)} (${after.cloned}/${after.total})`,
   );
 }
 
-module.exports = { maxCcReduced, cloneRatioReduced, codeLinesReduced, maxComplexity, cloneRatio, pythonFunctions, answerCode };
+// Counted rather than measured in lines: a line-count target pays for golfing,
+// which is the same defect facing the other way.
+function singleUseVarsReduced(output, context) {
+  const { code, fail } = measurable(output, context);
+  if (fail) return fail;
+  const before = singleUseVars(context.vars.source);
+  const after = singleUseVars(code);
+  return result(after < before, `single-use variables ${before} -> ${after}`);
+}
+
+module.exports = {
+  maxCcReduced,
+  cloneRatioReduced,
+  singleUseVarsReduced,
+  maxComplexity,
+  cloneRatio,
+  singleUseVars,
+  pythonFunctions,
+  answerCode,
+  retention,
+  MIN_RETENTION,
+};

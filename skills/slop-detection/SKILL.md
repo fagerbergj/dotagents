@@ -23,9 +23,9 @@ So measure it instead of arguing about it. Four numbers, all computed from the d
 
 ## The four numbers
 
-**1. Lines added.** `git diff --shortstat <base>...HEAD`. There is no threshold; it is the sanity check. A change that added far more lines than the capability it delivers has an explanation, and you should be able to state it in one sentence.
+**1. Lines added.** `git diff --shortstat <base>...HEAD`. There is no threshold, and it is the crudest of the four - it is also the one that predicts best what the next round will cost, ahead of both complexity measures below. A change that added far more lines than the capability it delivers has an explanation, and you should be able to state it in one sentence.
 
-Never optimise for this one. Golfing lines to make the number look good is its own kind of slop, and the measure stops meaning anything the moment it becomes a target.
+Never optimise for it. Golfing lines to make the number look good is its own kind of slop, and the measure stops meaning anything the moment it becomes a target. That tension is the reason it is reported rather than aimed at.
 
 **2. Duplicated-line ratio.** Count added lines that sit inside a run of six or more lines repeating elsewhere in the diff or in the file it lands in, ignoring whitespace and comments; divide by lines added.
 

@@ -44,15 +44,16 @@ Two raw counters move with it and are cheaper to compute: the number of function
 ## What the source study established, and what it did not
 
 - **Established:** agent-written code averages roughly twice the verbosity and erosion of maintained human code, and both climb monotonically as an agent extends its own earlier work, while human repositories plateau.
-- **Established:** the degradation compounds because each round starts without the previous round's reasoning, not because any single round is bad.
-- **Established, and the reason these are numbers rather than prompt text:** a quality-aware prompt lowered starting verbosity by about a third and erosion on 20 of 20 problems, and changed the *rate* of degradation not at all. It also raised cost per round. Instructions move the intercept; only measurement moves the slope.
+- **Established:** the degradation compounds across rounds rather than coming from one bad round. The mechanism the paper argues is that early architectural choices propagate through the workspace each round inherits; the benchmark also withholds the previous round's conversation, but no experiment separates the two.
+- **Established, and the reason these are numbers rather than prompt text:** a quality-aware prompt lowered starting verbosity by about a third on both models tested, and lowered erosion on 20 of 20 problems for GPT 5.4 and 18 of 20 for GPT 5.3 Codex, while changing the *rate* of degradation not at all. It raised cost per round on GPT 5.4; Codex saw no cost increase. Instructions move the intercept; only measurement moves the slope.
 - **Not established:** any link to correctness. Halving erosion and cutting verbosity by a third left every pass-rate measure statistically unchanged (paired Wilcoxon). Across nine threshold and size-term variants, erosion's correlation with the next round's pass rate stays near zero; its correlation with the next round's *cost* is positive. These measure what code costs to keep, not whether it works.
-- **Not established, and specifically warned against:** asking a model to score code quality. Rating on a 1-10 scale was described as close to a random number generator, and pairwise A/B judging flips its preference when the two solutions are renamed. Compute the number; do not ask for an opinion of it.
+- **Warned against by the article rather than the paper:** asking a model to score code quality. It describes 1-10 rating as close to a random number generator and cites work showing pairwise A/B judging flips its preference when the two solutions are renamed. Compute the number; do not ask for an opinion of it.
+- **Established, and awkward for anyone ranking these metrics:** in the threshold sweep, plain LOC is by far the strongest predictor of the next round's cost (0.534), ahead of max CC (0.323) and well ahead of erosion itself (0.127). The concentration measures say more about *where* the cost sits than about how much of it there is.
 - **Named but unmeasured:** coupling between functions, code churn, cohesion. The article lists these as directions it wants to explore. Do not cite them as if they carried numbers.
 
 ## Sources
 
 - Sebastian, *If coding is solved, what now?: Measuring the sloppiness of code*, Earendil, 10 Sep 2026 - <https://earendil.com/posts/measuring-code-sloppiness/>
-- *SlopCodeBench* - <https://arxiv.org/html/2603.24755v1> (definitions in §3.3, the prompt study in §4.3 and Appendix B, the threshold sweep in Appendix G)
+- *SlopCodeBench* - <https://arxiv.org/html/2603.24755v1> (definitions in §2.3, the prompt study in §4.3 and Appendix B, the threshold sweep in Appendix G)
 - Radon complexity bands, for the CC cutoff - <https://radon.readthedocs.io/en/latest/intro.html>
 - ast-grep, the tool the flagged-lines half is built on - <https://ast-grep.github.io/>

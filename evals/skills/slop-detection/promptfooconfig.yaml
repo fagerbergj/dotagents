@@ -13,18 +13,25 @@ prompts:
     label: skill-current
 
 providers:
-  - id: openai:chat:deepseek/deepseek-v4-flash
+  # Custom provider: the same OpenAI-compatible call, plus `load_resource` over
+  # the skill's own directory - and only when the prompt supplies `skillDir`
+  # (see prompts/arms.js), so the baseline sends no `tools` key and is called
+  # exactly as before. Without it the skill's two "read references/..."
+  # instructions are unfollowable and most of the bundle is untested.
+  - id: file://../../lib/skill-tools.js
+    label: deepseek-v4-flash+resources
     config:
+      model: deepseek/deepseek-v4-flash
       apiBaseUrl: https://openrouter.ai/api/v1
       max_tokens: 8192
-      max_completion_tokens: 8192
       passthrough:
         reasoning:
           enabled: false
       apiKeyEnvar: OPENROUTER_API_KEY
-      showThinking: false
-      omitDefaults: true
-      cost: 0.0000002
+      # Two references, 4.6 KB and 3.6 KB. Four rounds covers a wrong guess, the
+      # directory listing that answers it, and both reads.
+      maxToolCalls: 4
+      maxResourceBytes: 12288
 
 defaultTest:
   options:
@@ -47,12 +54,17 @@ defaultTest:
         showThinking: false
         omitDefaults: true
   assert:
-    # A run-shape guard, not a scored metric: a rewritten file at 120s is a file
-    # the completion cap cut off, which the graders in tests/cases.yaml already
-    # fine. report.js prints the timing regardless.
+    # A run-shape guard, not a scored metric. A file cut off by the completion
+    # cap is caught by the identifier floor in assertions/slop.cjs, which fails
+    # it for what did not survive rather than crediting the shorter file; this
+    # only bounds a row that never returns. report.js prints the timing anyway.
     - type: latency
-      threshold: 120000
+      threshold: 180000
 
+# No PROMPTFOO_DISABLE_TEMPLATING: the two rubrics interpolate `{{source}}` into
+# their assertion values, which that flag turns off. It is safe only while no
+# fixture contains `{{` - check-case-vars.py is what enforces that.
+#
 # Every scored assertion is per case. The three defect cases and the two
 # controls score opposite properties, and a metric that ran on both would pay
 # an arm for one behaviour and fine it for the other on the same run.

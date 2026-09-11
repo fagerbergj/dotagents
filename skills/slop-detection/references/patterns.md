@@ -1,6 +1,6 @@
 # Patterns no number catches
 
-The ast-grep half of verbosity is 137 handcrafted rules - taste, encoded. These are the families those rules cover, drawn from the anti-slop prompt the source study used. Each is a smell, not a defect: the exception column is where the pattern is the right call, and a finding raised against it there is wrong.
+The ast-grep half of verbosity is 137 handcrafted rules - taste, encoded - and they are not published. These ten families come from the anti-slop prompt the same study wrote, which is the closest published statement of what it treats as condensable; they are not a listing of the rule corpus. Each is a smell, not a defect: the exception column is where the pattern is the right call, and a finding raised against it there is wrong.
 
 | Pattern | What it looks like | Replace with | Not a finding when |
 |---|---|---|---|
