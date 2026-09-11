@@ -101,13 +101,9 @@
                       )
           return matches
   assert:
-    # The signal's own measure, computed the same way over the answer's code and
-    # over the input, so the number scored is the change rather than a threshold
-    # anyone could have picked to favour an arm.
-    - &max_cc
-      type: javascript
-      value: file://assertions/slop.cjs:maxCcReduced
-      metric: max_cc_reduced
+    # Cyclomatic complexity was measured here too and is gone: the first run put
+    # it at 1.00 in both arms, because a baseline asked to rewrite a CC-22
+    # function splits it as readily as an instructed one does.
     - &names_defect
       type: llm-rubric
       value: |
@@ -271,7 +267,6 @@
               print("unknown command: " + command)
               return 2
   assert:
-    - *max_cc
     - type: javascript
       value: file://assertions/slop.cjs:cloneRatioReduced
       metric: clone_ratio_reduced

@@ -1,7 +1,7 @@
 // One function measures the answer and the input, so what is scored is the
-// change and a bias in the counter cancels. Python only: counting decision-point
-// keywords stands in for a CC parser, which is why slop.test.cjs pins it against
-// the suite's real cases instead of trusting it.
+// change and a bias in the counter cancels. Python only, and by regex rather
+// than a parser, which is why slop.test.cjs pins every number against the
+// suite's own cases instead of trusting it.
 //
 // Every number here falls when code is deleted, so each metric runs behind
 // `measurable`: without it an answer that drops the work outscores one that
@@ -9,11 +9,14 @@
 
 const { fenceBlocks } = require('../../../lib/strip-reasoning.js');
 
-// `case` is anchored: it is not reserved in Python and appears as a plain
-// identifier. `try:` is no decision point on its own - `except` is, and counts.
-const DECISION = /\b(?:if|elif|for|while|except|and|or|assert)\b/g;
-const CASE_ARM = /^[ \t]*case\s+[^\n=]*:/gm;
 const CLONE_RUN = 6;
+
+// A data line carries a value and decides nothing. Control flow is what tells a
+// repeated table apart from four repeated procedural blocks, which is the whole
+// distinction `dataRegionLines` rests on.
+const CONTROL = /\b(?:if|elif|else|for|while|try|except|finally|with|return|yield|raise|break|continue|def|class|lambda|match|import|assert|pass)\b/;
+const LITERAL = /["']|\b\d|\b(?:None|True|False)\b/;
+const BRACKETS_ONLY = /^[[\](){},:]+$/;
 
 // Keywords are retained by any Python at all, so counting them would credit a
 // deleted answer for the words it could not avoid.
@@ -62,20 +65,6 @@ function pythonFunctions(src) {
   return out.concat(open.reverse());
 }
 
-function complexity(fn) {
-  const body = fn.lines.join('\n');
-  return 1 + (body.match(DECISION) || []).length + (body.match(CASE_ARM) || []).length;
-}
-
-function maxComplexity(src) {
-  const fns = pythonFunctions(src).map((fn) => ({ name: fn.name, cc: complexity(fn) }));
-  return fns.reduce((worst, fn) => (fn.cc > worst.cc ? fn : worst), { name: '(none)', cc: 0 });
-}
-
-function definesFunction(src, name) {
-  return new RegExp(`^\\s*(?:async\\s+)?def\\s+${name}\\s*\\(`, 'm').test(src);
-}
-
 function identifiers(src) {
   const found = new Set();
   for (const m of stripNoise(src).matchAll(/[A-Za-z_]\w*/g)) {
@@ -94,15 +83,36 @@ function retention(source, code) {
   return kept / before.size;
 }
 
-// Comments and whitespace only: blanking string literals the way the complexity
+// A literal table: data lines, no control flow. Uniform entries are exact
+// copies of each other once normalised, so counting them makes collapsing four
+// repeated blocks into one table read as more duplicated than the blocks it
+// replaced.
+function dataRegionLines(lines) {
+  const isData = lines.map((l) => !CONTROL.test(l) && (LITERAL.test(l) || BRACKETS_ONLY.test(l)));
+  const region = new Set();
+  let run = 0;
+  for (let i = 0; i <= lines.length; i++) {
+    if (i < lines.length && isData[i]) {
+      run++;
+      continue;
+    }
+    if (run >= CLONE_RUN) for (let k = i - run; k < i; k++) region.add(k);
+    run = 0;
+  }
+  return region;
+}
+
+// Comments and whitespace only: blanking string literals the way the single-use
 // counter does collapses a table of data into one repeated line. Literals kept
 // means exact copies, which is what a clone line is.
 function cloneRatio(src) {
-  const lines = src
+  const all = src
     .replace(/#[^\n]*/g, '')
     .split('\n')
     .map((l) => l.trim().replace(/\s+/g, ' '))
     .filter(Boolean);
+  const region = dataRegionLines(all);
+  const lines = all.filter((_, i) => !region.has(i));
   const runs = new Map();
   for (let i = 0; i + CLONE_RUN <= lines.length; i++) {
     const key = lines.slice(i, i + CLONE_RUN).join('\n');
@@ -160,17 +170,6 @@ function measurable(output, context) {
   return { code, kept };
 }
 
-function maxCcReduced(output, context) {
-  const { code, fail } = measurable(output, context);
-  if (fail) return fail;
-  const before = maxComplexity(context.vars.source);
-  if (!definesFunction(code, before.name)) {
-    return result(false, `Answer no longer defines ${before.name}, so its CC ${before.cc} has nothing to compare against.`);
-  }
-  const after = maxComplexity(code);
-  return result(after.cc < before.cc, `max CC ${before.cc} (${before.name}) -> ${after.cc} (${after.name})`);
-}
-
 // Both the share and the count have to fall. The share alone is bought by
 // padding the answer with unique lines, which removes no duplication.
 function cloneRatioReduced(output, context) {
@@ -196,11 +195,10 @@ function singleUseVarsReduced(output, context) {
 }
 
 module.exports = {
-  maxCcReduced,
   cloneRatioReduced,
   singleUseVarsReduced,
-  maxComplexity,
   cloneRatio,
+  dataRegionLines,
   singleUseVars,
   pythonFunctions,
   answerCode,
