@@ -3,7 +3,8 @@ name: review-code
 description: >
   The repeatable process for reviewing a code change: understand the change's
   intent before critiquing, read the diff AND the surrounding code, verify the
-  change's claims and tests rather than trusting them, categorize each finding
+  change's claims and tests rather than trusting them, check that it delivers
+  everything its task set out rather than a correct half, categorize each finding
   by severity, and structure the written review. Drafts the review and leaves
   submitting it to a human, following the target project's stated AI policy on
   disclosure. Load whenever the task is to review a pull request, diff, branch,
@@ -12,7 +13,7 @@ metadata:
   author: fagerbergj
   author_url: https://github.com/fagerbergj
   repository: https://github.com/fagerbergj/dotagents
-  version: "1.2.1"
+  version: "1.3.0"
 ---
 
 # Review code: understand → verify → categorize → structure
@@ -28,6 +29,7 @@ Do not write a single finding until step 2: you cannot judge a change you don't 
 Before looking critically at any line, learn what the change is *for*.
 
 - Read the PR description / linked issue / commit messages. State in one sentence what problem this change claims to solve and how.
+- List what the change set out to deliver: each acceptance item the linked issue names, each thing the description says it does. Step 2 checks every item on that list against the diff.
 - Get the change in front of you - the diff, or the branch's commit log where that is the better view. Take a broad view first - which files were added, deleted, moved - to grasp the intent before the details.
 - If you can't tell what the change is meant to do, that's your first finding (a `question:`), not a licence to guess.
 - **Understand the PR's current state before forming your review.** Read what has already been said - the existing inline comments, the conversation, and any prior submitted reviews - and recall this repo's settled decisions and conventions from whatever memory carries across sessions. Know what ground has already been covered so your review adds to it.
@@ -38,6 +40,9 @@ Before looking critically at any line, learn what the change is *for*.
 "This fixes X", "this improves performance", "the tests cover it" are claims. Check each against the actual diff before you accept it.
 
 - Does the code actually do what the description says? Trace the changed path and confirm the stated behavior is really there.
+- **Check delivery, not only correctness.** For each item on your step 1 list, find where the diff delivers it. Code that is correct as far as it goes can still be half a feature: an item that is absent, and that the change does not defer to a linked follow-up, is a `blocking:` finding under the delivery anchor. Report the list in the review - each item met, unmet, or deferred - so the author and the merger see what you checked.
+- **When the change adds another instance of an existing pattern, a sibling is the spec.** A fourth handler, a new plugin bundle, another migration: open an existing one and compare part for part. A part every sibling carries and the new one lacks is a finding with the sibling's path cited, never a note.
+- **Check what the change produces against what consumes it** - the schema, client, renderer or caller on the other side. A mismatch is a defect whether the producer is code, a prompt, a config file or a doc: "entries written this way render as empty rows" names concrete wrong output.
 - Is the change in the right part of the system, or bolted somewhere convenient? A four-line change can be correct in isolation yet wrong for where it lives.
 - Never assert behavior about code you didn't open. Open the file before claiming what it does - a finding about code you never read is fabrication.
 
@@ -66,9 +71,9 @@ Tests are not self-validating - a human must confirm they check for meaningful f
 
 ### 6. Categorize every finding by severity
 
-Label each finding so the author isn't overwhelmed (Conventional Comments). The line is whether you can point at something objective, not how strongly you feel: a finding supported only by your preference is a `nit:`, however sure you are. `references/severity.md` carries the anchors a `blocking:` finding must name (defect, security, design, scope, tests), the hard rules - style guide is the authority, out-of-scope belongs in its own issue, forward progress beats polish - and worked calls in both directions. Read it whenever a label isn't obvious.
+Label each finding so the author isn't overwhelmed (Conventional Comments). The line is whether you can point at something objective, not how strongly you feel: a finding supported only by your preference is a `nit:`, however sure you are. `references/severity.md` carries the anchors a `blocking:` finding must name (defect, security, design, scope, delivery, tests), the hard rules - style guide is the authority, out-of-scope belongs in its own issue, forward progress beats polish - and worked calls in both directions. Read it whenever a label isn't obvious.
 
-- **`blocking:`** - a definite bug, security hole, or major design flaw; must be fixed before merge.
+- **`blocking:`** - a definite bug, security hole, major design flaw, or a change that does not deliver what it set out to; must be fixed before merge. A finding that names concrete wrong output is `blocking:` however small it looks - labelling it `suggestion:` to keep an approve is the same mistake as blocking on taste.
 - **`suggestion:`** - an improvement; state *why* it's better. Non-blocking unless you give a compelling reason.
 - **`nit:`** - trivial, preference-based; NEVER blocks.
 - **`question:`** - you suspect a problem but aren't sure; asking resolves it faster than demanding a change.
@@ -82,7 +87,7 @@ Don't scatter line-by-line comments. Deliver:
 
 1. **Summary** - a high-level, constructive takeaway that sets the tone and states your verdict (e.g. "Solid approach overall; two correctness issues to resolve before merge").
 2. **Blocking issues** first, then **suggestions**, then **nits** - grouped by severity so the author fixes what matters first. Praise stays in the summary, not in this list.
-3. **Verdict** - **approve is the default.** A change that improves overall code health is approved even when it is not perfect and even with suggestions and nits outstanding; say explicitly that they are non-blocking. Withhold approval only for a finding that names one of the anchors in `references/severity.md`, and say which. Not being able to name one means the finding is not blocking, however sure you are.
+3. **Verdict** - **approve is the default for a change that delivers what it set out to.** The default forgives imperfection, never incompleteness. A change that improves overall code health is approved even when it is not perfect and even with suggestions and nits outstanding; say explicitly that they are non-blocking. Withhold approval only for a finding that names one of the anchors in `references/severity.md`, and say which. Not being able to name one means the finding is not blocking, however sure you are.
 
 Cite findings by `path:line` so the author can jump straight to them. Write the summary and each finding following the shared style ruleset at `~/.agents/AGENTS.md` - concrete, no ceremony, no canned "great work!" filler.
 
