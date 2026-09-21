@@ -162,29 +162,11 @@
     "verdict": "CHANGES_REQUESTED"
   },
   {
-    "name": "caddy-7937",
-    "repo": "caddyserver/caddy",
-    "pr": 7937,
-    "base": "c290397cdac2d04e421b638c88fd2e8f907d9f6d",
-    "reviewed": "27b3f11f55f026a34046cab216cb56eac191593e",
-    "reviewer": "steadytao",
-    "verdict": "CHANGES_REQUESTED"
-  },
-  {
     "name": "rclone-9827",
     "repo": "rclone/rclone",
     "pr": 9827,
     "base": "9dbfd9d8523104785969c9283c1db09b3d044851",
     "reviewed": "87202394fcf60993ad83f965ce7e7044cd1eedc9",
-    "reviewer": "ncw",
-    "verdict": "APPROVED"
-  },
-  {
-    "name": "rclone-9789",
-    "repo": "rclone/rclone",
-    "pr": 9789,
-    "base": "a1f98b49dfa8535467908dce148d106303f9e35a",
-    "reviewed": "828da21b7685a24d272fbb6162daab53da0fa384",
     "reviewer": "ncw",
     "verdict": "APPROVED"
   },
@@ -195,6 +177,33 @@
     "base": "3d7b101c7f4bc3ebdcfc882c063fffd1c16bf196",
     "reviewed": "03abd08b55414fce93ea36152ad20e06f2d13db2",
     "reviewer": "ncw",
+    "verdict": "APPROVED"
+  },
+  {
+    "name": "rclone-9494",
+    "repo": "rclone/rclone",
+    "pr": 9494,
+    "base": "9693b3df09a25dd3a23bd622912478e9b86ede4a",
+    "reviewed": "71cf5058a7510b0aa834e306e14bdb828d6c3f68",
+    "reviewer": "ncw",
+    "verdict": "CHANGES_REQUESTED"
+  },
+  {
+    "name": "rclone-9526",
+    "repo": "rclone/rclone",
+    "pr": 9526,
+    "base": "a0c09f1381ae93e2a9a33c529d170186c61ad058",
+    "reviewed": "e37dfec9b9cd175c8224823aa1192486b6eb4d86",
+    "reviewer": "nielash",
+    "verdict": "CHANGES_REQUESTED"
+  },
+  {
+    "name": "rclone-9912",
+    "repo": "rclone/rclone",
+    "pr": 9912,
+    "base": "812e693fd787d324981d423e9a73c873716c1046",
+    "reviewed": "d25932b0c5cddf28001f11dc33849e9a8f4a71d4",
+    "reviewer": "albertony",
     "verdict": "APPROVED"
   }
 ]
