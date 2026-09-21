@@ -3,7 +3,7 @@
 # not the merged head: later commits fix what the review asked for, so pinning the
 # merged head asks the model to find a defect that is no longer there.
 #
-# 16 cases, 8 the maintainer blocked and 8 they approved, across caddyserver/caddy,
+# 22 cases, 11 the maintainer blocked and 11 they approved, across caddyserver/caddy,
 # cli/cli and rclone/rclone, reviewed by steadytao, babakks and ncw. Spreading the
 # projects and the reviewers is deliberate: an earlier version was one repository
 # and one reviewer, which measured agreement with one person's taste.
@@ -607,6 +607,162 @@
     title: "box: fix truncated files being uploaded successfully when the source ends early"
     verdict: "APPROVED"
     expected: "Thank you, nice fix. I checked the integration tests === RUN TestIntegration/FsMkdir/FsPutShortEOF/Simple fstests.go:2596: Put returned an error (acceptable): expected 10240 bytes in input, but got 5120: unexpected EOF :+1:"
+  assert:
+    - *citations
+    - *no_false_claims
+    - *no_false_blocker
+    - *reasons_beyond_diff
+    - *severity_discipline
+
+# --- 1.3.0: delivery. See the comment on `flags_incomplete_delivery` below. ---
+- description: "caddy#7506 - cmd: Add 'caddy status' command and core Status"
+  vars:
+    fixture: caddy-7506
+    title: "cmd: Add 'caddy status' command and core StatusReporter interface"
+    verdict: "CHANGES_REQUESTED"
+    expected: "Thanks, this is a good start. I would like to see more of the features discussed in the issue next, before this is particularly useful, but excited to see that!"
+    note: "The pull request's own description:\n\n## Assistance Disclosure\r\nI used an LLM (Gemini) as a pair-programming assistant to brainstorm the architecture, design the `StatusReporter` interface, and generate the initial Go code structure. I then compiled, debugged, and manually verified the correctness of the code locally to ensure it meets Caddy's standards.\r\n\r\nResolves Phase 1 of #7453.\r\n\r\nAs discussed in the issue, this PR introduces the core architecture and the CLI command to view the running status of a Caddy instance without duplicating `/debug/pprof` logic, setting the ground for app-specific metrics.\r\n\r\n### What this PR does:\r\n1. **Extensibility:** Introduces the `StatusReporter` interface in the core `caddy` package. Any App or Module can implement this interface to safely expose its internal status snapshot.\r\n2. **Admin API:** Adds the `GET /status` endpoint. It loops through the `ActiveContext()` loaded apps, aggregating basic process data (Uptime, Memory, Goroutines, Version) and dynamically appending any app-specific status if the app implements `StatusReporter`.\r\n3. **CLI:** Adds the `caddy status` command. By default, it outputs a human-readable summary of the JSON payload. The `--json` flag is available for raw output.\r\n\r\n### Future Work (Phase 2):\r\nImplementing the `StatusReporter` interface specifically inside the `http` app to track active requests, latency, and the dot-matrix scoreboard, leveraging existing Prometheus hooks.\r\n\r\n### Demo:\r\n**Standard Output:**\r\n```text\r\nCaddy v2.x.x\r\nStatus: Running\r\nUptime: 14m 32s\r\n\r\nRunning apps: http, tls\r\n\r\nMemory\r\nAllocated: 4 MB\r\nSystem: 19 MB\r\nGoroutines: 18\r\n```\r\n\r\n**JSON Output (`caddy status --json`):**\r\n\r\n```json\r\n{\r\n  \"apps\": {\r\n    \"http\": {\"status\":\"running\"},\r\n    \"tls\": {\"status\":\"running\"}\r\n  },\r\n  \"goroutines\": 18,\r\n  \"memory\": {\r\n    \"allocated_bytes\": 4071992,\r\n    \"system_bytes\": 19749128\r\n  },\r\n  \"uptime_secs\": 872.4,\r\n  \"version\": \"v2.x.x\"\r\n}\n\nIt links issue #7453, \"Consider `caddy status` command\", which reads:\n\n### Issue Details\n\n@francislavoie suggested we have something similar to `apache fullstatus`. This prints, among other things:\n\n- Version\n- Time\n- Uptime\n- Time last started/restarted\n- Load\n- \"Accesses\" (request count)\n- Total traffic\n- Total time spent serving requests\n- CPU usage\n- Average req/sec, transfer/sec, request size, request latency\n- Count of active requests\n- A \"dot-matrix\" style summary of what is happening, like: \"waiting for connection,\" keepalive, reading/writing, DNS lookup, closing connection, etc. (For us, each \"dot\" would be a goroutine I think.)\n- Kind of a log of all active requests (protocol, client, start time, duration, Host header, req size, r/w bytes, etc.)\n\nNot that we have to implement a copycat output, but I think we can get ideas from that ^.\n\nAdditionally, maybe modules should be able to add their own status info.\n\nNow, we already have the `:2019/debug/` endpoints on the local admin interface which outputs a considerable amount of debugging information from the Go runtime already. So we need not duplicate that information. But HTTP/TLS/PKI-related stuff, let's definitely include.\n\nThis would first be implemented as an API endpoint (JSON output format), and then a CLI command can query and nicely format that for human consumption (or just print the raw JSON).\n\n### Assistance Disclosure\n\nAI not used\n\n### If AI was used, describe the extent to which it was used.\n\n_No response_"
+  assert:
+    - *citations
+    - *no_false_claims
+    # New in 1.3.0, and unearned: no run has separated the arms on it yet, so by
+    # evals/AGENTS.md ("Earn the case before adding it") these six rows are
+    # hypotheses until a baseline exists - cut any that sit at the ceiling or the
+    # floor in both arms. It exists because nothing here measured COMPLETENESS.
+    # `finds_the_defect` asks for a defect in the code that was written; a change
+    # can be correct line by line and still be half of what its issue asked for,
+    # which is how an automated review approved a four-agent feature that shipped
+    # without the skills, rubrics and schema contract its three siblings carry.
+    #
+    # The three CHANGES_REQUESTED rows are changes a human maintainer sent back
+    # for what was MISSING, not for what was wrong: caddy#7506 delivers four of
+    # the dozen items its issue lists, rclone#9598 ships a "strict" flag that is
+    # strict for one kind of error, caddy#7937 adds a digest header that is
+    # wrong for range responses and untested on the paths the RFC names. The
+    # three APPROVED rows close an issue in full and carry `no_false_blocker`,
+    # because the failure this change could introduce is the opposite one - a
+    # reviewer taught to hunt for gaps inventing them. Both arms get the task
+    # text in `note`: a reviewer always has the description and the linked issue
+    # in front of them, and withholding it would make the delta measure access.
+    - &flags_incomplete_delivery
+      type: llm-rubric
+      rubricPrompt:
+        - role: system
+          content: |
+            You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}
+
+            Examples:
+
+            <Output>Hello world</Output>
+            <Rubric>Content contains a greeting</Rubric>
+            {"reason": "the content contains the word 'Hello'", "pass": true, "score": 1.0}
+
+            <Output>Avast ye swabs, repel the invaders!</Output>
+            <Rubric>Does not speak like a pirate</Rubric>
+            {"reason": "'avast ye' is a common pirate term", "pass": false, "score": 0.0}
+        - role: user
+          content: |
+            <Task>{{note}}</Task>
+            <MaintainerReview>{{expected}}</MaintainerReview>
+            <MaintainerVerdict>{{verdict}}</MaintainerVerdict>
+            <Output>{{output}}</Output>
+            <Rubric>{{rubric}}</Rubric>
+      value: |
+        <Output> is a review of a real pull request. <Task> is what that pull
+        request set out to do - its own description and the issue it links.
+        <MaintainerReview> is what the project's maintainer wrote about the same
+        change, and <MaintainerVerdict> is CHANGES_REQUESTED: they sent it back
+        because part of what the task needed was not there yet.
+
+        The maintainer is the ground truth for what was missing, not for how a
+        review should read. Do not reward matching their tone, structure or
+        length.
+
+        Answer each with a quote from <Output>, or NONE. A quote must be text
+        that appears inside <Output>.
+
+        1. It says that something this change set out to deliver is missing,
+           unhandled or only partly done - the gap the maintainer named, OR
+           another specific item from <Task> that the change does not deliver.
+           Specific means it names the item: a feature the issue lists, a
+           command or code path the flag does not cover, a response type the
+           header is wrong or untested for. A defect in code that WAS written is
+           not this item. A general call for more tests, more documentation or
+           more error handling is NONE unless <Task> itself asks for them.
+        2. It holds the merge for that gap: the gap is something to resolve
+           before this change goes in, not an optional follow-up. Google's Code
+           Review Developer Guide, The Standard of Code Review, sets the bar at
+           a change that "definitely improves the overall code health of the
+           system", and a maintainer who withheld approval judged that this one
+           did not yet. A review that mentions the gap and approves anyway, or
+           lists it among optional suggestions, is NONE for this item.
+
+        Score from 0 to 1, never above 1: 0.6 for the first, 0.4 for the second.
+        Award nothing for an item you cannot quote for. Item 2 scores nothing
+        when item 1 is NONE. Brevity is never a deduction. State the arithmetic.
+      threshold: 0.5
+      metric: flags_incomplete_delivery
+    - *reasons_beyond_diff
+    - *severity_discipline
+- description: "rclone#9598 - filter: add --files-from-strict flag support"
+  vars:
+    fixture: rclone-9598
+    title: "filter: add --files-from-strict flag support"
+    verdict: "CHANGES_REQUESTED"
+    expected: "Nice feature, thank you :-) Please see inline comments. Thanks | fs/filter/filter.go: I think if FilesFromStrict is set then we should abort if any errors of any kind happen. It isn't really strict without that. As it happens most errors will be file not not found."
+    note: "The pull request's own description:\n\n#### What does this change do?\r\n\r\nadds --files-from-strict flag support to force an error on missing files from source\r\n\r\n#### Linked issue\r\n\r\nFixes #7842\r\n\r\n#### Checklist\r\n\r\n- [X] This change is trivial **OR** it has been discussed and agreed in the linked issue.\r\n- [X] I have read the [contribution guidelines](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#submitting-a-new-feature-or-bug-fix).\r\n- [X] I have added tests for all changes in this PR if appropriate.\r\n- [X] I have added documentation for the changes if appropriate.\r\n- [X] All commit messages are in [house style](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#commit-messages).\r\n- [X] This Pull Request is ready for review.\n\nIt links issue #7842, \"Fail on missing files when using `--files-from=`\", which reads:\n\nWhen coping files with `rclone --files-from=` the [documentation](https://rclone.org/filtering/) states:\r\n\r\n> Rclone commands do not error if any names in the --files-from file are missing from the source remote.\r\n\r\nHowever, that is a problem for me. I need to make sure that all files have been copied. So this is a request to put in an option to let `--files-from=` fail in case files are missing.\r\n\r\nI'm also open for any suggestions how to verify that all files (from the given list) are present at the target location."
+  assert:
+    - *citations
+    - *no_false_claims
+    - *flags_incomplete_delivery
+    - *reasons_beyond_diff
+    - *severity_discipline
+- description: "caddy#7937 - feat(fileserver): add Content-Digest header sup"
+  vars:
+    fixture: caddy-7937
+    title: "feat(fileserver): add Content-Digest header support (RFC 9530)"
+    verdict: "CHANGES_REQUESTED"
+    expected: "Always nice to align with RFCs but we need to do it to-the-letter when doing so. This should also have far more tests; verify exact digest values and add integration coverage for GET, HEAD, 304, ranges, precompressed responses and read/seek failures. In particular, a 206 digest must cover the selected representation data rather than the complete source file. | caddyfile.go: Validate and deduplicate algorithms here rather than silently ignoring unsupported values or emitting duplicate Structured Fields dictionary keys. | staticfiles.go: RFC 9530 requires `Content-Digest` to cover the actual message content. Hashing the complete file here gives an incorrect digest for 206 responses. | staticfiles.go: Read and seek failures cannot be ignored; a failed reset can also corrupt the subsequent response. Digest calculation needs to return errors."
+    note: "The pull request's own description:\n\n### Summary\r\n\r\nFixes #7901\r\n\r\nThis PR adds optional RFC 9530 Content-Digest header generation to the \file_server handler for static file responses.\r\n\r\n### Details\r\n- Configurable via JSON content_digest array or Caddyfile content_digest / digest subdirectives.\r\n- Supports standard sha-256 and sha-512 algorithms.\r\n- Computes Content-Digest: sha-256=:...: / sha-512=:...: headers for static file responses.\r\n- Includes unit tests in staticfiles_test.go.\r\n\r\nI have used help from various AI assistants to create this feature including Grok Build Heavy and Gemini 3.6 Flash Low.\n\nIt links issue #7901, \"Add optional Content-Digest headers\", which reads:\n\n### Issue Details\n\nHello, for a project that serves static files via Caddy it would be nice to have [Content-Digest](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Digest) headers that can be used to verify the integrity of a downloaded file.\n\nAFAIK this feature has not been implemented. Golang already provides a lot of these hashing functions ready to use in their `crypto` Package, so I imagine the implementation should be readily feasible. Perhaps we could make it off by default and turned on optionally to minimize performance impact, I am thinking of something like\n\n```caddyfile\nexample.com {\n  encode\n  handle_path /download/* {\n        root * /srv/static\n        file_server browse digest\n    }\n}\n```\n\nwith `digest` being an optional switch to always compute a hash before serving 😄 \n\n### Assistance Disclosure\n\nAI not used\n\n### If AI was used, describe the extent to which it was used.\n\n_No response_"
+  assert:
+    - *citations
+    - *no_false_claims
+    - *flags_incomplete_delivery
+    - *reasons_beyond_diff
+    - *severity_discipline
+- description: "rclone#9827 - accounting: fix bwlimit burst overflow - fixes"
+  vars:
+    fixture: rclone-9827
+    title: "accounting: fix bwlimit burst overflow - fixes #9820"
+    verdict: "APPROVED"
+    expected: "Thank you :-)"
+    note: "The pull request's own description:\n\n#### What does this change do?\n\nAvoids overflow while scaling the accounting token-bucket burst for very large `--bwlimit` values. The burst calculation now divides before scaling can overflow and caps the burst at the platform `int` maximum before passing it to `rate.NewLimiter` / `WaitN`.\n\nRegression coverage checks that a 4 TiB/s limit keeps the scaled burst instead of falling back to the default burst, and that the burst is capped safely for the largest `SizeSuffix` value.\n\n#### Linked issue\n\nFixes #9820\n\n#### For new or changed backends\n\nNot a backend change.\n\n#### Checklist\n\n- [x] This change is trivial **OR** it has been discussed and agreed in the linked issue.\n- [x] I have read the [contribution guidelines](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#submitting-a-new-feature-or-bug-fix).\n- [x] **(If I used AI tools to help write this code)** I have read and understood the [AI-assisted contributions guidance](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#ai-assisted-contributions), and I have tested and take ownership of this change myself.\n- [x] I have added tests for all changes in this PR if appropriate.\n- [x] I have added documentation for the changes if appropriate.\n- [x] All commit messages are in [house style](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#commit-messages).\n- [x] **(Backend changes only)** `test_all` passes for this backend and if submitting a new backend can provide a test account for the integration tester - see [CONTRIBUTING.md](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#integration-tests).\n- [x] This Pull Request is ready for review.\n\nVerification run locally:\n\n- `go test ./fs/accounting -run TokenBucket -count=1`\n- `go test ./fs/accounting -count=1`\n- `go build`\n- `git diff --check`\n\nI also attempted `make quicktest`; it did not complete successfully in this container because unrelated environment-sensitive tests failed (for example `cmd/gitannex` could not find `rclone` in `PATH`, `cmd/nfsmount` could not mount NFS/FUSE, and `cmd/selfupdate` failed while testing installation). The focused accounting tests and build above pass.\n\nIt links issue #9820, \"accounting: --bwlimit silently disabled for large T/P values - int64 overflow wraps token-bucket burst negative\", which reads:\n\n## Summary\n\n`newEmptyTokenBucket` scales the token-burst size linearly with the configured bandwidth without any overflow guard:\n\n```go\nconst defaultMaxBurstSize = 4 * 1024 * 1024\n\nmaxBurstSize := max((bandwidth*defaultMaxBurstSize)/(256*1024*1024), defaultMaxBurstSize)\ntb := rate.NewLimiter(rate.Limit(bandwidth), int(maxBurstSize))\nerr := tb.WaitN(context.Background(), int(maxBurstSize)) // \"empty the bucket\"\n```\n\n`bandwidth` is `fs.SizeSuffix` (int64, accepts `T`/`P` suffixes). Once `bandwidth ≥ 2 TiB/s`, `bandwidth * defaultMaxBurstSize` overflows int64 and wraps **negative**, so the limiter is created with a negative burst. From then on every transfer's `WaitN(ctx, n>0)` fails instantly with `rate: Wait(n=…) exceeds limiter's burst …`, and `LimitBandwidth`'s error path only logs `\"Token bucket error\"` and returns **without waiting** — i.e. `--bwlimit` is silently disabled for the entire session while spamming that log per call.\n\nOn still-shipped 32-bit builds the same total bypass arrives earlier via `int(maxBurstSize)` truncation (`--bwlimit 200G` class values).\n\nStatic analysis against current master; arithmetic verified deterministically, and the upstream `golang.org/x/time/rate` behavior (`wait()` rejects `n > burst`) checked against its source.\n\n## Location\n\n- File: `fs/accounting/token_bucket.go`\n- Function: `newEmptyTokenBucket` (overflow at the scaling line; consumption in `LimitBandwidth` ~line 172)\n\n## Steps to Reproduce\n\n```bash\nrclone copy src dst --bwlimit 4T -v\n# observe repeated \"Token bucket error\" lines and transfer speed unthrottled\n```\n\n## Expected Behavior\n\nEither clamp the scaled burst to a safe maximum (e.g. `min(maxBurst, math.MaxInt32)` with the limit itself still enforced by `rate.Limit`), or reject/round absurd bandwidths at flag-parse time. A user asking for \"very large\" bwlimit should get effectively-unlimited-but-logged behavior, not an accidentally disabled limiter.\n\n## Actual Behavior\n\nNegative burst → every WaitN errors → error path proceeds without throttling. Complete silent loss of bandwidth limiting.\n\n## Impact\n\nUsers passing large T/P `--bwlimit` values as a soft cap get zero limiting — ISP/mobile-data overage risk; also defeats `--bwlimit` used deliberately to avoid saturating shared links. No data loss.\n\n## Suggested Direction\n\nGuard the scaling product (compute in float64 or clamp before cast), and make `LimitBandwidth` treat limiter errors as fail-closed (wait full n duration) rather than fail-open, so any future arithmetic regression degrades to \"slower than requested\", never \"unlimited\".\n\n## Evidence\n\n- Scaling introduced in `33ddd540` (\"scales up token bucket size linearly above 2 Gbps\", fixes #5507) without an overflow guard.\n- Dedup: searches `bwlimit burst`, `bwlimit overflow`, `bwlimit 4T`, `token bucket error` across issues/PRs surface #8104 (log-message fix only) and #5507. Nothing reports the overflow or the resulting bypass."
+  assert:
+    - *citations
+    - *no_false_claims
+    - *no_false_blocker
+    - *reasons_beyond_diff
+    - *severity_discipline
+- description: "rclone#9789 - walk: stop directory traversal when the contex"
+  vars:
+    fixture: rclone-9789
+    title: "walk: stop directory traversal when the context is cancelled - fixes #9788"
+    verdict: "APPROVED"
+    expected: "Thank you - this is a nice fix :-)"
+    note: "The pull request's own description:\n\n#### What does this change do?\n\nIt makes the concurrent directory walker created by `walk()` observe context cancellation, and adds a context check between directory-read chunks in the local backend.\n\nBefore: `job/stop` on an async RC `operations/size` (or an interrupt of any command going through `walk()`) cancelled the job's context, but the checkers kept pulling list jobs and walked the whole tree anyway — the job often even completed with `success=true`. On a 1.26M-file local tree, rclone kept burning ~570% CPU for ~4 s after the stop request was acknowledged, then reported success.\n\nAfter: the same stop makes every checker exit through the existing `quit`/drain path within milliseconds, the job finishes with `error=context canceled`, and CPU returns to idle immediately.\n\nTwo changes:\n\n- `fs/walk/walk.go`: each checker now also selects on `ctx.Done()`. On cancellation it calls `closeQuit()` (the existing shutdown path, which drains pending jobs so `traversing` still converges and no producer stays blocked on the channel), pushes `ctx.Err()` into the existing error channel, and returns. No new synchronization is introduced — this reuses the shutdown machinery that was already there for listing errors.\n- `backend/local/local.go`: `List` checks `ctx.Err()` before each `Readdirnames`/`Readdir` chunk, so cancelling during the enumeration of one huge directory does not have to wait for that directory to finish.\n\n`walkRDirTree`/`walkListR` (native `ListR` backends) were not touched: those already propagate the context to the backend, which is expected to honour it.\n\nRelated but distinct: #9416 (channel deadlock in `fs/walk` under `--fast-list`) is a different bug in the same file — this PR does not address it, and the drain path reused here is the one that already existed.\n\n#### Linked issue\n\nFixes #9788\n\n#### Checklist\n\n- [x] This change is trivial **OR** it has been discussed and agreed in the linked issue.\n- [x] I have read the [contribution guidelines](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#submitting-a-new-feature-or-bug-fix).\n- [x] **(If I used AI tools to help write this code)** I have read and understood the [AI-assisted contributions guidance](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#ai-assisted-contributions), and I have tested and take ownership of this change myself. Verified against the reproducer in the linked issue (official v1.75.0 vs patched build, 1.26M-file local tree): unpatched keeps walking after `job/stop` until the tree is exhausted; patched finishes with `context canceled` within ~1 s and CPU drops to idle. `go build` passes; `go test -race -count=2 ./fs/walk/... ./backend/local/...` passes. Full `go test ./...`: all packages pass except `cmd/serve/s3` (`TestS3Minio`), which fails identically on unpatched `upstream/master` in this environment (pre-existing, unrelated — it needs a minio binary).\n- [x] I have added tests for all changes in this PR if appropriate.\n- [x] I have added documentation for the changes if appropriate. *(no user-facing surface changes: no flags, no output format changes — behaviour now matches what the docs already promise)*\n- [x] All commit messages are in [house style](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#commit-messages).\n- [x] **(Backend changes only)** N/A — the local backend change is a 3-line context check with no behavioural change unless the context is cancelled.\n- [x] This Pull Request is ready for review.\n\n**Test added**: `TestWalkContextCancelled` in `fs/walk/walk_test.go` runs a walk whose every directory listing returns a fresh subdirectory (so the walk never terminates on its own), cancels the context once listing has started, and asserts the walk returns `context.Canceled` within 10 s. Verified it fails on unpatched v1.75.0 (`walk did not stop after the context was cancelled`) and passes with the fix, stable across `-count=5` and under `-race`.\n\nIt links issue #9788, \"walk: directory traversal ignores context cancellation - rc job/stop on operations/size has no effect\", which reads:\n\n### Before you start\n\n- [x] I have searched the [forum](https://forum.rclone.org/) and the existing issues for this problem.\n- [x] I have tested with the latest beta or stable release and can still reproduce the problem.\n- [x] This is a reproducible bug, not a usage question (questions belong on the forum).\n\n### Associated forum post URL\n\nNone — I searched the forum and existing issues and found no report of this (see \"Prior art\" below).\n\n### What is the problem you are having with rclone?\n\nCancelling an async RC job that walks a directory tree has no effect on the traversal itself. `job/stop` cancels the job's context and returns immediately, but the concurrent walkers created by `walk()` keep pulling list jobs from the channel and keep listing the entire tree until it is exhausted, at full CPU.\n\nMeasured with the official `v1.75.0` binary on macOS arm64 against a local tree of 1,260,000 files (6000 directories × 210 files): after `job/stop` is acknowledged, the `rclone rcd` process keeps burning ~570% CPU for ~4 more seconds and the job eventually finishes with `success=true`. The cancellation is effectively ignored.\n\nReproducer:\n\n```bash\n# build a big local tree\nmkdir -p bigtree; for i in $(seq 1 6000); do mkdir -p bigtree/d$i; for j in $(seq 1 210); do printf x > bigtree/d$i/f$j.txt; done; done\n\nrclone rcd --rc-addr 127.0.0.1:5571 --rc-user probe --rc-pass probe &\nsleep 1\nJOB=$(curl -sf -u probe:probe -X POST http://127.0.0.1:5571/operations/size -d fs=bigtree -d _async=true | jq -r .jobid)\nsleep 2\ncurl -sf -u probe:probe -X POST http://127.0.0.1:5571/job/stop -d \"jobid=$JOB\"\n# watch the rcd process keep burning CPU, then finish with success=true\n```\n\nRoot cause: the checker loop inside `walk()` (`fs/walk/walk.go`, the `walkN` path used when the backend has no native `ListR`, e.g. local/alias) only selects on the `in` channel and the internal `quit` signal. Nothing observes `ctx.Done()`. The context-propagation effort (#3257) added a `ctx` parameter to `walk()`, but the checkers never watch it, so any cancellation arriving mid-walk is invisible to them.\n\nAdditionally, the local backend's `List` never checks its context, so once a single huge directory (millions of entries) is being enumerated, cancellation cannot take effect until that enumeration completes.\n\nExpected: after `job/stop`, the walk stops promptly and the job finishes with `error=context canceled`.\n\nThe same blind spot affects `operations/list` with `recurse=true` and any other RC command that goes through `walk()` against a backend without native `ListR`. With `--use-listr`-style paths on backends that have `ListR`, cancellation works because the context is propagated to the backend.\n\n### Prior art\n\nI searched the tracker and the forum before filing:\n\n- #3257 is the completed context-propagation effort; this gap looks like a leftover from it — `walk()` received a `ctx` parameter but its checkers never observe `ctx.Done()`.\n- The 2020 forum report of `job/stop` not stopping an sftp transfer is a different mechanism (backend-level cancellation, pre-#3257).\n- #9416 is a channel deadlock in `fs/walk` under `--fast-list` — same file, distinct bug (deadlock during normal operation, not ignored cancellation).\n\nNo existing issue or PR reports the walker ignoring context cancellation.\n\n### rclone version\n\n```\nrclone v1.75.0\n- os/version: darwin 27.0 (64 bit)\n- os/kernel: 27.0.0 (arm64)\n- os/type: darwin\n- os/arch: arm64\n- go/version: go1.26.2\n- go/linking: dynamic\n- go/tags: none\n```\n\nI also checked current master (`fs/walk/walk.go`): the checker loop still has no `ctx.Done()` observation, so the bug is present in master.\n\n### Which OS you are using\n\nmacOS 27.0 (arm64). The repro is OS-independent — the affected code is pure Go concurrency logic with no platform-specific path.\n\n### Which cloud storage system are you using? (eg Google Drive)\n\nLocal filesystem (no `ListR` implementation, which is what routes `operations/size` through the affected `walkN` path).\n\n### The command you were trying to run (eg `rclone copy /tmp remote:tmp`)\n\nAsync RC `operations/size` against a local remote, cancelled via `job/stop` (see reproducer above).\n\n### A log from the command with the `-vv` flag\n\nFrom the reproducer above, polling `job/status` every second after `job/stop`: the job stays `finished=false` with the process at ~570% CPU for ~4 s, then reports `finished=true, success=true` — the walk ran to completion despite the acknowledged cancellation. No error or suspicious entry appears in the log at any point, which is likely why this has gone unnoticed: the cancelled job looks successful, it just keeps burning CPU in silence."
+  assert:
+    - *citations
+    - *no_false_claims
+    - *no_false_blocker
+    - *reasons_beyond_diff
+    - *severity_discipline
+- description: "rclone#9762 - fserrors: fix out of space detection on Window"
+  vars:
+    fixture: rclone-9762
+    title: "fserrors: fix out of space detection on Windows - fixes #8011"
+    verdict: "APPROVED"
+    expected: "This looks very nice - thank you.\n\nI'll merge this as 4 commits."
+    note: "The pull request's own description:\n\n#### What does this change do?\n\nRecognize Windows disk-full errors (`ERROR_DISK_FULL` and `ERROR_HANDLE_DISK_FULL`) so `--local-fatal-if-no-space` stops transfers instead of retrying them. This also prevents a VFS cache hang when the cleaner is disabled and completes fatal-error handling for local multi-thread writer setup, writes and close. Regression tests cover classification, transfer propagation and disabled-cleaner behavior.\n\nThe option remains off by default and preallocation remains best-effort. No flags, public APIs or dependencies are added.\n\n#### Validation\n\nRebased onto master at `3d7b101c7f4b`; validated candidate `03abd08b5541`:\n\n- Windows build and complete uncached quicktest pass on Go 1.27.1 (174 packages). All eight local integration groups pass on their first attempts; actual restic integration passes separately. Repository-defined platform and feature skips remain, including Windows git-annex end-to-end tests.\n- Ten shuffled Windows race repetitions, focused Go 1.26.8 compatibility tests, complete affected Linux suites and focused Linux race coverage pass. Full configured lint, formatting and whitespace checks pass.\n- Actual write-time exhaustion on a fixed-capacity NTFS fixture with four streams and preallocation disabled: the published baseline retries and exits 1 with the option off or on; the candidate retries and exits 1 when off, and stops without retrying with exit 7 when on. Healthy-copy and default-preallocation smoke tests verify contents. This does not establish native preallocation-exhaustion behavior or every later metadata failure.\n\nAn earlier Windows quicktest hit an intermittent directory-timestamp assertion also reproduced on clean upstream; no workaround was added. Full Linux quicktest remains environment-limited: mount/Docker-volume tests require unavailable FUSE, and NFS tests require unsupported filesystem handle operations. This is not a claim that every repository test passed.\n\n#### Linked issue\n\nFixes #8011\n\n#### Checklist\n\n- [x] This change is trivial **OR** it has been discussed and agreed in the linked issue.\n- [x] I have read the [contribution guidelines](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#submitting-a-new-feature-or-bug-fix).\n- [x] **(If I used AI tools to help write this code)** I have read and understood the [AI-assisted contributions guidance](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#ai-assisted-contributions), and I have tested and take ownership of this change myself.\n- [x] I have added tests for all changes in this PR if appropriate.\n- [x] I have added documentation for the changes if appropriate.\n- [x] All commit messages are in [house style](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#commit-messages).\n- [x] **(Backend changes only)** `test_all` passes for this backend and if submitting a new backend can provide a test account for the integration tester - see [CONTRIBUTING.md](https://github.com/rclone/rclone/blob/master/CONTRIBUTING.md#integration-tests).\n- [x] This Pull Request is ready for review.\n\nIt links issue #8011, \"add --local-fatal-if-no-space\", which reads:\n\nSuggested by @ncw here:\r\nhttps://forum.rclone.org/t/how-to-make-rclone-copy-local-to-localdestination-stop-when-out-of-space/30859/2?u=orena1\r\n\r\n```\r\nWe could make a --local-fatal-if-no-space flag or something like that?\r\n\r\nThat would be fairly easy, except for making it cross platform on all the different platforms rclone supports\r\n```"
   assert:
     - *citations
     - *no_false_claims

@@ -142,5 +142,59 @@
     "reviewed": "7e21ef7bf09cff18620cd916c260312c92f42dad",
     "reviewer": "ncw",
     "verdict": "APPROVED"
+  },
+  {
+    "name": "caddy-7506",
+    "repo": "caddyserver/caddy",
+    "pr": 7506,
+    "base": "6610e2f1bd8f54853006eefd3849c9965190e57f",
+    "reviewed": "b608c190ab0bbea7aa9e5868da534c283a56feef",
+    "reviewer": "mholt",
+    "verdict": "CHANGES_REQUESTED"
+  },
+  {
+    "name": "rclone-9598",
+    "repo": "rclone/rclone",
+    "pr": 9598,
+    "base": "9e0a5b66a4a959ff9056ec2c76d168679d48051e",
+    "reviewed": "2f147ee6e4c918f3f32985733a7a0c03ac48d7ec",
+    "reviewer": "ncw",
+    "verdict": "CHANGES_REQUESTED"
+  },
+  {
+    "name": "caddy-7937",
+    "repo": "caddyserver/caddy",
+    "pr": 7937,
+    "base": "c290397cdac2d04e421b638c88fd2e8f907d9f6d",
+    "reviewed": "27b3f11f55f026a34046cab216cb56eac191593e",
+    "reviewer": "steadytao",
+    "verdict": "CHANGES_REQUESTED"
+  },
+  {
+    "name": "rclone-9827",
+    "repo": "rclone/rclone",
+    "pr": 9827,
+    "base": "9dbfd9d8523104785969c9283c1db09b3d044851",
+    "reviewed": "87202394fcf60993ad83f965ce7e7044cd1eedc9",
+    "reviewer": "ncw",
+    "verdict": "APPROVED"
+  },
+  {
+    "name": "rclone-9789",
+    "repo": "rclone/rclone",
+    "pr": 9789,
+    "base": "a1f98b49dfa8535467908dce148d106303f9e35a",
+    "reviewed": "828da21b7685a24d272fbb6162daab53da0fa384",
+    "reviewer": "ncw",
+    "verdict": "APPROVED"
+  },
+  {
+    "name": "rclone-9762",
+    "repo": "rclone/rclone",
+    "pr": 9762,
+    "base": "3d7b101c7f4bc3ebdcfc882c063fffd1c16bf196",
+    "reviewed": "03abd08b55414fce93ea36152ad20e06f2d13db2",
+    "reviewer": "ncw",
+    "verdict": "APPROVED"
   }
 ]
