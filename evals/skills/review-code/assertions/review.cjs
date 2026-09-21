@@ -277,8 +277,13 @@ function judgeProvider(context) {
 // weights: {1: 0.6, 2: 0.4, ...}. Only a verified quote whose "holds" is true
 // earns its item's weight - a real quote that the judge itself says does not
 // satisfy the item earns nothing, same as an unquoted one.
+// One weight per question. A judge that answers a question with one item per
+// finding earns the weight once, and only when every one of them holds.
 function weighByItem(weights) {
-  return (verified) => verified.reduce((sum, it) => sum + (it.holds ? (weights[it.n] || 0) : 0), 0);
+  return (verified) => Object.keys(weights).reduce((sum, n) => {
+    const answers = verified.filter((it) => String(it.n) === n);
+    return sum + (answers.length && answers.every((it) => it.holds) ? weights[n] : 0);
+  }, 0);
 }
 
 function askItems(output, context, itemsPrompt) {

@@ -17,6 +17,8 @@ const { diffLines, noInventedCitations, lineCount, citedCode, judgeProvider, wei
   assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: false }]), 0.6, 'only a holding item earns its weight');
   assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: true }]), 1, 'both items sum to 1');
   assert.equal(w([]), 0, 'nothing verified scores 0, not an error');
+  assert.equal(w([{ n: 1, holds: true }, { n: 1, holds: true }, { n: 1, holds: false }]), 0, 'one item per finding: the question fails if any finding fails');
+  assert.equal(w([{ n: 2, holds: true }, { n: 2, holds: true }]), 0.4, 'repeated items earn the weight once, never more than 1 in total');
 
   const built = askItems('the review text', { vars: { expected: 'maintainer said X', verdict: 'CHANGES_REQUESTED' } }, 'ITEM TEXT');
   assert.ok(built.messages[1].content.includes('the review text'), '<Output> carries the real review');
