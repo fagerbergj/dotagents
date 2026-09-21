@@ -19,7 +19,7 @@ Calibrate before you reach for one. Google's standard is that a reviewer approve
 | **security** | Auth flaw, unvalidated input, injection, PII or secret exposure | "I'd sanitise this differently" |
 | **design** | A *named* principle violated, **and** you can say which concrete future defect it invites | Naming a principle you could name about most code |
 | **scope** | The change does something its task never asked for | A pre-existing wart in adjacent code |
-| **delivery** | Something the change set out to deliver - an acceptance item in its linked issue, a claim in its own description - is absent and not deferred to a linked follow-up; or what the change produces does not match what consumes it (schema, client, renderer), with the consumer cited | Scope you wish the task had included; an item the change explicitly defers |
+| **delivery** | Something the change set out to deliver - an acceptance item in its linked issue, a claim in its own description - is absent and not deferred to a linked follow-up; or what the change produces does not match what consumes it (schema, client, renderer), with the consumer cited | Scope you wish the task had included; an item the change explicitly defers; the same pre-existing bug in a sibling path the task never mentions |
 | **tests** | The behaviour this change *exists to deliver* ships with no test, or a test passes while what it claims to cover is broken | An untested edge case, fallback, or guard alongside a tested main path - that is a `suggestion:` |
 
 There is deliberately no *intent* anchor, and delivery is not one: it is checked against the task's own words and the consumer's own file, never against what you think the change should have been.
