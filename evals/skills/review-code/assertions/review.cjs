@@ -1,4 +1,5 @@
 const { load, specs } = require('../../../lib/fixtures.js');
+const { judgeQuotedItems } = require('../../../lib/quoted-items.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const BY_NAME = new Map(specs(path.resolve(__dirname, '..')).map((f) => [f.name, f]));
@@ -247,4 +248,182 @@ function citedCode(output, context) {
   return `${output}${header}${found.length} passage(s), read from the repository at the commit under review.\n\n${blocks.join('\n\n')}\n`;
 }
 
-module.exports = { noInventedCitations, diffLines, lineCount, citedCode, anchors };
+// ---------------------------------------------------------------------------
+// dotagents#64: `finds_the_defect`, `no_false_blocker`, `severity_discipline`
+// and `reasons_beyond_diff` moved off llm-rubric's own arithmetic. The judge
+// still reasons in prose, but per item it must quote the review or say NONE
+// and say whether that item holds; quoteQuotedItems verifies the quote is real
+// before scoring, and the WEIGHTS below - not the judge - compute the number.
+// This is the fix for the failure the issue was opened over: an unchanged arm
+// scored 0.00 then 0.75 on one metric, and flip-flopped pass/fail on the same
+// case about half the time, because the old prompt asked the judge to both
+// find the answer AND do the arithmetic in one completion.
+const JSON_CONTRACT = 'You are grading output against a small numbered list of'
+  + ' yes/no questions. For EVERY numbered item, answer with one object:'
+  + ' {"n": <item number>, "quote": <verbatim text copied from inside <Output>'
+  + ' that decides this item, or the literal string "NONE" if nothing in'
+  + ' <Output> decides it>, "holds": <true or false>}. A quote must be text'
+  + ' that actually appears inside <Output> - copying <MaintainerReview> back,'
+  + ' paraphrasing, or summarising is not a quote and will be rejected before'
+  + ' your "holds" verdict is even read. Respond with exactly one JSON object:'
+  + ' {"items": [...]}, one entry per numbered item, nothing else.';
+
+function judgeProvider(context) {
+  const p = (context && context.test && context.test.options && context.test.options.provider) || {};
+  const model = String(p.id || '').replace(/^openai:chat:/, '') || (p.config && p.config.model);
+  return { model, ...(p.config || {}) };
+}
+
+// weights: {1: 0.6, 2: 0.4, ...}. Only a verified quote whose "holds" is true
+// earns its item's weight - a real quote that the judge itself says does not
+// satisfy the item earns nothing, same as an unquoted one.
+function weighByItem(weights) {
+  return (verified) => verified.reduce((sum, it) => sum + (it.holds ? (weights[it.n] || 0) : 0), 0);
+}
+
+function askItems(output, context, itemsPrompt) {
+  const providerCfg = judgeProvider(context);
+  const messages = [
+    { role: 'system', content: JSON_CONTRACT },
+    {
+      role: 'user',
+      content: `<MaintainerReview>${context.vars.expected}</MaintainerReview>\n`
+        + `<MaintainerVerdict>${context.vars.verdict}</MaintainerVerdict>\n`
+        + `<Output>${output}</Output>\n\n${itemsPrompt}`,
+    },
+  ];
+  return { providerCfg, messages };
+}
+
+// Was rubric item 1 of the old `review_quality` (weight 0.5 inside a collapsed
+// number). Restricted to the eight CHANGES_REQUESTED cases, so "raises a real
+// concern" means one thing and not also its opposite (no_false_blocker below).
+const FINDS_THE_DEFECT_ITEMS = `<MaintainerVerdict> is CHANGES_REQUESTED - the
+maintainer withheld approval until something was fixed. The maintainer is
+ground truth for what mattered in this change, not for how a review should
+read: do not reward matching their tone, structure or length, only whether the
+same substance is there.
+
+1. Does <Output> raise a concern the maintainer raised, OR another specific
+   defect in this change of comparable seriousness? Specific means a reader
+   could go and confirm it against the code. Bacchelli & Bird (ICSE 2013),
+   quoting an interviewed developer on a weak review: "[Some reviewers] focus
+   on formatting mistakes because they are easy [...] when there are real
+   mistakes to be found." A general call for more tests/error handling/docs,
+   or a naming/formatting/style point, does not hold.
+2. Is its most serious finding actionable - does it name the specific code and
+   say what is wrong with it, or what to do instead? Bosu, Greiler & Bird (MSR
+   2015): a comment with "a valid defect and a suggested fix" was useful; "a
+   question about how the changed component was tested" was not. A written fix
+   is not required (Google's Code Review Developer Guide: fixing a CL is the
+   developer's job), only that the author can tell which code and what is
+   wrong. A finding that says something "may need attention" without saying
+   what is wrong does not hold.`;
+
+function findsTheDefect(output, context) {
+  const { providerCfg, messages } = askItems(output, context, FINDS_THE_DEFECT_ITEMS);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.6, 2: 0.4 }), threshold: 0.5,
+  });
+}
+
+// The other half of the old item 1, on the eight APPROVED cases: the opposite
+// failure, manufacturing a blocker, which the literature says dominates
+// (Rigby & Bird, FSE 2013: "a median of 3 true defects ... An additional 4
+// ... were found to be false positives").
+const NO_FALSE_BLOCKER_ITEMS = `<MaintainerVerdict> is APPROVED - the
+maintainer merged this without requiring any change first. Anything they
+suggested, they suggested as optional. This suite treats that approval as
+ground truth for whether the change was fit to merge as it stood.
+
+1. Does <Output> NOT assert, as a fact about this change, a defect that is not
+   there - a bug, race, deadlock, security hole, data loss or breakage it
+   claims this code will cause? Bosu, Greiler & Bird (MSR 2015): most "not
+   useful" comments are false positives from a reviewer incorrectly indicating
+   a problem. A question, or a concern raised as something for the author to
+   check, is not an assertion and holds this item; only a flat claim the
+   change is broken fails it.
+2. Does <Output> NOT require any change before merge? Google's Code Review
+   Developer Guide: reviewers should favor approving a CL once it clearly
+   improves code health, "even if the CL isn't perfect". Suggestions and nits
+   hold this item as long as the review does not demand them as a
+   precondition for merging.`;
+
+function noFalseBlocker(output, context) {
+  const { providerCfg, messages } = askItems(output, context, NO_FALSE_BLOCKER_ITEMS);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.5,
+  });
+}
+
+// Was rubric item 2 of the old `review_quality`. An OUTCOME measure - grades
+// what the review reasons ABOUT, not whether it opened a file - on all
+// sixteen cases, the property the skill's own description leads with ("read
+// the diff AND the surrounding code").
+const REASONS_BEYOND_DIFF_ITEMS = `<Output> is a review of a real pull
+request. The reviewer was given the diff; the full files it touches were
+available to open. Judge the review as text: an item is satisfied by what it
+says, never by how much was read to produce it.
+
+1. Does <Output> reason about specific code the diff's hunks do not show - a
+   caller, an adjacent function, an existing test, a sibling implementation,
+   an invariant declared elsewhere - identified by name or path? Google's Code
+   Review Developer Guide, on Context: "you might see only four new lines
+   being added, but when you look at the whole file, you see those four lines
+   are in a 50-line method". A remark that unnamed callers or tests "might be
+   affected" does not hold - the code has to be identified.
+2. Is at least one point conceptual rather than superficial - turning on the
+   change's design, runtime behaviour, or interaction with another part of
+   the system, rather than naming, formatting, or the shape of the changed
+   lines alone? Bacchelli & Bird (ICSE 2013): reviewers who know the files
+   give feedback "more conceptual (better ideas, approaches) instead of
+   superficial (naming, mechanical style, etc.)".`;
+
+function reasonsBeyondDiff(output, context) {
+  const { providerCfg, messages } = askItems(output, context, REASONS_BEYOND_DIFF_ITEMS);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.6, 2: 0.4 }), threshold: 0.5,
+  });
+}
+
+// New (dotagents#61's `no_invented_citations`/`no_false_claims` had no
+// severity-labelling check): "categorize each finding by severity" is a claim
+// of the skill's own frontmatter description that nothing else here grades.
+// Deliberately not a regex for "blocking:"/"nit:" - those words come from the
+// skill under test, so matching them would score the arm for reciting its own
+// vocabulary (evals/AGENTS.md, "Never pattern-match prose").
+const SEVERITY_DISCIPLINE_ITEMS = `<Output> is a review of a real pull
+request, delivered as one written message. Reward no particular vocabulary -
+"blocking", "nit", plain prose that draws the same line all count equally; a
+label whose own text contradicts it ("nit: this will corrupt the database")
+counts for nothing.
+
+1. Can a reader tell, for every finding in <Output>, whether it must be fixed
+   before merge or is optional? Google's Code Review Developer Guide: label
+   severity so "authors may [not] interpret all comments as mandatory, even
+   if some ... are merely intended to be informational or optional." A review
+   with no findings at all holds this item - there is nothing to misread.
+2. Is nothing that rests only on the reviewer's taste presented as required?
+   Google: "Any purely style point ... that is not in the style guide is a
+   matter of personal preference" and "Don't block CLs ... based only on
+   personal style preferences." A demand to rename/reformat/restructure code
+   the reviewer merely prefers differently fails this item; the same demand
+   backed by a defect, security risk, or the project's own style guide does
+   not.`;
+
+function severityDiscipline(output, context) {
+  const { providerCfg, messages } = askItems(output, context, SEVERITY_DISCIPLINE_ITEMS);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.5,
+  });
+}
+
+module.exports = {
+  noInventedCitations, diffLines, lineCount, citedCode, anchors,
+  findsTheDefect, noFalseBlocker, reasonsBeyondDiff, severityDiscipline,
+  judgeProvider, weighByItem, askItems,
+};
