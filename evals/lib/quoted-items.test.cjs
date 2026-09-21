@@ -7,6 +7,9 @@ const { quoteHolds, verifyItems, parseJudge, scoreFromJudge } = require('./quote
 assert.ok(quoteHolds('the guard is wrong', 'Reviewer: the guard is wrong here.'), 'a real substring holds');
 assert.ok(quoteHolds('the   guard\nis wrong', 'the guard is wrong'), 'whitespace is normalised both sides');
 assert.ok(!quoteHolds('the guard is fine', 'the guard is wrong'), 'a paraphrase does not hold');
+assert.ok(quoteHolds('hostKeySuffix() fingerprints the struct', '**`hostKeySuffix()`** fingerprints the `struct`'), 'markdown marks do not break a real quote');
+assert.ok(quoteHolds('has this fallback: ... if u.hostKey == ""', 'it has this fallback:\n```go\nfunc f() {\n if u.hostKey == "" {'), 'elided segments match in order');
+assert.ok(!quoteHolds('second part ... first part', 'first part then second part'), 'elided segments out of order do not hold');
 assert.ok(!quoteHolds('', 'anything'), 'an empty quote never holds');
 assert.ok(!quoteHolds('x', ''), 'no text to check against never holds');
 

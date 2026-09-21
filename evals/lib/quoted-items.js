@@ -14,11 +14,22 @@ function normalize(s) {
   return String(s ?? '').replace(/\s+/g, ' ').trim();
 }
 
-// Whitespace-normalised substring match. A reflowed paragraph should not lose
-// an otherwise-real quote; text the judge never points at never counts.
+// Judges drop markdown marks and elide with "..."; match on the words, with
+// every elided segment present in order. A paraphrase still fails.
+function loose(s) {
+  return normalize(String(s ?? '').replace(/\\n/g, '\n').replace(/[`*_~"\u201c\u201d]/g, '')).toLowerCase();
+}
+
 function quoteHolds(quote, text) {
-  const q = normalize(quote);
-  return Boolean(q) && normalize(text).includes(q);
+  const segs = loose(quote).split(/\.\.\.|\u2026/).map((x) => x.trim()).filter(Boolean);
+  const t = loose(text);
+  let at = 0;
+  for (const seg of segs) {
+    const i = t.indexOf(seg, at);
+    if (i < 0) return false;
+    at = i + seg.length;
+  }
+  return segs.length > 0;
 }
 
 // items: [{quote, ...}]. `texts` maps a name to a checkable text; an item with
