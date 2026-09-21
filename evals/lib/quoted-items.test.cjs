@@ -2,6 +2,8 @@
 // judge - callJudge is exercised only by the suites that run for real tokens.
 const assert = require('node:assert');
 const { quoteHolds, verifyItems, parseJudge, scoreFromJudge } = require('./quoted-items.js');
+assert.deepEqual(parseJudge('{ {"items": [{"n": 1, "quote": "NONE", "holds": false}]}').items.length, 1, 'a stray leading brace is skipped');
+assert.equal(parseJudge('finish_reason=length (no content)'), null, 'an empty-answer marker does not parse');
 
 // --- quoteHolds --------------------------------------------------------
 assert.ok(quoteHolds('the guard is wrong', 'Reviewer: the guard is wrong here.'), 'a real substring holds');

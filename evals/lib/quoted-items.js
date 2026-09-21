@@ -53,14 +53,19 @@ function parseJudge(raw) {
   const text = String(raw ?? '').trim();
   if (!text) return null;
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  try {
-    const parsed = JSON.parse(fenced ? fenced[1] : text);
-    if (Array.isArray(parsed)) return { items: parsed };
-    if (parsed && Array.isArray(parsed.items)) return parsed;
-    return null;
-  } catch {
-    return null;
+  const body = fenced ? fenced[1] : text;
+  // A stray brace before the object ("{ {\"items\"...") has shown up with
+  // reasoning on; the object itself starts at the brace right before "items".
+  const at = body.indexOf('"items"');
+  const inner = at > 0 ? body.slice(body.lastIndexOf('{', at), body.lastIndexOf('}') + 1) : body;
+  for (const candidate of [body, inner]) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (Array.isArray(parsed)) return { items: parsed };
+      if (parsed && Array.isArray(parsed.items)) return parsed;
+    } catch { /* try the next shape */ }
   }
+  return null;
 }
 
 // Verify + score an already-fetched judge answer. `score(verified, allItems)`
@@ -124,7 +129,10 @@ function callJudge(providerCfg, messages) {
         try {
           const json = JSON.parse(data);
           if (json.error) return reject(new Error(`api error: ${JSON.stringify(json.error).slice(0, 300)}`));
-          resolve(json.choices?.[0]?.message?.content ?? '');
+          const choice = json.choices?.[0] || {};
+          const content = choice.message?.content ?? '';
+          // An empty answer is a harness fault; name the cause in the row.
+          resolve(content || `finish_reason=${choice.finish_reason} (no content)`);
         } catch {
           reject(new Error(`unparseable response: ${data.slice(0, 300)}`));
         }
