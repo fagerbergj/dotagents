@@ -1,4 +1,4 @@
-const { judgeQuotedItems } = require('../../../lib/quoted-items.js');
+const { judgeQuotedItems, JSON_CONTRACT } = require('../../../lib/quoted-items.js');
 
 // dotagents#64/#65: `coverage` and `restraint` moved off llm-rubric's own
 // arithmetic (list points, count, divide) onto quote-verified items - the same
@@ -7,17 +7,6 @@ const { judgeQuotedItems } = require('../../../lib/quoted-items.js');
 // <Output> or say NONE and say whether that item holds; judgeQuotedItems
 // verifies the quote is real before scoring, and WEIGHTS below - not the
 // judge - compute the number.
-const JSON_CONTRACT = 'You are grading output against a small numbered list of'
-  + ' yes/no questions. For EVERY numbered item, answer with one object:'
-  + ' {"n": <item number>, "quote": <verbatim text copied from inside <Output>'
-  + ' that decides this item, or the literal string "NONE" if nothing in'
-  + ' <Output> decides it>, "holds": <true or false>}. A quote must be text'
-  + ' that actually appears inside <Output> - copying another tag\'s content'
-  + ' back, paraphrasing, or summarising is not a quote and will be rejected'
-  + ' before your "holds" verdict is even read. Keep each quote to one'
-  + ' sentence or line, at most 300 characters, never a code block - long'
-  + ' quotes break the JSON and lose the item. Respond with exactly one JSON'
-  + ' object: {"items": [...]}, one entry per numbered item, nothing else.';
 
 function judgeProvider(context) {
   const p = (context && context.test && context.test.options && context.test.options.provider) || {};
@@ -78,7 +67,7 @@ function coverage(output, context) {
   const { providerCfg, messages } = askItems(output, context, COVERAGE_ITEMS, [['AuthorDescription', 'author_description']]);
   return judgeQuotedItems({
     providerCfg, messages, texts: { default: output },
-    score: weighByItem({ 1: 0.6, 2: 0.4 }), threshold: 0.5,
+    score: weighByItem({ 1: 0.6, 2: 0.4 }), threshold: 0.5, votes: 3,
   });
 }
 
@@ -99,14 +88,16 @@ reading of the diff the diff itself bears out are not claims. The
 issue-reference slot in a title line ("(closes #<n>)", "Fixes #NNN") is a
 template slot, not an assertion, and does not count against either item.
 
-1. Does <Output> avoid asserting, as a fact about this change, any effect,
-   cause, scope, or rationale that none of <Diff>, <AuthorNote>, or
-   <AuthorDescription> supports? An invented risk or design rationale this
-   change does not have, or a file/symbol absent from all three, fails this
-   item; a claim any one of the three backs holds it.
+1. Does <Output> avoid naming a file, symbol, flag, option, or component that
+   appears in none of <Diff>, <AuthorNote>, or <AuthorDescription>? Quote the
+   invented name if there is one.
 2. Does <Output> avoid stating a specific measurement, benchmark number, test
    command, or test result as though it were run or observed, when none of
-   <Diff>, <AuthorNote>, or <AuthorDescription> show it was?`;
+   <Diff>, <AuthorNote>, or <AuthorDescription> show it was? Quote it if so.
+3. Does <Output> avoid asserting a cause, effect, or design rationale for this
+   change that none of the three sources state or plainly imply? A reading of
+   the diff the diff itself bears out is not an invention; only a claim you can
+   point to as unsupported fails this item, and then quote that claim.`;
 
 function restraint(output, context) {
   const { providerCfg, messages } = askItems(output, context, RESTRAINT_ITEMS, [
@@ -114,7 +105,7 @@ function restraint(output, context) {
   ]);
   return judgeQuotedItems({
     providerCfg, messages, texts: { default: output },
-    score: weighByItem({ 1: 0.6, 2: 0.4 }), threshold: 0.5,
+    score: weighByItem({ 1: 0.4, 2: 0.3, 3: 0.3 }), threshold: 0.5, absence: [1, 2, 3], votes: 5,
   });
 }
 
