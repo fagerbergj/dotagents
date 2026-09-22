@@ -749,29 +749,13 @@
          flex-shrink: 0;
        }
   assert:
+    # dotagents#64/#65: moved off llm-rubric's own arithmetic onto
+    # lib/quoted-items.js, the same fix commit-authoring's other two judged
+    # metrics took. One item, quoted or NONE, weight 1.0 - it was already
+    # binary, never partial credit (assertions/commit.cjs:splitsMixedChange).
     - &splits_mixed_change
-      type: llm-rubric
-      value: |
-        The developer said this about the change:
-        "{{context}}"
-
-        Judge the response as delivered. Do not reward or penalise how it was built,
-        which features it used, or whether it followed any particular authoring
-        convention.
-
-        The working tree described in the request holds two unrelated pieces of work.
-        The response passes if it either gives two separate, well-formed commit
-        messages, or says plainly that these changes should not be committed
-        together. A single message that covers both concerns scores zero, however
-        well written it is.
-
-        Offering the combination as an acceptable choice is not recommending a split
-        and also scores zero: a reply that presents a single-commit option alongside a
-        two-commit one, or that says one commit is fine if the changes are related, has
-        not split them. So has a reply that supplies one example message and only
-        mentions in passing that two would work - the two messages must be written out.
-
-        Return one score from 0 to 1, never above 1.
+      type: javascript
+      value: file://assertions/commit.cjs:splitsMixedChange
       threshold: 0.7
       metric: splits_mixed_change
 - description: 'breaking change - a field in a published tool return schema is renamed'

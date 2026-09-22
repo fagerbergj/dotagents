@@ -34,6 +34,26 @@ ADK v2.1.0 made toolutils.PackTool public, allowing us to replace the
 inlined implementation previously required when it was internal.
 No functional change.\`\`\``;
 
+// --- the quote-verified metrics' pure parts (no network) -------------------
+{
+  const ctx = { test: { options: { provider: { id: 'openai:chat:google/gemini-3.8-flash', config: { apiBaseUrl: 'https://openrouter.ai/api/v1', apiKeyEnvar: 'OPENROUTER_API_KEY' } } } } };
+  const cfg = checks.judgeProvider(ctx);
+  assert.equal(cfg.model, 'google/gemini-3.8-flash');
+  assert.equal(cfg.apiKeyEnvar, 'OPENROUTER_API_KEY');
+  assert.equal(checks.judgeProvider({}).model, undefined, 'a missing provider block does not throw');
+
+  const w = checks.weighByItem({ 1: 0.4, 2: 0.3, 3: 0.3 });
+  assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: false }, { n: 3, holds: false }]), 0.4, 'only a holding item earns its weight');
+  assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: true }, { n: 3, holds: true }]), 1, 'all three items sum to 1');
+  assert.equal(w([]), 0, 'nothing verified scores 0, not an error');
+
+  const built = checks.askItems('the commit message', { vars: { context: 'developer said X' } }, 'ITEM TEXT');
+  assert.ok(built.messages[1].content.includes('the commit message'), '<Output> carries the real message');
+  assert.ok(built.messages[1].content.includes('developer said X'), '<DeveloperNote> carries the case var');
+  assert.ok(!built.messages[1].content.includes('<Diff>'), 'diff is omitted unless includeDiff is set');
+  assert.ok(built.messages[0].content.includes('"items"'), 'the system message states the JSON contract');
+}
+
 async function main() {
   const pass = async (output, message) => assert.equal((await checks.conventionalHeader(output)).pass, true, message);
   const fail = async (output, message) => assert.equal((await checks.conventionalHeader(output)).pass, false, message);
@@ -84,56 +104,58 @@ async function main() {
   assert.equal(breaking.pattern.test('```\nfix(config): reject unknown keys\n\nbreaking change: configs now fail to load.\n```'), false, 'the footer MUST be uppercase');
   assert.equal(breaking.pattern.test(real), false);
 
-  // --- the judged rubrics ----------------------------------------------------
+  // --- the judged metrics: quote-verified, not llm-rubric's own arithmetic ---
   // Parsed, not regexed: a config is a structured file, and PyYAML is already
   // a dependency of the python gates next door.
   const load = (f) => JSON.parse(execFileSync('python3', ['-c', 'import json,sys,yaml;print(json.dumps(yaml.safe_load(open(sys.argv[1]))))', path.join(suite, f)], { encoding: 'utf8' }));
   const cfg = load('promptfooconfig.yaml');
   const cases = load('tests/cases.yaml');
   const defaultMetricNames = new Set(cfg.defaultTest.assert.map((a) => a.metric).filter(Boolean));
-  const rubrics = cfg.defaultTest.assert.filter((a) => a.type === 'llm-rubric');
-  const byMetric = Object.fromEntries(rubrics.map((a) => [a.metric, a]));
+  const judged = cfg.defaultTest.assert.filter((a) => a.type === 'javascript' && /commit\.cjs:(whyQuality|noInventedClaims)$/.test(a.value));
+  const byMetric = Object.fromEntries(judged.map((a) => [a.metric, a]));
   assert.deepEqual(
-    rubrics.map((a) => a.metric),
+    judged.map((a) => a.metric),
     ['why_quality', 'no_invented_claims'],
     'the two judged properties of a message - is the reason there, and is it true - are two metrics',
   );
-
-  // A rubric only sees what is interpolated into it (evals/AGENTS.md): a clause
-  // about "the diff" in a rubric that is never given the diff is inert, and the
-  // judge guesses rather than complaining. Every var every rubric names has to
-  // exist on every case.
-  for (const a of rubrics) {
-    for (const [, v] of a.value.matchAll(/\{\{\s*(\w+)\s*\}\}/g)) {
-      if (v === 'output' || v === 'rubric') continue;
-      for (const c of cases) {
-        assert.ok(c.vars && c.vars[v] !== undefined, `${a.metric} interpolates {{${v}}}, which "${c.description}" does not define - the clause would be inert`);
-      }
-    }
+  // dotagents#64/#65: no llm-rubric or g-eval assertion may remain here or on
+  // any case - every subjective judgement in this suite goes through
+  // lib/quoted-items.js. Only Conventional Commits conformance (an external
+  // standard, decided by the reference parser) and marks_breaking (a regex
+  // over a structured header) stay deterministic.
+  for (const a of [...cfg.defaultTest.assert, ...cases.flatMap((c) => c.assert || [])]) {
+    assert.ok(a.type !== 'llm-rubric' && a.type !== 'g-eval', `${a.metric || '(unnamed)'} is still ${a.type}, not quote-verified`);
   }
 
   // why_quality grades one property: whether the reason is there and concrete.
   // Three items, no free ones, no subtraction.
-  const whyItems = [...byMetric.why_quality.value.matchAll(/^(\d)\. /gm)].map((m) => m[1]);
+  const whyItems = [...checks.WHY_QUALITY_ITEMS.matchAll(/^(\d)\. /gm)].map((m) => m[1]);
   assert.deepEqual(whyItems, ['1', '2', '3'], 'why_quality grades exactly items 1-3; body length (a second property, pointing against 1 and 2) and flagging a mixed diff (splits_mixed_change owns it) are cut');
   // An item a judge may mark N/A and still be paid for is not a measurement -
   // it is a free point whose size depends on which sub-population the case is
-  // in. 64 of 90 stored rows took that point.
-  assert.ok(!/N\/A/i.test(byMetric.why_quality.value), 'no item in why_quality may be satisfied as N/A');
-  assert.ok(!/unrelated pieces of work|recommending a split/i.test(byMetric.why_quality.value), 'flagging a mixed diff belongs to splits_mixed_change, which runs only on the cases where it applies');
-  assert.ok(!/subtract/i.test(byMetric.why_quality.value), 'why_quality must not subtract - fabrication is scored by no_invented_claims');
+  // in. 64 of 90 stored rows took that point under the old llm-rubric.
+  assert.ok(!/N\/A/i.test(checks.WHY_QUALITY_ITEMS), 'no item in why_quality may be satisfied as N/A');
+  assert.ok(!/unrelated pieces of work|recommending a split/i.test(checks.WHY_QUALITY_ITEMS), 'flagging a mixed diff belongs to splits_mixed_change, which runs only on the cases where it applies');
+  assert.ok(!/subtract/i.test(checks.WHY_QUALITY_ITEMS), 'why_quality must not subtract - fabrication is scored by no_invented_claims');
+  assert.deepEqual(byMetric.why_quality.threshold, 0.7);
 
   // no_invented_claims is yes/no, and it is the metric that needs the diff.
-  assert.ok(byMetric.no_invented_claims.value.includes('{{diff}}'), 'no_invented_claims judges claims against the diff, so it has to be given the diff');
-  assert.ok(/no partial credit/i.test(byMetric.no_invented_claims.value), 'invention is a yes/no property');
+  assert.ok(checks.NO_INVENTED_CLAIMS_ITEMS.includes('<Diff>'), 'no_invented_claims judges claims against the diff, so it has to be given the diff');
+  assert.ok(checks.askItems('', { vars: { context: 'x', diff: 'y' } }, checks.NO_INVENTED_CLAIMS_ITEMS, { includeDiff: true })
+    .messages[1].content.includes('<Diff>y</Diff>'), 'the diff tag is actually interpolated, not just named in the item text');
   assert.equal(byMetric.no_invented_claims.threshold, 1, 'a binary metric passes only at 1');
+  // The score function inverts weighByItem's usual sense: a verified,
+  // holding item 1 IS an invention, so it must fail the message, not earn it.
+  assert.equal(checks.noInventedClaimsScore([{ n: 1, holds: true }]), 0, 'a verified invention scores 0');
+  assert.equal(checks.noInventedClaimsScore([{ n: 1, holds: false }]), 1, 'no verified invention scores 1');
+  assert.equal(checks.noInventedClaimsScore([]), 1, 'nothing verified is not an invention either');
 
   // The skill's own prescribed footer slot is not a fabrication. Nine skill-arm
   // zeros on the stored run quoted `#<issue>` / `#<TBD>` / `#<ticket-number>`
   // back as "an invented reference"; the baseline, which emits no footer, took
   // none. A slot asserts nothing, so the metric was reading the template rather
   // than the message.
-  const invented = byMetric.no_invented_claims.value;
+  const invented = checks.NO_INVENTED_CLAIMS_ITEMS;
   assert.match(invented, /unfilled placeholder slot asserts nothing/i,
     'no_invented_claims fines the skill for the `Refs #<issue>` slot SKILL.md prescribes unless the slot is exempt');
   // pr-authoring's restraint stops the same exemption at a real number, and so
@@ -149,7 +171,7 @@ async function main() {
   // so the exemption has to reach the proposed messages and the rationale.
   assert.match(invented, /recommendation about HOW TO COMMIT/i,
     'recommending a split is not a claim about the code');
-  for (const part of [/proposing a boundary between commits/i, /writing out the\s+subject and body of each proposed commit/i, /the standing reasons for splitting/i]) {
+  for (const part of [/proposing a boundary between commits/i, /writing out\s+the subject and body of each proposed commit/i, /the standing reasons for\s+splitting/i]) {
     assert.match(invented, part, `the split exemption has to name what the recommendation is made of: ${part}`);
   }
   // The exemption is scoped: a fabricated cause inside a proposed commit's body
@@ -161,6 +183,26 @@ async function main() {
   assert.ok(mixed.length >= 4, `splits_mixed_change rides on only ${mixed.length} cases`);
   assert.ok(defaultMetricNames.has('no_invented_claims'),
     'no_invented_claims runs on every case, the mixed ones included - which is why the exemption is needed');
+
+  // splits_mixed_change: one item, weight 1.0, still binary - never partial
+  // credit for a reply that only gestures at splitting.
+  const splitsAssertion = mixed[0].assert.find((a) => a.metric === 'splits_mixed_change');
+  assert.equal(splitsAssertion.type, 'javascript', 'splits_mixed_change moved off llm-rubric too');
+  assert.equal(splitsAssertion.value, 'file://assertions/commit.cjs:splitsMixedChange');
+  const splitsItems = [...checks.SPLITS_MIXED_CHANGE_ITEMS.matchAll(/^(\d)\. /gm)].map((m) => m[1]);
+  assert.deepEqual(splitsItems, ['1'], 'splits_mixed_change is one binary item, not a partial-credit scale');
+  assert.ok(/without also offering a\s+single-commit combination/.test(checks.SPLITS_MIXED_CHANGE_ITEMS),
+    'offering a single-commit option alongside a two-commit one must not count as splitting');
+
+  // Every case var a judged item's text refers to by tag actually exists on
+  // every case it runs against - the same rule evals/AGENTS.md states for
+  // rubricPrompt interpolation, checked here against the JS builder instead.
+  for (const c of cases) {
+    assert.ok(c.vars && c.vars.context !== undefined, `"${c.description}" has no context var, which why_quality/no_invented_claims/splits_mixed_change all need`);
+  }
+  for (const c of cases.filter((cc) => (cc.assert || []).some((a) => a.metric === 'no_invented_claims') || defaultMetricNames.has('no_invented_claims'))) {
+    assert.ok(c.vars && c.vars.diff !== undefined, `"${c.description}" has no diff var, which no_invented_claims needs`);
+  }
 
   // The latency assertion stays UNNAMED. Named, it is a graded column beside
   // the quality metrics - and a message slow enough to trip 120s is one the
