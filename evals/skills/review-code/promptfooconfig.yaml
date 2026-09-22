@@ -93,7 +93,7 @@ defaultTest:
         passthrough:
           temperature: 0
           reasoning:
-            enabled: true
+            enabled: false
         apiKeyEnvar: OPENROUTER_API_KEY
         showThinking: false
         omitDefaults: true
