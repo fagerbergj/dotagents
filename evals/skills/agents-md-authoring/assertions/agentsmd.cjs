@@ -3,9 +3,16 @@
 // does a nested file add subtree-specific content instead of repeating the
 // root file it was handed. Both compute against real input - the repo
 // checkout, or the case's own vars.existingRoot - never prose matching.
+//
+// states_critical_fact and says_nothing_else, below the deterministic
+// graders, are the suite's two judged metrics, moved onto quoted-items.js's
+// pattern (dotagents#64/#65): the judge answers narrow per-item questions
+// with a verbatim quote or NONE, code verifies the quote is real, and the
+// score comes from weighByItem - never the judge's own arithmetic.
 const fs = require('node:fs');
 const path = require('node:path');
 const { stripReasoning } = require('../../../lib/strip-reasoning.js');
+const { judgeQuotedItems } = require('../../../lib/quoted-items.js');
 
 function result(pass, score, reason) {
   return { pass, score, reason };
@@ -677,6 +684,132 @@ function lengthProportionateToEvidence(output, context) {
     `Output is ${outLen} chars, ${ratio.toFixed(1)}x the ${evLen}-char evidence - over the ${RATIO_CAP}x proportionality guard, likely padding rather than signal.`);
 }
 
+// --- quote-verified judged metrics ------------------------------------------
+// dotagents#64/#65: a judge that both finds the answer and scores it in one
+// completion is noise, not measurement - the same unchanged metric scored
+// 0.00 then 0.75 across two runs elsewhere in this harness. Ask for a quote
+// per item, verify it is real, score in code.
+const JSON_CONTRACT = 'You are grading output against a small numbered list of'
+  + ' yes/no questions. For EVERY numbered item, answer with one object:'
+  + ' {"n": <item number>, "quote": <verbatim text copied from inside <Output>'
+  + ' that decides this item, or the literal string "NONE" if nothing in'
+  + ' <Output> decides it>, "holds": <true or false>}. A quote must be text'
+  + ' that actually appears inside <Output> - copying <Evidence> or <Obvious>'
+  + ' back, paraphrasing, or summarising is not a quote and will be rejected'
+  + ' before your "holds" verdict is even read. Keep each quote to one'
+  + ' sentence or line, at most 300 characters, never a code block - long'
+  + ' quotes break the JSON and lose the item. Respond with exactly one JSON'
+  + ' object: {"items": [...]}, one entry per numbered item, nothing else.';
+
+function judgeProvider(context) {
+  const p = (context && context.test && context.test.options && context.test.options.provider) || {};
+  const model = String(p.id || '').replace(/^openai:chat:/, '') || (p.config && p.config.model);
+  return { model, ...(p.config || {}) };
+}
+
+// weights: {1: 0.6, 2: 0.4, ...}. Only a verified quote whose "holds" is true
+// earns its item's weight - a real quote the judge itself says does not
+// satisfy the item earns nothing, same as an unquoted one.
+function weighByItem(weights) {
+  return (verified) => Object.keys(weights).reduce((sum, n) => {
+    const answers = verified.filter((it) => String(it.n) === n);
+    return sum + (answers.length && answers.every((it) => it.holds) ? weights[n] : 0);
+  }, 0);
+}
+
+function askItems(output, context, itemsPrompt, { includeObvious = false } = {}) {
+  const providerCfg = judgeProvider(context);
+  const evidence = context?.vars?.evidence;
+  if (!evidence) throw new Error('askItems needs vars.evidence - the case\'s own ground truth about the repo.');
+  if (includeObvious && !context?.vars?.obvious) throw new Error('askItems needs vars.obvious for this item set.');
+  const messages = [
+    { role: 'system', content: JSON_CONTRACT },
+    {
+      role: 'user',
+      content: `<Output>${output}</Output>\n<Evidence>${evidence}</Evidence>\n`
+        + (includeObvious ? `<Obvious>${context.vars.obvious}</Obvious>\n` : '')
+        + `\n${itemsPrompt}`,
+    },
+  ];
+  return { providerCfg, messages };
+}
+
+// Claim: "discoverability-first rubric", RECALL half. <Obvious> is
+// deliberately never passed here - what an agent already gets for free has
+// no bearing on whether the load-bearing fact is stated, and handing the
+// judge a clutter list while asking a recall question is how the two halves
+// got entangled before the split (see tests/cases.yaml's file-level comment).
+const STATES_CRITICAL_FACT_ITEMS = `<Output> is a candidate AGENTS.md (or a
+section of one, for a nested file) for a real repository. <Evidence> lists
+facts about the repository gathered independently - treat it as ground
+truth, not as a list <Output> must quote verbatim.
+
+Length, tidiness, and whether <Output> also says things it did not need to
+say are graded elsewhere and are not your concern here. A file that states
+the fact and rambles still holds this item.
+
+1. If <Evidence> names a fact serious enough that missing it would cause a
+   real mistake (a broken build or test run, a violated policy, a wasted
+   debugging session), does <Output> state it and say how to actually avoid
+   the mistake - not just gesture at the topic? Quote the sentence(s) that do
+   this and mark holds true, or answer NONE and mark holds false if it is
+   missing or only gestured at. If <Evidence> says no such fact exists for
+   this repo, this item holds automatically: quote any sentence of <Output>
+   and mark holds true.`;
+
+function statesCriticalFact(output, context) {
+  const { providerCfg, messages } = askItems(output, context, STATES_CRITICAL_FACT_ITEMS);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 1 }), threshold: 0.5,
+  });
+}
+
+// Claim: "pruning stale or redundant guidance" / "whether a rule earns
+// permanent context" - the PRECISION half: restating what one glance already
+// gives (item 1), and padding beyond what the facts require (item 2). Same
+// sign, so they stay one metric; the recall half above has the opposite
+// failure mode and does not.
+const SAYS_NOTHING_ELSE_ITEMS = `<Output> is a candidate AGENTS.md (or a
+section of one, for a nested file) for a real repository. <Evidence> lists
+facts about the repository gathered independently - treat it as ground
+truth. <Obvious> lists what one glance at the repo's own files already gives
+an agent for free - restating any of it is clutter, not content.
+
+A live failure on an earlier version of this rubric called an output
+containing a directory tree and an invented "Release checklist" clutter-free,
+reasoning "obvious clutter is absent" - false against the text being judged.
+Point to the specific words that decide each item; a holistic impression is
+not an answer.
+
+Stating an <Evidence> fact concretely - naming the actual command, flag,
+path, or policy, and what goes wrong without it - is never padding, however
+specific it gets. A concrete command is the content; only what surrounds it
+can be clutter.
+
+1. Does <Output> avoid restating anything in <Obvious> (a dependency list, a
+   directory/file tour, license text, a boilerplate contribution template, or
+   generic software-engineering advice not specific to this repo)? If it
+   restates something, quote the offending passage and mark holds false. If
+   it does not, quote a representative sentence of what <Output> actually
+   says instead and mark holds true. Answer NONE only if <Output> has no
+   content addressing this at all.
+2. Does <Output> avoid any passage that is not grounded in <Evidence> and not
+   needed to state <Evidence>'s facts - padding such as a "Useful links"
+   section, an invented checklist, restated ceremony, or elaboration beyond
+   what the fact requires? If it pads, quote the offending passage and mark
+   holds false. If it does not, quote a representative sentence of the
+   evidence-grounded content and mark holds true. Answer NONE only if
+   <Output> has no content addressing this at all.`;
+
+function saysNothingElse(output, context) {
+  const { providerCfg, messages } = askItems(output, context, SAYS_NOTHING_ELSE_ITEMS, { includeObvious: true });
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.5,
+  });
+}
+
 module.exports = {
   checkCargo,
   checkGit,
@@ -700,4 +833,9 @@ module.exports = {
   readMakeTargets,
   repoContains,
   spans,
+  askItems,
+  judgeProvider,
+  weighByItem,
+  statesCriticalFact,
+  saysNothingElse,
 };

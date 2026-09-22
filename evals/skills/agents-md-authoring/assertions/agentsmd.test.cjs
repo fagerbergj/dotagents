@@ -15,6 +15,9 @@ const {
   looksLikeGithubSlug,
   nestedDoesNotRepeatRoot,
   checksForSpan,
+  askItems,
+  judgeProvider,
+  weighByItem,
 } = require('./agentsmd.cjs');
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentsmd-fixture-'));
@@ -384,35 +387,40 @@ console.log('ok   checkGo / checksForSpan go (synthetic Go fixture)');
   const byMetric = (m) => graders.find((g) => g.metric === m);
   const recall = byMetric('states_critical_fact');
   const precision = byMetric('says_nothing_else');
-
-  // The split is only real if the recall rubric cannot see the clutter list.
-  const recallText = recall.value + JSON.stringify(recall.rubricPrompt);
-  assert.doesNotMatch(recallText, /obvious/i,
-    'states_critical_fact must not be handed <Obvious> - that is the precision half\'s ground truth');
-  assert.match(recall.value, /graded elsewhere and are not your concern/,
-    'states_critical_fact must tell the judge not to mark down for saying more than the minimum');
-
-  // ...and the precision rubric must not re-award the fact the recall half scores,
-  // nor fine the concrete citation cited_facts_exist pays for.
-  assert.doesNotMatch(precision.value, /serious enough that missing it/,
-    'says_nothing_else must not also score whether the load-bearing fact is present');
-  assert.match(precision.value, /is never\s+padding/,
-    'says_nothing_else must exempt concrete commands, or it fines what cited_facts_exist requires');
-
-  // A custom rubricPrompt replaces promptfoo's whole grading prompt. Without the
-  // system half the judge answers in prose and every row scores 0 as "Could not
-  // extract JSON" - indistinguishable from a genuine zero.
-  const vars = new Set([...Object.keys(cases[0].vars), 'output', 'rubric']);
-  for (const g of graders) {
-    if (!g.rubricPrompt) continue;
-    const system = g.rubricPrompt.find((m) => m.role === 'system');
-    assert.ok(system && /reason.+pass.+score/s.test(system.content),
-      `${g.metric}: custom rubricPrompt drops the JSON-contract system message`);
-    for (const m of g.rubricPrompt) {
-      for (const [, name] of m.content.matchAll(/\{\{\s*(\w+)\s*\}\}/g)) {
-        assert.ok(vars.has(name), `${g.metric}: rubricPrompt interpolates undefined var {{${name}}}`);
-      }
-    }
-  }
+  assert.equal(recall.type, 'javascript', 'states_critical_fact must be quote-verified javascript, not llm-rubric');
+  assert.equal(recall.value, 'file://assertions/agentsmd.cjs:statesCriticalFact');
+  assert.equal(precision.type, 'javascript', 'says_nothing_else must be quote-verified javascript, not llm-rubric');
+  assert.equal(precision.value, 'file://assertions/agentsmd.cjs:saysNothingElse');
   console.log(`ok   metric split (${cases.length} cases, ${new Set(graders.map((g) => g.metric)).size} metrics)`);
+}
+
+// --- quote-verified judged metrics: pure parts (no network) -----------------
+{
+  // Model comes off `test.options.provider.id` ("openai:chat:<model>"), the
+  // exact object the old llm-rubric assertions already used.
+  const ctx = { test: { options: { provider: { id: 'openai:chat:google/gemini-3.8-flash', config: { apiBaseUrl: 'https://openrouter.ai/api/v1', apiKeyEnvar: 'OPENROUTER_API_KEY' } } } } };
+  const cfg = judgeProvider(ctx);
+  assert.equal(cfg.model, 'google/gemini-3.8-flash');
+  assert.equal(cfg.apiKeyEnvar, 'OPENROUTER_API_KEY');
+  assert.equal(judgeProvider({}).model, undefined, 'a missing provider block does not throw');
+
+  const w = weighByItem({ 1: 0.5, 2: 0.5 });
+  assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: false }]), 0.5, 'only a holding item earns its weight');
+  assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: true }]), 1, 'both items sum to 1');
+  assert.equal(w([]), 0, 'nothing verified scores 0, not an error');
+
+  const withEvidence = { vars: { evidence: 'the repo needs X', obvious: 'a dependency list' } };
+  const built = askItems('the file text', withEvidence, 'ITEM TEXT');
+  assert.ok(built.messages[1].content.includes('the file text'), '<Output> carries the real output');
+  assert.ok(built.messages[1].content.includes('the repo needs X'), '<Evidence> carries the case var');
+  assert.ok(!built.messages[1].content.includes('a dependency list'), '<Obvious> is left out unless requested');
+  assert.ok(built.messages[0].content.includes('"items"'), 'the system message states the JSON contract');
+
+  const withObvious = askItems('the file text', withEvidence, 'ITEM TEXT', { includeObvious: true });
+  assert.ok(withObvious.messages[1].content.includes('a dependency list'), '<Obvious> is carried when requested');
+
+  assert.throws(() => askItems('x', { vars: {} }, 'ITEM TEXT'), /vars\.evidence/, 'missing vars.evidence throws rather than scoring');
+  assert.throws(() => askItems('x', { vars: { evidence: 'e' } }, 'ITEM TEXT', { includeObvious: true }), /vars\.obvious/, 'missing vars.obvious throws when the item set needs it');
+
+  console.log('ok   states_critical_fact / says_nothing_else (pure parts; no network)');
 }
