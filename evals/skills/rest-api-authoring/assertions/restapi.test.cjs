@@ -4,6 +4,11 @@
 const assert = require('node:assert');
 const path = require('node:path');
 const g = require('./restapi.cjs');
+const q = require('./quality.cjs');
+// Every assertion's `value: file://assertions/<file>.cjs:<fn>` resolves
+// against the module its own filename names, not always restapi.cjs -
+// quality.cjs carries the quote-verified judged metrics.
+const MODULES = { 'restapi.cjs': g, 'quality.cjs': q };
 
 const wrap = (doc) => 'Here you go:\n\n```json\n' + JSON.stringify(doc, null, 2) + '\n```\n';
 
@@ -368,12 +373,13 @@ if (process.env.SKIP_NETWORK_TESTS) {
       if (assertion.type !== 'latency') assert.ok(assertion.metric, `${where}: headless ${assertion.type} assertion`);
       if (assertion.metric) carriedBy.set(assertion.metric, (carriedBy.get(assertion.metric) || new Set()).add(where));
       if (typeof assertion.value === 'string' && assertion.value.startsWith('file://')) {
-        const fn = assertion.value.split(':').pop();
-        assert.strictEqual(typeof g[fn], 'function', `${where}: ${assertion.value} does not resolve to an export`);
+        const [file, fn] = assertion.value.replace('file://assertions/', '').split(':');
+        const mod = MODULES[file];
+        assert.ok(mod, `${where}: ${assertion.value} names an assertions file this test does not know about`);
+        assert.strictEqual(typeof mod[fn], 'function', `${where}: ${assertion.value} does not resolve to an export`);
       }
-      if (typeof assertion.value === 'string' && assertion.type === 'llm-rubric') {
-        assert.match(assertion.value.toLowerCase(), /score from 0 to 1, never above 1/, `${where}: rubric is missing the 0-to-1 clause`);
-      }
+      assert.notEqual(assertion.type, 'llm-rubric', `${where}: llm-rubric is banned - convert to quote-verified javascript (evals/AGENTS.md)`);
+      assert.notEqual(assertion.type, 'g-eval', `${where}: g-eval is banned - convert to quote-verified javascript (evals/AGENTS.md)`);
       if (assertion.metric !== 'contract_requirements') continue;
       const requirements = (assertion.config || {}).requirements || [];
       assert.ok(requirements.length, `${where}: contract_requirements with no requirements`);
