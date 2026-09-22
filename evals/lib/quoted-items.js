@@ -105,6 +105,36 @@ function scoreFromJudge(raw, texts, score, opts = {}) {
 // One JSON POST, shaped like lib/skill-tools.js's own chat(): apiKeyEnvar
 // names the key, never a literal; model/apiBaseUrl come from the provider
 // config the suite already declares once, so a grader carries no copy of them.
+// Constrained decoding: the provider enforces the shape, so a long quote or a
+// stray brace cannot break the answer. maxLength keeps quotes checkable.
+const ITEMS_SCHEMA = {
+  type: 'json_schema',
+  json_schema: {
+    name: 'judged_items',
+    strict: true,
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['items'],
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['n', 'quote', 'holds'],
+            properties: {
+              n: { type: 'integer' },
+              quote: { type: 'string', maxLength: 300 },
+              holds: { type: 'boolean' },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
 function callJudge(providerCfg, messages) {
   const key = providerCfg.apiKeyEnvar ? process.env[providerCfg.apiKeyEnvar] : process.env.OPENAI_API_KEY;
   if (!key) throw new Error(`no API key in ${providerCfg.apiKeyEnvar || 'OPENAI_API_KEY'}`);
@@ -113,7 +143,7 @@ function callJudge(providerCfg, messages) {
     model: providerCfg.model,
     messages,
     max_tokens: providerCfg.max_tokens,
-    response_format: providerCfg.response_format,
+    response_format: ITEMS_SCHEMA,
     ...(providerCfg.passthrough || {}),
   });
   return new Promise((resolve, reject) => {
@@ -155,4 +185,4 @@ async function judgeQuotedItems({ providerCfg, messages, texts, score, threshold
   return scoreFromJudge(raw, texts, score, { threshold });
 }
 
-module.exports = { normalize, quoteHolds, verifyItems, parseJudge, scoreFromJudge, callJudge, judgeQuotedItems };
+module.exports = { ITEMS_SCHEMA, normalize, quoteHolds, verifyItems, parseJudge, scoreFromJudge, callJudge, judgeQuotedItems };
