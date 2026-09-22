@@ -156,33 +156,47 @@ function callJudge(providerCfg, messages) {
       let data = '';
       res.on('data', (c) => { data += c; });
       res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.error) return reject(new Error(`api error: ${JSON.stringify(json.error).slice(0, 300)}`));
-          const choice = json.choices?.[0] || {};
-          const content = choice.message?.content ?? '';
-          // An empty answer is a harness fault; name the cause in the row.
-          resolve(content || `finish_reason=${choice.finish_reason} (no content)`);
-        } catch {
-          reject(new Error(`unparseable response: ${data.slice(0, 300)}`));
-        }
+        let json;
+        try { json = JSON.parse(data); } catch { return reject(new Error(`http ${res.statusCode}: ${data.slice(0, 200)}`)); }
+        if (json.error) return reject(new Error(`api error: ${JSON.stringify(json.error).slice(0, 300)}`));
+        const choice = json.choices?.[0] || {};
+        const content = choice.message?.content ?? '';
+        if (!content) return reject(new Error(`empty answer (finish_reason=${choice.finish_reason})`));
+        resolve(choice.finish_reason === 'length' ? `${content}\n[truncated: finish_reason=length]` : content);
       });
     });
+    req.setTimeout(180000, () => req.destroy(new Error('timeout after 180s')));
     req.on('error', reject);
     req.write(body);
     req.end();
   });
 }
 
-// End-to-end assertion helper: ask, verify, score. `providerCfg` should be read
-// straight off `context.test.options.provider` by the caller, so the judge
-// model lives in exactly one place in the suite's YAML.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Provider errors, empty answers and unparseable JSON are all transport noise
+// from the eval's point of view: retry with backoff, then mark the row dead.
+async function judgeWithRetry(providerCfg, messages, attempts = 3) {
+  const errors = [];
+  for (let i = 0; i < attempts; i++) {
+    if (i) await sleep(1000 * 2 ** i);
+    try {
+      const raw = await callJudge(providerCfg, messages);
+      if (parseJudge(raw)) return { raw };
+      errors.push(`unparseable: ${normalize(raw).slice(0, 120)}`);
+    } catch (e) {
+      errors.push(e.message);
+    }
+  }
+  return { raw: '', errors };
+}
+
 async function judgeQuotedItems({ providerCfg, messages, texts, score, threshold }) {
-  let raw = await callJudge(providerCfg, messages);
-  // One retry: a provider-side error or an unparseable answer is transport
-  // noise, and a second call is cheaper than a dead row.
-  if (!parseJudge(raw)) raw = await callJudge(providerCfg, messages);
+  const { raw, errors } = await judgeWithRetry(providerCfg, messages);
+  if (errors) {
+    return { pass: false, score: 0, reason: `did not parse: judge failed ${errors.length} attempts: ${errors.join(' / ')}`, metadata: { graderError: true } };
+  }
   return scoreFromJudge(raw, texts, score, { threshold });
 }
 
-module.exports = { ITEMS_SCHEMA, normalize, quoteHolds, verifyItems, parseJudge, scoreFromJudge, callJudge, judgeQuotedItems };
+module.exports = { ITEMS_SCHEMA, judgeWithRetry, normalize, quoteHolds, verifyItems, parseJudge, scoreFromJudge, callJudge, judgeQuotedItems };

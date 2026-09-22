@@ -88,3 +88,12 @@ assert.equal(parseJudge('{"reason": "x"}'), null, 'valid JSON with no items arra
 }
 
 console.log('ok   quoted-items (quote verification, parsing, error/zero distinction, caller scoring rule)');
+
+// An unreachable provider must cost three attempts and come back as a dead
+// row with graderError, never a thrown error that kills the suite.
+(async () => {
+  process.env.QUOTED_ITEMS_TEST_KEY = 'k';
+  const { judgeQuotedItems } = require('./quoted-items.js');
+  const r = await judgeQuotedItems({ providerCfg: { model: 'm', apiBaseUrl: 'https://127.0.0.1:9/v1', apiKeyEnvar: 'QUOTED_ITEMS_TEST_KEY' }, messages: [], texts: { default: '' }, score: () => 0 });
+  assert.ok(r.metadata.graderError && /3 attempts/.test(r.reason), 'retries are exhausted and the row is marked dead');
+})();
