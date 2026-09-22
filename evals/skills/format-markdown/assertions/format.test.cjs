@@ -228,13 +228,13 @@ for (const c of dirty) {
   assert.ok(!metricsOn(c).has('unchanged_when_clean'), `${c.description}: a dirty document is not meant to come back unchanged`);
 }
 
-// Item 5 duplicated the computed `preserved`; cutting it rescaled the other
-// four. A rubric awarding 0.2 an item has five of them again.
+// dotagents#64/#65: readability moved off llm-rubric arithmetic onto
+// quote-verified items (assertions/readability.cjs). Content preservation is
+// `preserved`'s job, not re-asked of the judge here - a rubric item asking
+// "is it still the same document" would duplicate a computed metric.
 const readability = dirty[0].assert.find((a) => a.metric === 'readability');
-assert.match(readability.value, /award 0\.25 for each of the four/,
-  'readability no longer scores four items at 0.25 - did item 5 come back?');
-assert.doesNotMatch(readability.value, /still the same document/,
-  'item 5 duplicates the computed `preserved` metric and must stay cut');
-assert.ok(defaultMetrics.has('preserved'), '`preserved` is what replaced item 5; it has to still be there');
+assert.equal(readability.type, 'javascript', 'readability must be quote-verified, not llm-rubric or g-eval');
+assert.equal(readability.value, 'file://assertions/readability.cjs:readability');
+assert.ok(defaultMetrics.has('preserved'), '`preserved` is what content-preservation is graded by; it has to still be there');
 
 console.log(`format assertions: ok (${dirty.length} dirty cases graded for readability, ${controls.length} controls for restraint)`);
