@@ -37,7 +37,8 @@ providers:
 
 defaultTest:
   options:
-    # Every judged assertion is llm-rubric; no g-eval survives in this suite, so
+    # Every judged assertion is now `javascript` via lib/quoted-items.js
+    # (dotagents#64/#65); no llm-rubric or g-eval survives in this suite, so
     # no rubricPrompt override is needed anywhere.
     # The model is asked to return the skill as `FILE: <path>` blocks; this pulls
     # them into a {path: content} JSON object so every native `is-json` and
@@ -45,20 +46,25 @@ defaultTest:
     # Output with no FILE: block passes through untouched behind a sentinel, which
     # is the correct outcome for a case whose right answer is to push back.
     transform: file://assertions/skillauth.cjs:normalizeToFiles
+    # Judge settings are settled repo-wide (evals/AGENTS.md): google/gemini-3.8-flash,
+    # temperature 0, reasoning enabled under passthrough - not deepseek grading
+    # deepseek, which shares its blind spots and was this suite's judge before
+    # this conversion. skillauth.cjs's judgeQuotedItems metrics read this block
+    # via context.test.options.provider; the deterministic javascript graders
+    # (validatesWithSkillsRef, specBudgetAndRefs) ignore it entirely.
     provider:
-      id: openai:chat:deepseek/deepseek-v4-flash
+      id: openai:chat:google/gemini-3.8-flash
       config:
-        # Kept deliberately, matching rest-api-authoring: an isolated A/B found
-        # it does not break judge parsing, and llm-rubric brace-matches its
-        # verdict regardless.
         response_format:
           type: json_object
         apiBaseUrl: https://openrouter.ai/api/v1
-        max_tokens: 8192
-        max_completion_tokens: 8192
+        temperature: 0
+        max_tokens: 16384
+        max_completion_tokens: 16384
         passthrough:
+          temperature: 0
           reasoning:
-            enabled: false
+            enabled: true
         apiKeyEnvar: OPENROUTER_API_KEY
         showThinking: false
         omitDefaults: true
