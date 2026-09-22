@@ -58,63 +58,16 @@
     #    the skill under test does not itself cite. Consequence questions, not
     #    section-heading presence - a question like "quote the mechanism" can't
     #    be answered by reciting SKILL.md's own prescribed vocabulary.
+    #
+    #    Quote-verified (dotagents#64/#65): the judge answers each of the five
+    #    questions with a verbatim quote or NONE, code checks the quote is a
+    #    real substring before it counts, and skillauth.cjs's weighByItem - not
+    #    the judge's own arithmetic - sums the 0.2-per-item weights. See
+    #    assertions/skillauth.cjs:skillQuality.
     - &skill_quality
-      type: llm-rubric
-      threshold: 0.7
+      type: javascript
+      value: file://assertions/skillauth.cjs:skillQuality
       metric: skill_quality
-      value: |
-        You are reading an agent skill package written in response to this request:
-        "{{task}}"
-
-        Answer the five questions below from the delivered package alone. A
-        question counts as answered only if you can quote the part of the
-        package that answers it. Naming a best practice, a heading, or a
-        convention is not an answer; only a mechanism you can quote is. If
-        nothing in the package answers a question, the answer is NONE and that
-        question earns nothing.
-
-        1. Quote the `description` field. Per Anthropic's Agent Skills docs,
-           "The description is what Claude matches your request against when
-           determining whether to trigger the Skill" (platform.claude.com,
-           Agent Skills overview). Imagining only the name and description are
-           loaded, would they get this skill triggered for a request like the
-           one above, and correctly left alone for an unrelated request? Quote
-           the words that make the trigger specific, or answer NONE.
-        2. Progressive disclosure. Anthropic's engineering team writes that
-           content should move out of SKILL.md "when the SKILL.md file
-           becomes unwieldy" (Equipping agents for the real world with Agent
-           Skills, anthropic.com). Does the package avoid inlining a long,
-           detailed list/schema/edge-case table in SKILL.md's body - either
-           because this task's domain knowledge is compact enough that
-           nothing needs to move out (quote the passage covering it inline),
-           or because it correctly points to a separate references/, assets/,
-           or scripts/ file via a real instruction in SKILL.md's own body
-           text telling the agent when to open it (quote that instruction)?
-           A line of prose or an echo printed by a script at runtime, a
-           comment inside the separate file itself, or the file simply
-           existing without SKILL.md pointing to it does not count. Answer
-           NONE only if the body pads itself with an exhaustive list/schema/
-           table that should have moved to a separate file, or points to a
-           separate file with nothing in the body saying when to open it.
-        3. Take the first concrete action a user of this skill needs the agent
-           to perform. Could the agent perform it without guessing a command, a
-           file path, or a decision the author left implicit? Quote the
-           instruction, or answer NONE.
-        4. Anthropic's guidance on creating custom Skills says the best skills
-           "solve a specific, repeatable task" and are "focused on one workflow
-           rather than trying to do everything" (support.claude.com, Creating
-           custom Skills). Does this package stay to one workflow, or does it
-           fold in an unrelated capability a user would reasonably want to
-           invoke separately? Quote evidence that it stays focused, or answer
-           NONE if it does not.
-        5. Coverage: does the package address everything this request needs,
-           with nothing contradicting it? Specifically: {{coverage}} - quote what
-           does it, or answer NONE.
-
-        Score from 0 to 1, never above 1: award 0.2 for each of the five
-        questions you answered with a quotable mechanism and 0 for each NONE.
-        Judge the package as delivered; do not reward or penalise which
-        conventions or authoring style it used.
 
 - description: domain knowledge skill - terraform review conventions
   vars:
@@ -210,35 +163,14 @@
     # reply instead.
     transform: 'output'
   assert:
-    - type: llm-rubric
+    # Quote-verified (dotagents#64/#65): see assertions/skillauth.cjs:
+    # controlQualityOneOff. Two equally-weighted items, the same claim as
+    # before - flags the mismatch, and does not over-deliver a scaffolded
+    # package - scored from verified quotes instead of the judge's own prose
+    # arithmetic.
+    - type: javascript
       metric: control_quality
-      threshold: 0.7
-      value: |
-        Someone asked for this:
-        "{{task}}"
-
-        The reply is below. Anthropic's guidance on creating custom Skills says
-        "the best skills: Solve a specific, repeatable task" (Creating custom
-        Skills, support.claude.com) and are "focused on one workflow rather
-        than trying to do everything." A schema change to one column, done once
-        on a fixed date and never repeated, has no future occasion to trigger a
-        skill - there is nothing left to reuse it for once Thursday passes.
-
-        Answer these from the reply as delivered:
-        1. Does the reply note that a one-time, non-repeated task like this is
-           a poor fit for a persistent, reusable skill? Quote it, or answer
-           NONE.
-        2. Does the reply nonetheless hand back a fully scaffolded skill
-           package - a SKILL.md plus one or more separate references/, assets/,
-           or scripts/ files - as if the task were skill-worthy? Quote the
-           artifact, or answer NONE.
-
-        Score from 0 to 1, never above 1. Start at 1. A reply that does not
-        flag the mismatch (question 1 answered NONE) scores 0. Subtract 0.5 if
-        question 2 finds a fully scaffolded multi-file package delivered
-        without qualification. A reply that flags the mismatch, and either
-        declines outright or hands back nothing more than a short note, scores
-        1 and must not be marked down for declining to build something.
+      value: file://assertions/skillauth.cjs:controlQualityOneOff
 
 - description: negative control - a rule this small does not earn scaffolding
   vars:
@@ -255,35 +187,12 @@
     # which docked those same over-built rows to 0.50. Three of the 21
     # skill_validates rows per arm were this case. control_quality is the metric
     # written for it and is the only one that grades it.
-    - type: llm-rubric
+    # Quote-verified (dotagents#64/#65): see assertions/skillauth.cjs:
+    # controlQualitySmallRule. Same two claims - a proportionate, unpadded
+    # body and no invented extra file - as equally-weighted items.
+    - type: javascript
       metric: control_quality
-      threshold: 0.7
-      value: |
-        Someone asked for this:
-        "{{task}}"
-
-        The reply is below. This is a genuinely repeatable rule, so a skill is
-        a reasonable answer - but Anthropic's engineering team writes that
-        content should move into a separate file only "when the SKILL.md file
-        becomes unwieldy" (Equipping agents for the real world with Agent
-        Skills, anthropic.com), and a one-line spelling preference never gets
-        there.
-
-        Answer these from the delivered package:
-        1. Is the SKILL.md body itself short and proportionate to a one-line
-           style rule - roughly a short paragraph or a handful of bullet points
-           - rather than padded with an interview phase, a multi-step
-           procedure, or a validation loop that a rule this simple does not
-           need? Quote the body, or answer NONE if it is padded.
-        2. Does the package invent a references/, assets/, or scripts/ file to
-           hold content that would fit inline in a sentence or two? Quote the
-           invented file, or answer NONE.
-
-        Score from 0 to 1, never above 1. Start at 1. Subtract 0.5 if question
-        1 finds the body padded beyond what a one-line rule needs. Subtract 0.5
-        if question 2 finds an unwarranted extra file. A single short SKILL.md
-        with no invented extra files scores 1 and must not be marked down for
-        looking sparse.
+      value: file://assertions/skillauth.cjs:controlQualitySmallRule
 
 - description: negative control - the existing skill is already fine
   vars:
@@ -355,38 +264,11 @@
   options:
     transform: 'output'
   assert:
-    - type: llm-rubric
+    # Quote-verified (dotagents#64/#65): see assertions/skillauth.cjs:
+    # controlQualityAlreadyFine. Same two claims - says the skill is fine, and
+    # leaves it unchanged - as items weighted 0.6/0.4 (saying it's fine is the
+    # primary claim; leaving nothing changed is the specificity check, the
+    # same 0.6/0.4 split review.cjs's findsTheDefect uses for that shape).
+    - type: javascript
       metric: control_quality
-      threshold: 0.7
-      value: |
-        Someone asked for this:
-        "{{task}}"
-
-        The file they attached:
-
-        ````markdown
-        {{draft}}
-        ````
-
-        The reply is below. The attached skill already satisfies the published
-        Agent Skills spec (a valid lowercase-hyphenated name matching its own
-        subject, a description stating what and when, a body far under the
-        500-line budget, no references it points to that are missing) and
-        support.claude.com's guidance that the best skills "are focused on one
-        workflow rather than trying to do everything" - this one workflow is
-        writing one commit message. The correct answer is that it does not need
-        a cleanup pass or a split into references/.
-
-        Answer these from the reply as delivered:
-        1. Does the reply say the skill is fine as it is and does not need a
-           rewrite or a split? Quote it, or answer NONE.
-        2. List everything the reply changes or adds: a new references/,
-           assets/, or scripts/ file, new sections, a rewritten frontmatter
-           field, additional steps. Quote each one, or answer NONE.
-
-        Score from 0 to 1, never above 1. Start at 1. A reply that does not say
-        the skill is fine scores 0. Subtract 0.25 for each distinct change or
-        addition listed in question 2, however well designed it is - inventing
-        a references/ split for a 63-line file is the wrong answer here, not
-        thoroughness. A reply that says it's fine and changes nothing scores 1
-        and must not be marked down for being short.
+      value: file://assertions/skillauth.cjs:controlQualityAlreadyFine

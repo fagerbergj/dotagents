@@ -248,4 +248,26 @@ if (process.env.SKIP_NETWORK_TESTS) {
   console.log(`ok   control partition (${controls.length} controls on control_quality alone, ${cases.length - controls.length} package cases)`);
 }
 
+// --- quote-verified judged metrics: pure parts (no network) -----------------
+{
+  const ctx = { test: { options: { provider: { id: 'openai:chat:google/gemini-3.8-flash', config: { apiBaseUrl: 'https://openrouter.ai/api/v1', apiKeyEnvar: 'OPENROUTER_API_KEY' } } } } };
+  const cfg = g.judgeProvider(ctx);
+  assert.equal(cfg.model, 'google/gemini-3.8-flash');
+  assert.equal(cfg.apiKeyEnvar, 'OPENROUTER_API_KEY');
+  assert.equal(g.judgeProvider({}).model, undefined, 'a missing provider block does not throw');
+
+  const w = g.weighByItem({ 1: 0.6, 2: 0.4 });
+  assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: false }]), 0.6, 'only a holding item earns its weight');
+  assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: true }]), 1, 'both items sum to 1');
+  assert.equal(w([]), 0, 'nothing verified scores 0, not an error');
+
+  const built = g.askItems('the delivered package', { vars: { task: 'a request for a skill' } }, 'ITEM TEXT');
+  assert.ok(built.messages[1].content.includes('the delivered package'), '<Output> carries the real output');
+  assert.ok(built.messages[1].content.includes('a request for a skill'), '<Task> carries the case var');
+  assert.ok(built.messages[0].content.includes('"items"'), 'the system message states the JSON contract');
+
+  const withExtra = g.askItems('pkg', { vars: { task: 't' } }, 'ITEMS', '<Coverage>everything covered</Coverage>\n');
+  assert.ok(withExtra.messages[1].content.includes('<Coverage>everything covered</Coverage>'), 'extra tags (Coverage, Draft) are carried through');
+}
+
 console.log('skillauth assertions: ok');

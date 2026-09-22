@@ -17,6 +17,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
+const { judgeQuotedItems } = require('../../../lib/quoted-items.js');
 
 // skills-ref is the reference validator agentskills.io/specification names:
 // `skills-ref validate ./my-skill`. Pinned to the version probed by hand.
@@ -290,6 +291,201 @@ function specBudgetAndRefs(output) {
   });
 }
 
+// dotagents#64/#65 pattern, mirroring skills/review-code/assertions/review.cjs:
+// ask the judge narrow numbered items, require a verbatim quote from <Output>
+// (or NONE), verify the quote is a real substring before it counts, and score
+// from the verified items by a rule this file supplies - never the judge's own
+// arithmetic. Same JSON contract as review-code's/adr's; the tags in the user
+// message are this suite's own (Task/Coverage/Output).
+const JSON_CONTRACT = 'You are grading output against a small numbered list of'
+  + ' yes/no questions. For EVERY numbered item, answer with one object:'
+  + ' {"n": <item number>, "quote": <verbatim text copied from inside <Output>'
+  + ' that decides this item, or the literal string "NONE" if nothing in'
+  + ' <Output> decides it>, "holds": <true or false>}. A quote must be text'
+  + ' that actually appears inside <Output> - copying <Task> or <Coverage> back,'
+  + ' paraphrasing, or summarising is not a quote and will be rejected before'
+  + ' your "holds" verdict is even read. Keep each quote to one sentence or'
+  + ' line, at most 300 characters, never a code block - long quotes break the'
+  + ' JSON and lose the item. Respond with exactly one JSON object:'
+  + ' {"items": [...]}, one entry per numbered item, nothing else.';
+
+function judgeProvider(context) {
+  const p = (context && context.test && context.test.options && context.test.options.provider) || {};
+  const model = String(p.id || '').replace(/^openai:chat:/, '') || (p.config && p.config.model);
+  return { model, ...(p.config || {}) };
+}
+
+// weights: {1: 0.6, 2: 0.4, ...}. Only a verified quote whose "holds" is true
+// earns its item's weight - a real quote the judge itself says does not
+// satisfy the item earns nothing, same as an unquoted one.
+function weighByItem(weights) {
+  return (verified) => Object.keys(weights).reduce((sum, n) => {
+    const answers = verified.filter((it) => String(it.n) === n);
+    return sum + (answers.length && answers.every((it) => it.holds) ? weights[n] : 0);
+  }, 0);
+}
+
+// Builds the judge's messages. `extra` carries whatever case-specific tags
+// (Coverage, Draft) a metric needs beyond <Task> and <Output>; the caller
+// supplies its own text so no metric here has to guess which vars exist.
+function askItems(output, context, itemsPrompt, extra) {
+  const providerCfg = judgeProvider(context);
+  const messages = [
+    { role: 'system', content: JSON_CONTRACT },
+    {
+      role: 'user',
+      content: `<Task>${context.vars.task || ''}</Task>\n`
+        + `${extra || ''}`
+        + `<Output>${output}</Output>\n\n${itemsPrompt}`,
+    },
+  ];
+  return { providerCfg, messages };
+}
+
+// Was the `skill_quality` llm-rubric's five questions, unchanged in substance
+// and equal weight (0.2 each, as the original "award 0.2 for each" arithmetic
+// did) - only the arithmetic moves off the judge's own prose onto verified
+// quotes. Runs on every positive case (the &skill_quality alias), never on the
+// three negative controls, which have no skill package to answer these against.
+const SKILL_QUALITY_ITEMS = `<Output> is an agent skill package (or, for the
+transform used on the two negative-control-adjacent cases with a raw reply,
+the model's prose) written in response to the request in <Task>. Answer the
+five questions below from the delivered package alone. A question counts as
+answered only if you can quote the part of the package that answers it.
+Naming a best practice, a heading, or a convention is not an answer; only a
+mechanism you can quote is. If nothing in the package answers a question, the
+answer is NONE and that question earns nothing.
+
+1. Quote the \`description\` field. Per Anthropic's Agent Skills docs, "The
+   description is what Claude matches your request against when determining
+   whether to trigger the Skill" (platform.claude.com, Agent Skills overview).
+   Imagining only the name and description are loaded, would they get this
+   skill triggered for a request like <Task>, and correctly left alone for an
+   unrelated request? Quote the words that make the trigger specific, or
+   answer NONE.
+2. Progressive disclosure. Anthropic's engineering team writes that content
+   should move out of SKILL.md "when the SKILL.md file becomes unwieldy"
+   (Equipping agents for the real world with Agent Skills, anthropic.com).
+   Does the package avoid inlining a long, detailed list/schema/edge-case
+   table in SKILL.md's body - either because this task's domain knowledge is
+   compact enough that nothing needs to move out (quote the passage covering
+   it inline), or because it correctly points to a separate references/,
+   assets/, or scripts/ file via a real instruction in SKILL.md's own body
+   text telling the agent when to open it (quote that instruction)? A line of
+   prose or an echo printed by a script at runtime, a comment inside the
+   separate file itself, or the file simply existing without SKILL.md
+   pointing to it does not count. Answer NONE only if the body pads itself
+   with an exhaustive list/schema/table that should have moved to a separate
+   file, or points to a separate file with nothing in the body saying when to
+   open it.
+3. Take the first concrete action a user of this skill needs the agent to
+   perform. Could the agent perform it without guessing a command, a file
+   path, or a decision the author left implicit? Quote the instruction, or
+   answer NONE.
+4. Anthropic's guidance on creating custom Skills says the best skills "solve
+   a specific, repeatable task" and are "focused on one workflow rather than
+   trying to do everything" (support.claude.com, Creating custom Skills). Does
+   this package stay to one workflow, or does it fold in an unrelated
+   capability a user would reasonably want to invoke separately? Quote
+   evidence that it stays focused, or answer NONE if it does not.
+5. Coverage: does the package address everything <Coverage> describes, with
+   nothing contradicting it? Quote what does it, or answer NONE.`;
+
+function skillQuality(output, context) {
+  const extra = `<Coverage>${(context.vars && context.vars.coverage) || ''}</Coverage>\n`;
+  const { providerCfg, messages } = askItems(output, context, SKILL_QUALITY_ITEMS, extra);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2 }), threshold: 0.7,
+  });
+}
+
+// Was the `control_quality` llm-rubric on the one-off-task negative control
+// (id002 in tests/cases.yaml). The two questions are unchanged; the original
+// arithmetic gated item 2 on item 1 (a fully-scaffolded package could only
+// cost anything if the reply also failed to flag the mismatch). Simplified to
+// two equally-weighted positive items, the same move adr-authoring's
+// quote-verified conversion made on its own control_quality (dotagents#65's
+// sibling suite): item 2 is reframed as "did NOT over-deliver" so `holds` is
+// good news for both items, matching how weighByItem is written everywhere
+// else in this file.
+const CONTROL_ONE_OFF_ITEMS = `<Task> describes a one-time, non-repeated
+task with no future occasion to trigger a reusable skill. Anthropic's
+guidance on creating custom Skills says "the best skills: Solve a specific,
+repeatable task" (Creating custom Skills, support.claude.com) and are
+"focused on one workflow rather than trying to do everything." Judge the
+reply as delivered; a short decline is not a deduction.
+
+1. Does <Output> note that a one-time, non-repeated task like <Task> is a
+   poor fit for a persistent, reusable skill? Quote it, or answer NONE.
+2. Does <Output> avoid handing back a fully scaffolded skill package - a
+   SKILL.md plus one or more separate references/, assets/, or scripts/
+   files - as if the task were skill-worthy? Answer NONE (this item does not
+   hold) only if it hands back such a package unqualified; a short note or an
+   outright decline holds this item.`;
+
+function controlQualityOneOff(output, context) {
+  const { providerCfg, messages } = askItems(output, context, CONTROL_ONE_OFF_ITEMS);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.7,
+  });
+}
+
+// Was `control_quality` on the small-rule negative control (id003): a genuine
+// rule, but too small to earn scaffolding. Anthropic's engineering team writes
+// that content moves to a separate file only "when the SKILL.md file becomes
+// unwieldy" (Equipping agents for the real world with Agent Skills,
+// anthropic.com), and a one-line spelling preference never gets there.
+const CONTROL_SMALL_RULE_ITEMS = `<Task> asks for a genuinely repeatable
+one-line style rule - too small to ever make SKILL.md "unwieldy" (Equipping
+agents for the real world with Agent Skills, anthropic.com).
+
+1. Is the SKILL.md body itself short and proportionate to a one-line style
+   rule - roughly a short paragraph or a handful of bullet points - rather
+   than padded with an interview phase, a multi-step procedure, or a
+   validation loop a rule this simple does not need? Quote the body, or
+   answer NONE if it is padded.
+2. Does the package avoid inventing a references/, assets/, or scripts/ file
+   to hold content that would fit inline in a sentence or two? Answer NONE
+   (this item does not hold) only if it invents such a file; quote it if so.`;
+
+function controlQualitySmallRule(output, context) {
+  const { providerCfg, messages } = askItems(output, context, CONTROL_SMALL_RULE_ITEMS);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.7,
+  });
+}
+
+// Was `control_quality` on the already-fine negative control (id004): the
+// attached skill already satisfies the spec and support.claude.com's
+// single-workflow guidance, so the correct answer is to leave it alone.
+const CONTROL_ALREADY_FINE_ITEMS = `<Draft> is an existing skill, attached to
+<Task>. It already satisfies the published Agent Skills spec (a valid
+lowercase-hyphenated name matching its own subject, a description stating
+what and when, a body far under the 500-line budget, no references it points
+to that are missing) and support.claude.com's guidance that the best skills
+"are focused on one workflow rather than trying to do everything" - this one
+workflow is writing one commit message. The correct answer is that it does
+not need a cleanup pass or a split into references/.
+
+1. Does <Output> say the skill is fine as it is and does not need a rewrite
+   or a split into references/? Quote it, or answer NONE.
+2. Does <Output> leave the skill unchanged - no new references/, assets/, or
+   scripts/ file, no new section, no rewritten frontmatter field, no
+   additional step? Answer NONE (this item does not hold) only if it changes
+   or adds something; quote the change if so.`;
+
+function controlQualityAlreadyFine(output, context) {
+  const extra = `<Draft>${(context.vars && context.vars.draft) || ''}</Draft>\n`;
+  const { providerCfg, messages } = askItems(output, context, CONTROL_ALREADY_FINE_ITEMS, extra);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.6, 2: 0.4 }), threshold: 0.7,
+  });
+}
+
 module.exports = {
   danglingAndChains,
   extractFence,
@@ -304,4 +500,11 @@ module.exports = {
   unreachableFiles,
   validatesWithSkillsRef,
   withinBodyBudget,
+  judgeProvider,
+  weighByItem,
+  askItems,
+  skillQuality,
+  controlQualityOneOff,
+  controlQualitySmallRule,
+  controlQualityAlreadyFine,
 };
