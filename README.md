@@ -16,7 +16,7 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 | `commit-authoring` | [commit-authoring.md](results/commit-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `develop-feature` | [develop-feature.md](results/develop-feature.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `fix-bug` | [fix-bug.md](results/fix-bug.md) | `881ceab` :warning: | `3a3f00e` | reused |
-| `format-markdown` | [format-markdown.md](results/format-markdown.md) | `96ebc20` :warning: | `2f5e7f7` | reused |
+| `format-markdown` | [format-markdown.md](results/format-markdown.md) | `1c093c5` :warning: | `e71b94e` | reused |
 | `issue-authoring` | [issue-authoring.md](results/issue-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `mermaid-authoring` | [mermaid-authoring.md](results/mermaid-authoring.md) | `172b59b` | `172b59b` | rerun |
 | `pr-authoring` | [pr-authoring.md](results/pr-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
