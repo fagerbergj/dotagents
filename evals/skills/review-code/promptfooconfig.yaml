@@ -80,7 +80,7 @@ defaultTest:
     # they take promptfoo's default prompt untouched, which cannot drift from it.
     transform: file://../../lib/strip-reasoning.js:stripReasoning
     provider:
-      id: openai:chat:google/gemini-3.5-flash-lite
+      id: openai:chat:google/gemini-3.8-flash
       config:
         response_format:
           type: json_object
