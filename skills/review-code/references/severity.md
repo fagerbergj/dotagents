@@ -19,9 +19,10 @@ Calibrate before you reach for one. Google's standard is that a reviewer approve
 | **security** | Auth flaw, unvalidated input, injection, PII or secret exposure | "I'd sanitise this differently" |
 | **design** | A *named* principle violated, **and** you can say which concrete future defect it invites | Naming a principle you could name about most code |
 | **scope** | The change does something its task never asked for | A pre-existing wart in adjacent code |
+| **delivery** | Something the change set out to deliver - an acceptance item in its linked issue, a claim in its own description - is absent and not deferred to a linked follow-up; or what the change produces does not match what consumes it (schema, client, renderer), with the consumer cited | Scope you wish the task had included; an item the change explicitly defers; the same pre-existing bug in a sibling path the task never mentions |
 | **tests** | The behaviour this change *exists to deliver* ships with no test, or a test passes while what it claims to cover is broken | An untested edge case, fallback, or guard alongside a tested main path - that is a `suggestion:` |
 
-There is deliberately no *intent* anchor.
+There is deliberately no *intent* anchor, and delivery is not one: it is checked against the task's own words and the consumer's own file, never against what you think the change should have been.
 A human reviewer blocking on "I don't understand this" is healthy scepticism; an automated reviewer doing it would block on anything unfamiliar, at any hour, with nobody to argue back.
 See **Unclear intent** below for where it goes instead.
 
@@ -55,6 +56,14 @@ Raise them, file them, don't hold this change hostage to them.
 Approve a change that clearly improves overall code health even if it isn't perfect.
 There is no perfect code, only better code.
 Blocking a net improvement on polish costs more than the polish is worth.
+
+**Imperfect is not unfinished.**
+Forward progress forgives polish, not missing parts.
+A change that ships half of what its issue asks for, or an output its consumer cannot read, has not yet improved anything a user can see - approving it moves the gap into production, where nobody is reviewing.
+
+**Severity errs in both directions.**
+Blocking on taste is one failure; filing a named defect as a `suggestion:` so the verdict stays approve is the other, and it is the expensive one - a suggestion is optional by definition, so the merge does not wait for it.
+If your own finding says what breaks ("renders as empty rows", "the key the page reads is never written"), it carries the defect or delivery anchor and it blocks.
 
 **Unclear intent withholds approval; it does not demand changes.**
 If you cannot verify correctness because you don't understand the change, raise a `question:` naming *what specifically* you could not determine, and let the verdict be `comment`.

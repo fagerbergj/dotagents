@@ -235,7 +235,7 @@ jobs:
     environment: ${{ inputs.environment }}
     permissions:
       contents: read
-    timeout-minutes: 60
+    timeout-minutes: 240   # experiment: reasoning rows run several times longer; revert with the arm
     strategy:
       # One suite failing must not cancel the others: a red suite is still a
       # result worth reporting, and the report job wants every artifact it can get.

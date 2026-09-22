@@ -32,7 +32,24 @@ const withRepo = (fn, extra = {}) => (ctx) => ({
   config: { repoDir: fixture(ctx.vars).dir, ...extra },
 });
 
+// Experiment arm, not a shipped subject: the delivery check as nine lines of
+// system prompt with no skill at all. It answers whether an always-on rule
+// belongs in a skill (3k words, and both skill arms cost a quarter of
+// `no_false_blocker`) or in the prompt. Remove once the question is settled.
+const DELIVERY = `When you review a change:
+- First list what it set out to deliver: each item its linked issue asks for and each thing its description says it does.
+- For each item, find where the diff delivers it. Say which items are met, unmet, or deferred to a linked follow-up.
+- An item that is neither delivered nor deferred holds the merge: say so plainly and ask for it before approval.
+- If the change adds another instance of something the repository already has, open an existing one and compare part for part.
+- A fix that leaves the same old bug in a sibling path holds the merge only when the issue or description covers the whole class; otherwise suggest a follow-up.
+- Approve a change that delivers what it set out to, even when it is not perfect. Do not demand anything the task never asked for.`;
+const promptOnly = ({ vars }) => {
+  const [system, user] = arms.noSkill({ vars });
+  return [{ role: 'system', content: `${system.content}\n\n${DELIVERY}` }, user];
+};
+
 module.exports = {
+  promptOnly: withRepo(promptOnly),
   noSkill: withRepo(arms.noSkill),
   skillCurrent: withRepo(arms.skillCurrent, { skillDir: arms.skillDir }),
   skillNext: withRepo(arms.skillNext, { skillDir: arms.skillDir }),

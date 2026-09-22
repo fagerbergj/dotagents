@@ -23,6 +23,15 @@ prompts:
     label: no-skill
   - id: file://prompts/arms.js:skillCurrent
     label: skill-current
+  # Experiment: the delivery rule as a short system prompt, no skill. See arms.js.
+  - id: file://prompts/arms.js:promptOnly
+    label: prompt-only
+
+# Experiment setting, remove with the prompt-only arm: two samples per cell. One
+# sample could not read the delivery metric - an unchanged arm moved from 0.00
+# to 0.75 between runs.
+evaluateOptions:
+  repeat: 2
 
 providers:
   # Custom provider: the same OpenAI-compatible call, plus tools over two roots.
@@ -35,10 +44,13 @@ providers:
     config:
       model: deepseek/deepseek-v4-flash
       apiBaseUrl: https://openrouter.ai/api/v1
-      max_tokens: 8192
+      # Experiment, reverts with the prompt-only arm: reasoning ON for the reviewer
+      # under test. It was off because a reasoning row could burn ~29k tokens and
+      # truncate to empty under 8192, so the cap rises with it. Judges stay off.
+      max_tokens: 32768
       passthrough:
         reasoning:
-          enabled: false
+          enabled: true
       apiKeyEnvar: OPENROUTER_API_KEY
       # Reviewing a change means opening the files around it, so these are
       # ceilings on a runaway loop, not a rationing of the reading the skill
