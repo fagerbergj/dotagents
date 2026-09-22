@@ -21,63 +21,23 @@
   assert:
     # "scannability" and "clean visual rendering" - the part no parser settles.
     # Anchored here and aliased by the eight other cases that hand over a messy
-    # document. The three negative controls do NOT carry it: items 1 and 2 pay
-    # for shortening a prose run and for moving prose into a heading or list,
-    # and on an already-clean document the right answer is to do neither -
-    # exactly what unchanged_when_clean fines. Scored over all twelve, the
-    # fenced-commands control lost 0.40 here for leaving a run it was right to
-    # leave, in the same row where unchanged_when_clean scored it 1.00.
+    # document. The three negative controls do NOT carry it: item 1 pays for
+    # shortening a prose run or moving prose into a heading/list/table, and on
+    # an already-clean document the right answer is to do neither - exactly
+    # what unchanged_when_clean fines. Scored over all twelve, the
+    # fenced-commands control lost points here for leaving a run it was right
+    # to leave, in the same row where unchanged_when_clean scored it 1.00.
     #
-    # Four countable items, each quoted before it is scored: bands ("one soft
-    # spot", "largely as it arrived") wandered between identical runs. The fifth
-    # item, "it is still the same document", is CUT: `preserved` computes the
-    # same property against the input by rendering both through markdown-it, so
-    # the judge was being asked to re-guess a fact already decided. The one
-    # zero-gate left is "no document came back at all", which is how the
-    # baseline arm most often fails.
+    # dotagents#64/#65: quote-verified, not llm-rubric arithmetic. Three
+    # numbered yes/no items, weights 0.4/0.3/0.3; code verifies each quote is
+    # real before it can earn its weight. Content preservation (the old
+    # rubric's `{{rubric}}` restraint clause) is `preserved`'s job above, not
+    # re-asked of the judge here.
     - &readability
-      type: llm-rubric
-      value: |
-        The reader below handed over a Markdown document and asked for it back in better
-        shape. Score the document they received.
-
-        Judge the document as delivered. Do not reward or penalise how it was built, which
-        features it used, or whether it followed any particular authoring convention. Which
-        bullet character or emphasis delimiter it uses, and how its blank lines fall, are
-        graded elsewhere and are not your concern. What a reader sees is.
-
-        Answer each of the four below by quoting the part of the delivered document that
-        supports it, or answer NONE. Answer all four before scoring.
-
-        1. The longest run of unbroken prose in the delivered document is shorter than the
-           longest run in the document the reader handed over. Quote the first line of each.
-           If the document handed over held no run of prose a reader would want broken up,
-           answer N/A and count this item as satisfied.
-        2. At least one piece of content that was prose in the original is now carried by a
-           heading, list, or table. Quote it in both forms, or answer NONE if nothing moved.
-           If the original already carried its content in headings, lists, tables or code,
-           answer N/A and count this item as satisfied.
-        3. Every heading in the delivered document names what is under it, so a reader
-           choosing where to jump does not have to read the section to find out. Quote the
-           one that names its content least well.
-        4. Nothing would render broken: quote any fence, table, link definition, or inline
-           HTML that a renderer would not handle, or answer NONE - NONE satisfies this item.
-
-        Whether content was added or lost is not yours to judge and is graded elsewhere
-        against the original; do not mark the document down for it.
-
-        Score from 0 to 1, never above 1: award 0.25 for each of the four satisfied, where
-        N/A counts as satisfied. If no document was delivered at all - advice, or a list of
-        suggested changes instead of the document - score 0 regardless of the four.
-
-        The restraint the reader is entitled to, specifically: {{rubric}}
+      type: javascript
+      value: file://assertions/readability.cjs:readability
       threshold: 0.7
       metric: readability
-      rubricPrompt:
-        - role: system
-          content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else: {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
-        - role: user
-          content: "<Original>\n{{document}}\n</Original>\n<Delivered>\n{{output}}\n</Delivered>\n<Rubric>\n{{rubric}}\n</Rubric>"
 
 - description: ragged lists - onboarding checklist with three bullet characters
   vars:
