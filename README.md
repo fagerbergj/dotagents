@@ -22,7 +22,7 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 | `pr-authoring` | [pr-authoring.md](results/pr-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `rest-api-authoring` | [rest-api-authoring.md](results/rest-api-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `review-code` | [review-code.md](results/review-code.md) | `ff444c2` :warning: | `7ccf646` | reused |
-| `rfc-authoring` | [rfc-authoring.md](results/rfc-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
+| `rfc-authoring` | [rfc-authoring.md](results/rfc-authoring.md) | `51c93a3` :warning: | `b537e60` | reused |
 | `rfd-authoring` | [rfd-authoring.md](results/rfd-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `slop-detection` | [slop-detection.md](results/slop-detection.md) | `d9ff088` :warning: | `9430e7c` | reused |
 
