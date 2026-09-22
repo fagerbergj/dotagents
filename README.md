@@ -24,7 +24,7 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 | `review-code` | [review-code.md](results/review-code.md) | `ff444c2` :warning: | `7ccf646` | reused |
 | `rfc-authoring` | [rfc-authoring.md](results/rfc-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `rfd-authoring` | [rfd-authoring.md](results/rfd-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
-| `slop-detection` | [slop-detection.md](results/slop-detection.md) | `881ceab` :warning: | `3a3f00e` | reused |
+| `slop-detection` | [slop-detection.md](results/slop-detection.md) | `d9ff088` :warning: | `9430e7c` | reused |
 
 :warning: means the numbers were produced against a different commit than the one that merged.
 That is the `reused` path: the PR's artifact was built from the PR head, and if `main` moved
