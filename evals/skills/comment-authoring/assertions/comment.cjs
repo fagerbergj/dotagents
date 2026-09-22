@@ -1,6 +1,6 @@
 const { spawnSync } = require('node:child_process');
 const { unwrapFence } = require('../../../lib/strip-reasoning.js');
-const { judgeQuotedItems } = require('../../../lib/quoted-items.js');
+const { judgeQuotedItems, JSON_CONTRACT } = require('../../../lib/quoted-items.js');
 'use strict';
 
 // Two graders that genuinely compute, against the case's own input var:
@@ -300,17 +300,6 @@ print(json.dumps({"found": found}))
 // requires a verbatim quote or NONE; judgeQuotedItems verifies the quote is
 // real before scoring, and weighByItem - not the judge - computes the number.
 // review-code/assertions/review.cjs is the worked example this follows.
-const JSON_CONTRACT = 'You are grading output against a small numbered list of'
-  + ' yes/no questions. For EVERY numbered item, answer with one object:'
-  + ' {"n": <item number>, "quote": <verbatim text copied from inside <Output>'
-  + ' that decides this item, or the literal string "NONE" if nothing in'
-  + ' <Output> decides it>, "holds": <true or false>}. A quote must be text'
-  + ' that actually appears inside <Output> - copying another tag back,'
-  + ' paraphrasing, or summarising is not a quote and will be rejected before'
-  + ' your "holds" verdict is even read. Keep each quote to one sentence or'
-  + ' line, at most 300 characters, never a code block - long quotes break the'
-  + ' JSON and lose the item. Respond with exactly one JSON object:'
-  + ' {"items": [...]}, one entry per numbered item, nothing else.';
 
 function judgeProvider(context) {
   const p = (context && context.test && context.test.options && context.test.options.provider) || {};
@@ -364,7 +353,7 @@ function notNarration(output, context) {
   const { providerCfg, messages } = askItems(output, context, NOT_NARRATION_ITEMS);
   return judgeQuotedItems({
     providerCfg, messages, texts: { default: output },
-    score: weighByItem({ 1: 0.6, 2: 0.4 }), threshold: 0.5,
+    score: weighByItem({ 1: 0.6, 2: 0.4 }), threshold: 0.5, votes: 3,
   });
 }
 
@@ -388,7 +377,7 @@ function noFalseComments(output, context) {
   const { providerCfg, messages } = askItems(output, context, NO_FALSE_COMMENTS_ITEMS);
   return judgeQuotedItems({
     providerCfg, messages, texts: { default: output },
-    score: weighByItem({ 1: 1 }), threshold: 1,
+    score: weighByItem({ 1: 1 }), threshold: 1, absence: [1], votes: 3,
   });
 }
 
@@ -419,7 +408,7 @@ function restraint(output, context) {
   const { providerCfg, messages } = askItems(output, context, RESTRAINT_ITEMS, extraXml);
   return judgeQuotedItems({
     providerCfg, messages, texts: { default: output },
-    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.5,
+    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.5, absence: [1, 2],
   });
 }
 
@@ -447,7 +436,7 @@ ${facts}`;
   const { providerCfg, messages } = askItems(output, context, itemsPrompt, `<Request>${ask}</Request>\n`);
   return judgeQuotedItems({
     providerCfg, messages, texts: { default: output },
-    score: weighByItem({ 1: 0.25, 2: 0.25, 3: 0.25, 4: 0.25 }), threshold: 0.6,
+    score: weighByItem({ 1: 0.25, 2: 0.25, 3: 0.25, 4: 0.25 }), threshold: 0.6, votes: 5,
   });
 }
 
