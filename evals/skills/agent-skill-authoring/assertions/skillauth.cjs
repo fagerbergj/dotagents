@@ -17,7 +17,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
-const { judgeQuotedItems } = require('../../../lib/quoted-items.js');
+const { judgeQuotedItems, JSON_CONTRACT } = require('../../../lib/quoted-items.js');
 
 // skills-ref is the reference validator agentskills.io/specification names:
 // `skills-ref validate ./my-skill`. Pinned to the version probed by hand.
@@ -297,17 +297,6 @@ function specBudgetAndRefs(output) {
 // from the verified items by a rule this file supplies - never the judge's own
 // arithmetic. Same JSON contract as review-code's/adr's; the tags in the user
 // message are this suite's own (Task/Coverage/Output).
-const JSON_CONTRACT = 'You are grading output against a small numbered list of'
-  + ' yes/no questions. For EVERY numbered item, answer with one object:'
-  + ' {"n": <item number>, "quote": <verbatim text copied from inside <Output>'
-  + ' that decides this item, or the literal string "NONE" if nothing in'
-  + ' <Output> decides it>, "holds": <true or false>}. A quote must be text'
-  + ' that actually appears inside <Output> - copying <Task> or <Coverage> back,'
-  + ' paraphrasing, or summarising is not a quote and will be rejected before'
-  + ' your "holds" verdict is even read. Keep each quote to one sentence or'
-  + ' line, at most 300 characters, never a code block - long quotes break the'
-  + ' JSON and lose the item. Respond with exactly one JSON object:'
-  + ' {"items": [...]}, one entry per numbered item, nothing else.';
 
 function judgeProvider(context) {
   const p = (context && context.test && context.test.options && context.test.options.provider) || {};
@@ -428,7 +417,7 @@ function controlQualityOneOff(output, context) {
   const { providerCfg, messages } = askItems(output, context, CONTROL_ONE_OFF_ITEMS);
   return judgeQuotedItems({
     providerCfg, messages, texts: { default: output },
-    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.7,
+    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.7, absence: [2],
   });
 }
 
@@ -454,7 +443,7 @@ function controlQualitySmallRule(output, context) {
   const { providerCfg, messages } = askItems(output, context, CONTROL_SMALL_RULE_ITEMS);
   return judgeQuotedItems({
     providerCfg, messages, texts: { default: output },
-    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.7,
+    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.7, absence: [2],
   });
 }
 
@@ -482,7 +471,7 @@ function controlQualityAlreadyFine(output, context) {
   const { providerCfg, messages } = askItems(output, context, CONTROL_ALREADY_FINE_ITEMS, extra);
   return judgeQuotedItems({
     providerCfg, messages, texts: { default: output },
-    score: weighByItem({ 1: 0.6, 2: 0.4 }), threshold: 0.7,
+    score: weighByItem({ 1: 0.6, 2: 0.4 }), threshold: 0.7, absence: [2],
   });
 }
 
