@@ -11,7 +11,7 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 | `adr-authoring` | [adr-authoring.md](results/adr-authoring.md) | `9195879` :warning: | `da6dc04` | reused |
 | `agent-card-authoring` | [agent-card-authoring.md](results/agent-card-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `agent-skill-authoring` | [agent-skill-authoring.md](results/agent-skill-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
-| `agents-md-authoring` | [agents-md-authoring.md](results/agents-md-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
+| `agents-md-authoring` | [agents-md-authoring.md](results/agents-md-authoring.md) | `f9bef38` :warning: | `b75b6d2` | reused |
 | `comment-authoring` | [comment-authoring.md](results/comment-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `commit-authoring` | [commit-authoring.md](results/commit-authoring.md) | `dc17e84` :warning: | `19efdcd` | reused |
 | `develop-feature` | [develop-feature.md](results/develop-feature.md) | `3aa20f9` :warning: | `68d1f14` | reused |
