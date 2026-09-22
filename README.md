@@ -8,7 +8,7 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 
 | suite | table | measured against | merged as | source |
 |---|---|---|---|---|
-| `adr-authoring` | [adr-authoring.md](results/adr-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
+| `adr-authoring` | [adr-authoring.md](results/adr-authoring.md) | `9195879` :warning: | `da6dc04` | reused |
 | `agent-card-authoring` | [agent-card-authoring.md](results/agent-card-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `agent-skill-authoring` | [agent-skill-authoring.md](results/agent-skill-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `agents-md-authoring` | [agents-md-authoring.md](results/agents-md-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
