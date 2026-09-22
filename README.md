@@ -14,7 +14,7 @@ Rows accumulate - a new model or a bumped skill version adds rows beside the old
 | `agents-md-authoring` | [agents-md-authoring.md](results/agents-md-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `comment-authoring` | [comment-authoring.md](results/comment-authoring.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `commit-authoring` | [commit-authoring.md](results/commit-authoring.md) | `dc17e84` :warning: | `19efdcd` | reused |
-| `develop-feature` | [develop-feature.md](results/develop-feature.md) | `881ceab` :warning: | `3a3f00e` | reused |
+| `develop-feature` | [develop-feature.md](results/develop-feature.md) | `3aa20f9` :warning: | `68d1f14` | reused |
 | `fix-bug` | [fix-bug.md](results/fix-bug.md) | `881ceab` :warning: | `3a3f00e` | reused |
 | `format-markdown` | [format-markdown.md](results/format-markdown.md) | `1c093c5` :warning: | `e71b94e` | reused |
 | `issue-authoring` | [issue-authoring.md](results/issue-authoring.md) | `aa9785e` :warning: | `d90f8b2` | reused |
