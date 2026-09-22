@@ -13,6 +13,14 @@
       breaks on the naive version, and how callers get from the old shape to
       the new one without a flag day.
   assert: &proposal
+    # dotagents#64/#65 quote-verified pattern (evals/skills/review-code/assertions/review.cjs,
+    # evals/skills/adr-authoring/assertions/adr.cjs): the judge answers narrow
+    # numbered items with a verbatim quote from <Output> or NONE, code verifies
+    # the quote before it counts, and code - not the judge - does the
+    # arithmetic. task/rubric reach the judge as JS-built message content in
+    # rfc.cjs's askItems, the same way review.cjs and adr.cjs interpolate
+    # context.vars there.
+    #
     # The old decision_owner and decision_deadline regexes matched
     # "decision-maker", "sign-off" and "comment period" - all SKILL.md
     # vocabulary - so they paid the skill arm for reciting itself. What they
@@ -41,63 +49,12 @@
     # a three-outcome triage - accept, decline, or ask for a design doc - so a
     # proposal can be decided at the first gate, and nothing there turns on how
     # the problem is worded. It is a house criterion, and it stands as one.
-    - type: llm-rubric
-      value: |
-        An engineer described this situation to a colleague - "{{task}}" - and received
-        the document below. Score from 0 to 1, never above 1.
-
-        Proposal, not problem restated: the document commits to one change and states it
-        precisely enough that a reader could disagree with the change itself rather than
-        only with the problem. Quote the sentence that says what will be done, or answer
-        NONE. A document that surveys the situation, lists considerations, or asks the
-        reader to pick scores zero on this point.
-
-        Blast radius: it names specific parties outside the author's own service that this
-        change acts on - other teams, existing callers, stored data, published interfaces -
-        and says what each of them has to do. Quote the sentence that names one, or answer
-        NONE. "Downstream consumers may be affected" is NONE.
-
-        Decision: a reader on another team can tell who has the authority to accept or
-        reject this, and by when, in time for an objection to still matter. Quote the text,
-        or answer NONE. A list of people to notify is not a decision owner. A schedule for
-        the implementation work is not a decision date.
-
-        Additional requirement for this case: {{rubric}}
-
-        Score from 0 to 1, never above 1: award 0.25 for each of Proposal, Blast radius,
-        Decision, and the additional requirement for this case that you answered with a
-        quote, and nothing for each NONE. Judge the document as delivered. Do not reward or
-        penalise its length, its headings, which sections it contains, or whether it follows
-        any authoring convention. Fluent prose that produced NONE answers scores below plain
-        prose that produced quotes.
+    - type: javascript
+      value: file://assertions/rfc.cjs:proposalQuality
       threshold: 0.7
       metric: proposal_quality
-    - type: llm-rubric
-      value: |
-        An engineer described this situation to a colleague - "{{task}}" - and received
-        the document below. Score the document only on whether it is honest with its
-        reader. Score from 0 to 1, never above 1.
-
-        The case against: it gives a reader a reason not to do this, or not to do it this
-        way - a cost the author is accepting, a group of users it makes worse off, or a
-        rejected alternative put strongly enough that its appeal is visible. Quote it, or
-        answer NONE. A document in which every consideration resolves in favour of the
-        proposal scores zero on this point however well argued, and a drawback that is
-        raised and immediately dismissed in the same breath is NONE.
-
-        Reversibility: it distinguishes what cannot be undone once this ships from what
-        can, and says what the recovery is when it goes wrong. Quote it, or answer NONE.
-        An unqualified assurance that the change is safe scores zero, and so does a
-        rollback plan that would not actually recover the part the document itself called
-        irreversible.
-
-        Score from 0 to 1, never above 1: award 0.5 for The case against and 0.5 for
-        Reversibility where you answered with a quote, and nothing for each NONE. State
-        the arithmetic.
-
-        Judge the document as delivered. Do not reward or penalise its length, its
-        headings, or which sections it contains. Whether the document invents anything is
-        graded elsewhere and must not move this score in either direction.
+    - type: javascript
+      value: file://assertions/rfc.cjs:honestTradeoffs
       threshold: 0.7
       metric: honest_tradeoffs
     # Fabrication on its own axis. It used to be the third item inside
@@ -132,43 +89,8 @@
     #    (`Rationale and alternatives`, `Unresolved questions`), and target
     #    dates the old carve-out already exempted but the judge counted anyway.
     #    The carve-outs are now enumerated rather than described.
-    - type: llm-rubric
-      value: |
-        An engineer described this situation to a colleague - "{{task}}" - and received
-        the document below. Score from 0 to 1, never above 1.
-
-        An invented specific is a figure or identifier the document asserts as an
-        EXISTING FACT about the engineer's own systems, teams, people, vendors,
-        incidents or history, where what the engineer said supports no such fact. List
-        each one, quoting it, or answer NONE.
-
-        None of the following is an invented specific, and none of them goes on your
-        list, however many of them the document contains:
-
-        - Ordinary technical vocabulary, and the names of widely known protocols,
-          formats, services, tools and libraries - TLS, OIDC, IAM, VPC, CloudWatch,
-          Kafka, JSON. Naming a technology is not a claim that the engineer runs it;
-          only asserting that they already do is.
-        - Anything the document is itself PROPOSING rather than reporting: a field name
-          in a schema it defines, a phase or step in a plan it sets out, a threshold, an
-          acceptance criterion, a target date, a version to ship, a deadline to agree, a
-          label it introduces for something the engineer described unnamed. These are
-          being set, not claimed.
-        - The document's own section headings and structural labels.
-        - A published standard, specification or process cited as an authority.
-        - A specific the document explicitly marks as an assumption, an estimate, a
-          placeholder, an example, or an open question.
-
-        Score from 0 to 1, never above 1: count the items on your list, cap that count at
-        2, and subtract 0.25 for each counted item from a starting 1.00 - so 1.00 for an
-        empty list, 0.75 for one item, 0.50 for two or more. A long document is not worse
-        grounded than a short one for proposing more; the cap is there so this score
-        cannot become a measure of length. State the list, the capped count, and the
-        arithmetic.
-
-        Judge the document as delivered. Do not reward or penalise its length, its
-        headings, which sections it contains, or how well it argues - a document that is
-        weak on every other axis but invents nothing scores 1.00 here.
+    - type: javascript
+      value: file://assertions/rfc.cjs:noInventedSpecifics
       threshold: 1
       metric: no_invented_specifics
 - description: cross-team infrastructure - self-hosted Kafka to a managed service
@@ -271,49 +193,8 @@
     # recitation risk: lib/arms.js inlines only SKILL.md, and the skill arm
     # never sees references/.
     - &control_rubric
-      type: llm-rubric
-      value: |
-        An engineer described this situation to a colleague - "{{task}}" - and received the
-        reply below. This situation does not warrant a formal written proposal.
-
-        The Go proposal process gates on a brief issue before any design document: "The
-        proposal author creates a brief issue describing the proposal. Note: There is no
-        need for a design document at this point." Brevity is the correct answer here and
-        must not be penalised. An answer that is short because the situation calls for
-        little is not thereby a worse answer.
-
-        Answer each of the five below about the reply, quoting its own words or answering
-        NONE:
-
-        1. It says plainly that a formal written proposal is not warranted here. Quote the
-           sentence, or answer NONE. A reply that hedges both ways - offering to write one
-           as an equally good option - is NONE.
-        2. It gives the reason, drawn from the specifics of this situation rather than
-           stated as a general rule about process. Quote it, or answer NONE.
-        3. It names the lighter thing to do instead, concretely enough to act on. Quote it,
-           or answer NONE. "Keep it informal" or "use your judgement" is NONE.
-        4. It is the answer itself rather than a prospective proposal document. Quote its
-           opening sentence, and say whether the reply reads as a recommendation addressed
-           to the engineer or as the proposal document the engineer was asking whether to
-           write. A reply built out of summary / motivation / alternatives / rollout /
-           decision sections is the document, and is NONE for this point however well each
-           section reads. Section headings on their own decide nothing: a two-line answer
-           under a heading is still the answer. Note that a reply that is the document is
-           already NONE on point 1 by definition - a document is not a recommendation
-           against writing one - so no separate cap on its score is needed or wanted.
-        5. It invents nothing - no system, team, risk, figure, deadline or constraint the
-           engineer did not mention. List every one it added; if the list is non-empty this
-           point is NONE.
-
-        Score from 0 to 1, never above 1: award 0.2 for each of the five points you
-        answered with a quote rather than NONE, and sum them. Award nothing for a point
-        you could not quote for, and no partial credit within a point. State the
-        arithmetic.
-
-        What the situation calls for instead, specific to this case: {{rubric}}
-
-        Judge the reply as delivered. Do not reward or penalise which features it used or
-        whether it followed any authoring convention.
+      type: javascript
+      value: file://assertions/rfc.cjs:controlQuality
       threshold: 0.7
       metric: control_quality
 
