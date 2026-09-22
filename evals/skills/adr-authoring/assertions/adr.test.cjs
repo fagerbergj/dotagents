@@ -77,6 +77,36 @@ assert.equal(checks.carriesTaskSpecifics(good, { vars }).pass, true);
 assert.equal(checks.carriesTaskSpecifics('We picked a database. It has upsides and downsides.', { vars }).pass, false);
 assert.equal(checks.carriesTaskSpecifics('Postgres and Dynamo were compared.', { vars, config: { minimum: 2 } }).pass, true);
 
+// --- quote-verified pure parts (no network), mirroring review.test.cjs -----
+{
+  const ctx = { test: { options: { provider: { id: 'openai:chat:google/gemini-3.8-flash', config: { apiBaseUrl: 'https://openrouter.ai/api/v1', apiKeyEnvar: 'OPENROUTER_API_KEY' } } } } };
+  const cfg = checks.judgeProvider(ctx);
+  assert.equal(cfg.model, 'google/gemini-3.8-flash');
+  assert.equal(cfg.apiKeyEnvar, 'OPENROUTER_API_KEY');
+  assert.equal(checks.judgeProvider({}).model, undefined, 'a missing provider block does not throw');
+
+  const w = checks.weighByItem({ 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2 });
+  assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: true }]), 0.4, 'only holding items earn their weight');
+  assert.equal(w([]), 0, 'nothing verified scores 0, not an error');
+
+  const built = checks.askItems('the record text', { vars: { task: 'the note', must_carry: 'the numbers' } }, 'ITEM TEXT');
+  assert.ok(built.messages[1].content.includes('the record text'), '<Output> carries the document');
+  assert.ok(built.messages[1].content.includes('the note'), '<SourceNote> carries the case var');
+  assert.ok(built.messages[1].content.includes('the numbers'), '<MustCarry> carries the case var');
+  assert.ok(built.messages[0].content.includes('"items"'), 'the system message states the JSON contract');
+}
+
+// no_invented_specifics' own score rule: 0.25 per verified invented item,
+// floored at 0 - the same arithmetic the old llm-rubric did in prose, now run
+// by code on items whose quotes already passed verification.
+{
+  const scoreFn = (verified) => Math.max(0, 1 - 0.25 * verified.filter((it) => it.holds).length);
+  assert.equal(scoreFn([]), 1, 'nothing invented scores 1.00');
+  assert.equal(scoreFn([{ holds: false }, { holds: false }]), 1, 'items that are IN NOTE do not cost anything');
+  assert.equal(scoreFn([{ holds: true }]), 0.75, 'one invented item costs 0.25');
+  assert.equal(scoreFn([{ holds: true }, { holds: true }, { holds: true }, { holds: true }, { holds: true }]), 0, 'floored at 0, never negative');
+}
+
 // --- config shape -----------------------------------------------------------
 // One metric, one property. Only no_invented_specifics may subtract, and its
 // entire score is that subtraction - every other rubric awards and never fines,
