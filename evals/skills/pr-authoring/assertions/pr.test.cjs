@@ -18,19 +18,21 @@ for (const a of [...(yamlLoadCfg('promptfooconfig.yaml').defaultTest.assert || [
     `latency carries metric "${a && a.metric}" - it must stay an unnamed run-shape guard, not a graded column`);
 }
 
-// Tripwires on the two judged rubrics, which no unit test can otherwise reach:
-// one criterion, one property, and no two criteria scoring one behaviour with
-// opposite signs. A text scan rather than a parse - the suite ships no YAML
+// Tripwires on the two judged metrics, which no unit test can otherwise reach:
+// both moved off llm-rubric's own arithmetic onto assertions/judged.cjs
+// (dotagents#64/#65), and both must still see the author's real description,
+// or `coverage` pays for points `restraint` cannot see as anything but
+// inventions. A text scan rather than a parse - the suite ships no YAML
 // parser and this is not worth a dependency; it fails if either fix is reverted.
 const cases = fs.readFileSync(path.join(__dirname, '..', 'tests', 'cases.yaml'), 'utf8');
-// `coverage` must not read length: `proportionality` owns it, against a stated
-// per-case ceiling rather than the author's own word count.
-assert.equal(/SHORTER, COMPARABLE, or LONGER|\* 0\.85/.test(cases), false, 'coverage is scoring length again');
-// Both judges must see the author's description, or the points `coverage` pays
-// for are unsupported inventions to `restraint`.
-assert.equal((cases.match(/{{author_description}}/g) || []).length, 2, 'restraint cannot see what coverage rewards');
+assert.equal(/type: llm-rubric|type: g-eval/.test(cases), false, 'a judged metric reverted to llm-rubric/g-eval arithmetic instead of quote-verified items');
+assert.equal((cases.match(/value: file:\/\/assertions\/judged\.cjs:coverage/g) || []).length, 1, 'coverage must be defined exactly once and reused by anchor');
+assert.equal((cases.match(/value: file:\/\/assertions\/judged\.cjs:restraint/g) || []).length, 1, 'restraint must be defined exactly once and reused by anchor');
 // Only `proportionality` carries a word ceiling.
 assert.equal((cases.match(/maxWords/g) || []).length, 10, 'a word ceiling moved off proportionality');
+// judged.cjs itself must interpolate the author's description into both metrics.
+const judgedSrc = fs.readFileSync(path.join(__dirname, 'judged.cjs'), 'utf8');
+assert.equal((judgedSrc.match(/'author_description'/g) || []).length, 2, 'restraint cannot see what coverage rewards');
 
 const vars = {
   diff: 'diff --git a/internal/dag/control.go b/internal/dag/control.go\n-\tif !m.Delivered {\n+\tif m.Status == MsgQueued {\n',
