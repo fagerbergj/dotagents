@@ -5,11 +5,11 @@
 | model | metric | no-skill | skill@1.0 | skill@1.0.1 | Δ |
 | --- | --- | ---: | ---: | ---: | ---: |
 | ci:deepseek-v4-flash | bounded_scope | 0.90 | 1.00 | 1.00 | +0.10 |
-| ci:deepseek-v4-flash | case_fidelity | 0.86 | 0.70 | 0.81 | −0.05 |
+| ci:deepseek-v4-flash | case_fidelity | 0.64 | 0.70 | 0.75 | +0.11 |
 | ci:deepseek-v4-flash | latency max (s) | 18.20 | 24.20 | 16.50 | −1.7 |
 | ci:deepseek-v4-flash | latency p50 (s) | 6.40 | 17.90 | 12.10 | +5.7 |
 | ci:deepseek-v4-flash | latency_s | 8.10 | 16.52 | 12.45 | +4.3 |
-| ci:deepseek-v4-flash | no_invented_facts | 1.00 | 1.00 | 1.00 | +0.00 |
-| ci:deepseek-v4-flash | semantic_quality | 0.67 | 0.73 | 1.00 | +0.33 |
-| ci:deepseek-v4-flash | tokens p50 | 372 | 6605 | 6209 | +5837 |
-| ci:deepseek-v4-flash | tokens total | 4323 | 71307 | 65033 | +60710 |
+| ci:deepseek-v4-flash | no_invented_facts | 1.00 | 1.00 | 0.91 | −0.09 |
+| ci:deepseek-v4-flash | semantic_quality | 0.66 | 0.73 | 0.97 | +0.30 |
+| ci:deepseek-v4-flash | tokens p50 | 364 | 6605 | 6400 | +6036 |
+| ci:deepseek-v4-flash | tokens total | 4376 | 71307 | 69009 | +64633 |
