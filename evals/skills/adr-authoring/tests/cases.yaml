@@ -21,53 +21,13 @@
   - type: javascript
     value: file://assertions/adr.cjs:carriesTaskSpecifics
     metric: adr_context
-  # llm-rubric's stock user message is <Output>/<Rubric> only, so the case's own
-  # `task` never reached the judge and both source-note clauses below were inert -
-  # cached replies show it guessing that "source note" meant the document itself.
-  # The rubricPrompt puts the note in front of it. Object/message-list shape is
-  # legal on an assertion but not under defaultTest.options; and the case var that
-  # used to be called `rubric` is `must_carry` because llm-rubric binds `rubric`
-  # to the rubric text itself and would shadow it here.
-  - type: llm-rubric
-    rubricPrompt: &sourceNoteRubricPrompt
-    - role: system
-      content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else:
-        {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
-    - role: user
-      content: "<SourceNote>\n{{task}}\n</SourceNote>\n<Output>\n{{output}}\n</Output>\n<Rubric>\n{{rubric}}\n</Rubric>"
-    value: 'Judge only what the document says, never how it is laid out or which headings it uses. A record
-      that states these in flowing prose is exactly as good as one that uses sections.
-
-
-      The ecADR definition of done (adr.github.io/ad-practices) asks whether an architectural decision
-      record is complete. For each of the five, quote the supporting text or answer NONE:
-
-
-      - evidence: the record points at something that happened - a measurement, a load test, an incident,
-      an operational track record, a prior attempt - rather than only asserting the choice is right.
-      Evidence about the problem, or about an option that was rejected, counts.
-
-      - criteria: the record says what made this option preferable, whether or not it names the
-      alternatives.
-
-      - agreement: the record states its own standing, either a status word (Accepted, Proposed,
-      Superseded, Deferred, Blocked) or a sentence saying the team agreed. A named approver is not
-      required; a status word alone satisfies this.
-
-      - documentation of the outcome AND its rationale, not merely the outcome
-
-      - a realization or review plan: what happens next, or what would cause this to be revisited.
-      Migration or follow-up work counts; a bare restatement of the decision does not.
-
-
-      Score from 0 to 1, never above 1: the number of the five that are genuinely present and supported
-      by the source note above, divided by five. Do not credit a document for containing sections
-      named after these criteria while leaving them empty. Whether the document asserts anything the
-      source note does not support is graded by no_invented_specifics and must not move this score
-      in either direction.
-
-
-      Situation-specific facts a complete record must carry: {{must_carry}}'
+  # dotagents#64/#65 quote-verified pattern (evals/skills/review-code/assertions/review.cjs):
+  # narrow numbered items, a verbatim quote from <Output> or NONE, code verifies
+  # the quote before it counts, and code - not the judge - does the arithmetic.
+  # task/must_carry reach the judge as JS-built message content in adr.cjs's
+  # askItems, the same way review.cjs interpolates context.vars there.
+  - type: javascript
+    value: file://assertions/adr.cjs:semanticQuality
     threshold: 0.7
     metric: semantic_quality
   # Fabrication on its own axis. It used to cancel a satisfied ecADR criterion
@@ -81,24 +41,8 @@
   # note's own names and numbers surviving into the record, this one fines names
   # and numbers the note never contained. Disjoint sets by construction.
   - &grounded
-    type: llm-rubric
-    rubricPrompt: *sourceNoteRubricPrompt
-    value: |
-      Judge only what the document says, never its length or layout.
-
-      List every figure, identifier, date, file path, status and named system the document
-      asserts as established fact. Go through that list one at a time and answer IN NOTE or
-      INVENTED for each, quoting the source note where it is IN NOTE. A specific the document
-      explicitly marks as an assumption, a placeholder, an open question or a proposal is not
-      INVENTED, and neither is a published standard, specification or process the document
-      cites as an authority - that is a citation, not a claim about the team's own systems.
-      A document that asserts nothing specific lists nothing and loses nothing.
-
-      Score from 0 to 1, never above 1: start at 1.00 and subtract 0.25 for each INVENTED,
-      floored at 0. State the list and the arithmetic.
-
-      Do not reward or penalise whether the record is complete, well argued, or in the right
-      genre - a record that is wrong on every other axis but invents nothing scores 1.00 here.
+    type: javascript
+    value: file://assertions/adr.cjs:noInventedSpecifics
     threshold: 1
     metric: no_invented_specifics
 - description: replaces an earlier choice - self-hosted RabbitMQ to managed SQS
@@ -217,47 +161,8 @@
   # the note's specifics and failed, beside a rubric that says brevity must not
   # be penalised. Only the rubric runs on the controls now, and its second
   # criterion is what keeps a canned decline from scoring.
-  - type: llm-rubric
-    rubricPrompt: *sourceNoteRubricPrompt
-    value: 'Judge only what the response says, never its length or layout.
-
-
-      This situation is NOT ready for an architectural decision record. The START definition of ready
-      (ozimmer.ch) says a decision is ready only when all five hold: Stakeholders are known; Time - the
-      most responsible moment - has come; Alternatives are identified and understood; Requirements, context
-      and decision drivers are analysed; a Template has been chosen.
-
-
-      Answer each of the three below with a quote from the response, or NONE.
-
-
-      - the text refusing to record as settled anything this note does not settle. A plain
-      "there is nothing decided here yet" is that refusal; so is a record explicitly filed
-      as Proposed - not Accepted - that names what is still open; so is a record of a part
-      of the note that IS settled, filed as such, alongside the refusal for the rest
-
-      - the text naming, in substance, which readiness criterion is absent - unknown stakeholders,
-      unmeasured alternatives, a moment that has not arrived, unanalysed requirements - however it words
-      it
-
-      - the text saying what belongs in the repository instead
-
-
-      Score from 0 to 1, never above 1: award one third for each of the three answered with a quote,
-      and nothing for each NONE. Whether the response asserts anything the source note does not
-      support is graded by no_invented_specifics and must not move this score in either direction.
-
-
-      A record that presents an undecided matter as settled produces NONE on the first item however
-      well written - the confidence is the error, not the artifact. A Proposed record is not that:
-      Nygard''s original status field is "proposed if the project stakeholders haven''t agreed with it
-      yet, or accepted once it is agreed", and MADR lists proposed first among its status values, so a
-      record filed as Proposed that names the open question is a correct answer here and not a hedge.
-      Brevity is equally correct and must not be penalised: a two-sentence refusal that names what is
-      open scores the same as a Proposed record that does.
-
-
-      What this particular situation is missing: {{must_carry}}'
+  - type: javascript
+    value: file://assertions/adr.cjs:controlQuality
     threshold: 0.7
     metric: control_quality
   - *grounded
