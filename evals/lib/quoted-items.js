@@ -17,7 +17,7 @@ function normalize(s) {
 // Judges drop markdown marks and elide with "..."; match on the words, with
 // every elided segment present in order. A paraphrase still fails.
 function loose(s) {
-  return normalize(String(s ?? '').replace(/\\n/g, '\n').replace(/[`*_~"\u201c\u201d]/g, '')).toLowerCase();
+  return normalize(String(s ?? '').replace(/\\n/g, '\n').replace(/[`*_~"'\u201c\u201d\u2018\u2019]/g, '').replace(/[\u2013\u2014]/g, '-')).toLowerCase();
 }
 
 function quoteHolds(quote, text) {
@@ -34,12 +34,20 @@ function quoteHolds(quote, text) {
 
 // items: [{quote, ...}]. `texts` maps a name to a checkable text; an item with
 // no `source` (or an unrecognised one) checks against texts.default.
-function verifyItems(items, texts) {
+// opts.absence: item numbers whose compliant answer is "nothing to quote". For those, NONE
+// verifies as held (holds=true); a real quote is the violation and verifies as given.
+// Without this, a clean answer scores 0 and the metric sits at the floor for both arms.
+function verifyItems(items, texts, opts = {}) {
+  const absence = new Set((opts.absence || []).map(String));
   const verified = [];
   const rejected = [];
   for (const item of items || []) {
     const raw = item && item.quote;
-    if (raw == null || /^\s*NONE\s*$/i.test(String(raw))) { rejected.push({ item, why: 'NONE' }); continue; }
+    if (raw == null || /^\s*NONE\s*$/i.test(String(raw))) {
+      if (item && absence.has(String(item.n))) verified.push({ ...item, holds: item.holds !== false });
+      else rejected.push({ item, why: 'NONE' });
+      continue;
+    }
     const text = (item && texts[item.source]) ?? texts.default;
     if (quoteHolds(raw, text)) verified.push(item);
     else rejected.push({ item, why: 'quote does not appear verbatim in the text' });
@@ -86,11 +94,11 @@ function scoreFromJudge(raw, texts, score, opts = {}) {
       metadata: { graderError: true },
     };
   }
-  const { verified, rejected } = verifyItems(parsed.items, texts);
+  const { verified, rejected } = verifyItems(parsed.items, texts, { absence: opts.absence });
   const value = score(verified, parsed.items || []);
   const threshold = opts.threshold ?? 0.5;
   const detail = (parsed.items || []).map((it, i) => {
-    const ok = verified.includes(it);
+    const ok = verified.some((v) => v === it || (v.n === it.n && v.quote === it.quote));
     const why = ok ? 'verified' : (rejected.find((r) => r.item === it) || {}).why || '?';
     return `${i + 1}. [${why}] ${JSON.stringify(String((it && it.quote) || '').slice(0, 140))}`
       + (it && typeof it.holds === 'boolean' ? ` holds=${it.holds}` : '');
@@ -191,12 +199,30 @@ async function judgeWithRetry(providerCfg, messages, attempts = 3) {
   return { raw: '', errors };
 }
 
-async function judgeQuotedItems({ providerCfg, messages, texts, score, threshold }) {
-  const { raw, errors } = await judgeWithRetry(providerCfg, messages);
-  if (errors) {
+// The system message every caller sends; says how absence items are answered.
+const JSON_CONTRACT = 'You are grading output against a small numbered list of yes/no questions.'
+  + ' For EVERY numbered item, answer with one object {"n": <item number>, "quote": <verbatim text'
+  + ' copied from inside <Output> that decides this item, or the literal string "NONE" if nothing in'
+  + ' <Output> decides it>, "holds": <true or false>}. Keep each quote to one sentence or line, at most'
+  + ' 300 characters, never a code block. For an item phrased "does <Output> avoid ...": if <Output>'
+  + ' contains an offending passage, quote it and answer holds=false; if it contains none, quote "NONE"'
+  + ' and answer holds=true. A quote must be text that actually appears inside <Output> - copying other'
+  + ' tags back, paraphrasing, or summarising is not a quote and is rejected before your "holds" verdict'
+  + ' is read. Respond with exactly one JSON object: {"items": [...]}, one entry per numbered item, nothing else.';
+
+// votes > 1 asks the judge k times and keeps the median-scoring answer: a
+// borderline item that flips on one call is outvoted (Rating Roulette, 2025).
+async function judgeQuotedItems({ providerCfg, messages, texts, score, threshold, absence, votes = 1 }) {
+  const answers = await Promise.all(Array.from({ length: votes }, () => judgeWithRetry(providerCfg, messages)));
+  const graded = answers.filter((a) => !a.errors).map((a) => scoreFromJudge(a.raw, texts, score, { threshold, absence }));
+  if (!graded.length) {
+    const errors = answers.flatMap((a) => a.errors || []);
     return { pass: false, score: 0, reason: `did not parse: judge failed ${errors.length} attempts: ${errors.join(' / ')}`, metadata: { graderError: true } };
   }
-  return scoreFromJudge(raw, texts, score, { threshold });
+  graded.sort((a, b) => a.score - b.score);
+  const pick = graded[Math.floor((graded.length - 1) / 2)];
+  if (graded.length > 1) pick.reason = `votes=${graded.map((g) => g.score.toFixed(2)).join(',')} median kept.\n${pick.reason}`;
+  return pick;
 }
 
-module.exports = { ITEMS_SCHEMA, judgeWithRetry, normalize, quoteHolds, verifyItems, parseJudge, scoreFromJudge, callJudge, judgeQuotedItems };
+module.exports = { ITEMS_SCHEMA, JSON_CONTRACT, judgeWithRetry, normalize, quoteHolds, verifyItems, parseJudge, scoreFromJudge, callJudge, judgeQuotedItems };

@@ -97,3 +97,12 @@ console.log('ok   quoted-items (quote verification, parsing, error/zero distinct
   const r = await judgeQuotedItems({ providerCfg: { model: 'm', apiBaseUrl: 'https://127.0.0.1:9/v1', apiKeyEnvar: 'QUOTED_ITEMS_TEST_KEY' }, messages: [], texts: { default: '' }, score: () => 0 });
   assert.ok(r.metadata.graderError && /3 attempts/.test(r.reason), 'retries are exhausted and the row is marked dead');
 })();
+
+// Absence items: a clean answer has nothing to quote, so NONE+holds=true must earn the weight.
+{
+  const { verified, rejected } = verifyItems([{ n: 1, quote: 'NONE', holds: true }, { n: 2, quote: 'NONE', holds: true }], { default: 'clean text' }, { absence: [1] });
+  assert.equal(verified.length, 1, 'NONE verifies only for a declared absence item');
+  assert.equal(verified[0].holds, true);
+  assert.equal(rejected[0].item.n, 2, 'a NONE on a presence item is still rejected');
+}
+assert.ok(quoteHolds("the word 'the' was repeated \u2014 twice", 'the word "the" was repeated - twice'), 'apostrophes and dashes are normalised');
