@@ -95,53 +95,17 @@
     # metric with the precision half). Does the file state the one fact whose
     # absence causes the mistake - judged against this case's own <Evidence>,
     # and aliased unchanged onto every other case.
+    # Quote-verified (dotagents#64/#65 pattern): the judge answers a narrow
+    # item with a verbatim quote or NONE, code verifies the quote is real
+    # against <Output>, and assertions/agentsmd.cjs's weighByItem computes the
+    # score - never the judge's own arithmetic. <Obvious> is deliberately not
+    # passed here: what an agent already gets for free has no bearing on
+    # whether the load-bearing fact is stated, and handing the judge a
+    # clutter list while asking a recall question is how the two halves got
+    # entangled in the first place.
     - &states_critical_fact
-      type: llm-rubric
-      # A custom rubricPrompt replaces promptfoo's default JSON-format system
-      # message wholesale (loadRubricPrompt in graders-*.cjs returns the
-      # override verbatim rather than merging it), so it has to reassert the
-      # JSON contract itself or the row dies with "Could not extract JSON" -
-      # reproduced on this exact suite, matched against adr-authoring's
-      # tests/cases.yaml, which carries this same system message and scored
-      # 120/120 llm-rubric rows with zero extraction failures historically.
-      # <Obvious> is deliberately not passed here: what an agent already gets
-      # for free has no bearing on whether the load-bearing fact is stated,
-      # and handing the judge a clutter list while asking a recall question is
-      # how the two halves got entangled in the first place.
-      rubricPrompt:
-        - role: system
-          content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else:
-            {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
-        - role: user
-          content: |
-            <Output>{{output}}</Output>
-            <Evidence>{{evidence}}</Evidence>
-            <Rubric>{{rubric}}</Rubric>
-      value: |
-        <Output> is a candidate AGENTS.md (or a section of one, for a nested
-        file) for a real repository. <Evidence> lists facts about the
-        repository gathered independently - treat it as ground truth, not
-        as a list <Output> must quote verbatim.
-
-        Answer with a quote from <Output>, or NONE - a holistic impression is
-        not an answer. The item is not satisfied until you can point to the
-        specific words that satisfy it.
-
-        If <Evidence> names a fact serious enough that missing it would cause
-        a real mistake (a broken build or test run, a violated policy, a
-        wasted debugging session), does <Output> state it and say how to
-        actually avoid the mistake - not just gesture at the topic? Quote the
-        sentence(s) that do this, or NONE if it is missing or only gestured
-        at. If <Evidence> says no such fact exists for this repo, score 1
-        automatically.
-
-        Length, tidiness, and whether <Output> also says things it did not
-        need to say are graded elsewhere and are not your concern here. A
-        file that states the fact and rambles still scores 1 on this.
-
-        Score from 0 to 1, never above 1: 1 if you can quote the sentence,
-        0 if you answered NONE.
-      threshold: 0.5
+      type: javascript
+      value: file://assertions/agentsmd.cjs:statesCriticalFact
       metric: states_critical_fact
 
     # Claim: "pruning stale or redundant guidance" / "whether a rule earns
@@ -149,53 +113,16 @@
     # that did not earn its place: restating what one glance already gives,
     # and padding beyond what the facts require. Same sign, so they stay one
     # metric; the recall half above has the opposite failure mode and does not.
+    # Quote-verified, same pattern as states_critical_fact above. A live
+    # failure on this rubric's old llm-rubric form scored an output containing
+    # a directory tree and an invented "Release checklist" a 1.0, reasoning
+    # "obvious clutter is absent" - false against the text being judged; the
+    # per-item quote requirement in assertions/agentsmd.cjs's
+    # SAYS_NOTHING_ELSE_ITEMS is what replaced that self-reported holistic
+    # impression.
     - &says_nothing_else
-      type: llm-rubric
-      rubricPrompt:
-        - role: system
-          content: 'You grade a document against a rubric. Reply with one line of JSON and nothing else:
-            {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
-        - role: user
-          content: |
-            <Output>{{output}}</Output>
-            <Evidence>{{evidence}}</Evidence>
-            <Obvious>{{obvious}}</Obvious>
-            <Rubric>{{rubric}}</Rubric>
-      value: |
-        <Output> is a candidate AGENTS.md (or a section of one, for a nested
-        file) for a real repository. <Evidence> lists facts about the
-        repository gathered independently - treat it as ground truth.
-        <Obvious> lists what one glance at the repo's own files already gives
-        an agent for free - restating any of it is clutter, not content.
-
-        Answer every item with a quote from <Output>, or NONE - a holistic
-        impression is not an answer. A live failure on this exact rubric
-        scored an output containing a directory tree and an invented
-        "Release checklist" a 1.0, reasoning "obvious clutter is absent" -
-        false against the text being judged. An item is not satisfied until
-        you can point to the specific words that satisfy or violate it.
-
-        1. Does <Output> restate anything in <Obvious> (a dependency list,
-           a directory/file tour, license text, a boilerplate contribution
-           template, or generic software-engineering advice not specific to
-           this repo)? Quote the specific offending passage, or NONE if
-           none appears. Score 1 for NONE, 0 for a quote.
-        2. Does <Output> contain any passage that is not grounded in
-           <Evidence> and not needed to state <Evidence>'s facts - padding
-           such as a "Useful links" section, an invented checklist, restated
-           ceremony, or elaboration beyond what the fact requires? Quote the
-           specific offending passage, or NONE if none appears. Score 1 for
-           NONE, 0 for a quote.
-
-        Stating an <Evidence> fact concretely - naming the actual command,
-        flag, path, or policy, and what goes wrong without it - is never
-        padding, however specific it gets. A concrete command is the content;
-        only what surrounds it can be clutter.
-
-        Score from 0 to 1, never above 1: 0.5 for the first, 0.5 for the
-        second. Award nothing for any item where you cannot produce the quote
-        it requires.
-      threshold: 0.5
+      type: javascript
+      value: file://assertions/agentsmd.cjs:saysNothingElse
       metric: says_nothing_else
 
     # Deterministic backstop for says_nothing_else's item 2, computed against
