@@ -54,21 +54,30 @@ providers:
 
 defaultTest:
   options:
-    # llm-rubric everywhere: g-eval extracts with /{.+}/, which cannot cross
-    # newlines, so a pretty-printed verdict is discarded and the row records
-    # 0.00 where the judge wrote full marks (evals/AGENTS.md Harness facts).
+    # type: javascript everywhere now (evals/AGENTS.md: quote-verified items,
+    # not the judge's own number - dotagents#64/#65). Each judged metric calls
+    # lib/quoted-items.js's judgeQuotedItems directly from assertions/plan.cjs,
+    # so this provider block is what THAT grader reads via judgeProvider(context)
+    # (askItems in plan.cjs), not a promptfoo rubric provider - and it is the
+    # settled judge config evals/AGENTS.md fixes suite-wide, copied from
+    # review-code's promptfooconfig.yaml: google/gemini-3.8-flash, temperature
+    # 0, reasoning on. A judge from the reviewer's own family, sampling left at
+    # the default, or json_object each measurably raised run-to-run noise
+    # (fagerbergj/dotagents#65).
     transform: file://../../lib/strip-reasoning.js:stripReasoning
     provider:
-      id: openai:chat:deepseek/deepseek-v4-flash
+      id: openai:chat:google/gemini-3.8-flash
       config:
         response_format:
           type: json_object
         apiBaseUrl: https://openrouter.ai/api/v1
-        max_tokens: 8192
-        max_completion_tokens: 8192
+        temperature: 0
+        max_tokens: 16384
+        max_completion_tokens: 16384
         passthrough:
+          temperature: 0
           reasoning:
-            enabled: false
+            enabled: true
         apiKeyEnvar: OPENROUTER_API_KEY
         showThinking: false
         omitDefaults: true
