@@ -37,19 +37,23 @@ defaultTest:
     # cut everything before the first heading or title label, then drop a
     # leading conversational line so a bare first-line title is the title.
     transform: file://../../lib/strip-reasoning.js:stripReasoning
+    # Judge settings are settled, not per-suite (evals/AGENTS.md):
+    # google/gemini-3.8-flash, temperature 0, reasoning on under `passthrough`.
+    # Sampling left at the default, or a judge sharing the reviewed model's own
+    # family, measurably raised run-to-run noise on review-code (dotagents#65).
     provider:
-      id: openai:chat:deepseek/deepseek-v4-flash
+      id: openai:chat:google/gemini-3.8-flash
       config:
-        # json_object, not json_schema - the latter makes promptfoo pre-parse the
-        # reply into an object, which the grader then rejects as 'not a string'.
         response_format:
           type: json_object
         apiBaseUrl: https://openrouter.ai/api/v1
-        max_tokens: 8192
-        max_completion_tokens: 8192
+        temperature: 0
+        max_tokens: 16384
+        max_completion_tokens: 16384
         passthrough:
+          temperature: 0
           reasoning:
-            enabled: false
+            enabled: true
         apiKeyEnvar: OPENROUTER_API_KEY
         showThinking: false
         omitDefaults: true
@@ -59,25 +63,23 @@ defaultTest:
     - type: javascript
       value: file://assertions/issue.cjs:noInventedFacts
       metric: no_invented_facts
-    # 2. semantic_quality is NOT here. It grades a write-up against the four
+    # 2. semantic_quality is NOT here. It grades a write-up against the three
     #    properties the description claims, which is the wrong question to ask of
     #    the Jira negative control, where the right answer is to refuse to write
-    #    a ticket at all. Sitting in defaultTest it graded that control anyway:
-    #    one skill row scored semantic_quality=1.00 ("clear outcome ... bounded
-    #    scope ... testable completion conditions") and case_fidelity=0.00
-    #    ("fabricates a product area ... never states that the report is
-    #    insufficient") - full marks and zero for the same output. It now rides
-    #    on the ten positive cases, anchored in tests/cases.yaml; the control is
-    #    graded by case_fidelity, which was written for it.
+    #    a ticket at all. It now rides on the ten positive cases, anchored in
+    #    tests/cases.yaml as *semantic; the control is graded by case_fidelity
+    #    alone, whose items were written for it.
     #
-    # 3. The case's own property, scored on its own axis rather than folded
-    #    into one of the three above.
-    - type: llm-rubric
-      value: |
-        The reply below was produced from this raw report:
-        "{{report}}"
-
-        {{rubric}}
+    # 3. The case's own property: quote-verified per-item (dotagents#64/#65
+    #    pattern; see skills/review-code/assertions/review.cjs). The old
+    #    llm-rubric asked the judge to both find the answer AND compute a 0-to-1
+    #    score with subtractions in one completion - the exact failure #64
+    #    documents (one unchanged metric scored 0.00 then 0.75 across two runs).
+    #    Items and weights now live per-case in tests/cases.yaml (`rubric`,
+    #    `weights`); this assertion only supplies the judge call and the
+    #    report-fact context.
+    - type: javascript
+      value: file://assertions/quality.cjs:caseFidelity
       threshold: 0.7
       metric: case_fidelity
     - type: latency
