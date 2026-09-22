@@ -40,17 +40,25 @@ defaultTest:
     # this level of transform deletes. It now hangs off the one assertion that
     # cannot see past prose (contract_shape, native is-json); the javascript
     # graders extract the card themselves via agentcard.cjs:source.
+    #
+    # Judge settings are settled (evals/AGENTS.md), never varied per suite:
+    # google/gemini-3.8-flash, temperature 0, reasoning on. This suite's arm
+    # provider is deepseek/deepseek-v4-flash - grading it with a deepseek judge
+    # would share its blind spots, the exact pairing #65 measured raising
+    # per-case SD 0.29 -> 0.04 and arm-mean SD 0.12 -> 0.015 when corrected.
     provider:
-      id: openai:chat:deepseek/deepseek-v4-flash
+      id: openai:chat:google/gemini-3.8-flash
       config:
         response_format:
           type: json_object
         apiBaseUrl: https://openrouter.ai/api/v1
-        max_tokens: 8192
-        max_completion_tokens: 8192
+        temperature: 0
+        max_tokens: 16384
+        max_completion_tokens: 16384
         passthrough:
+          temperature: 0
           reasoning:
-            enabled: false
+            enabled: true
         apiKeyEnvar: OPENROUTER_API_KEY
         showThinking: false
         omitDefaults: true
