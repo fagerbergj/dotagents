@@ -1,6 +1,12 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
 description: Slop detection skill effectiveness
 
+# Quote-verified judging (dotagents#64/#65) builds every judge prompt in JS,
+# wrapping `source` in its own <SourceFile> tag by hand - nothing left renders
+# a case var through nunjucks, so templating can stay off entirely.
+env:
+  PROMPTFOO_DISABLE_TEMPLATING: "1"
+
 # Both arms see the same file and the same ask. Arm labels come from the skill's
 # frontmatter version, so bumping metadata.version in SKILL.md relabels the
 # comparison. skill-next stays out until a SKILL.next.md exists - lib/arms.js
@@ -39,17 +45,24 @@ defaultTest:
     # see the answer. Anchors on the first fence; a fenceless answer passes
     # through untouched.
     transform: file://../../lib/strip-reasoning.js:stripReasoning
+    # Judge settings are settled repo-wide (evals/AGENTS.md): a judge outside
+    # the reviewed model's own family, temperature 0, reasoning on, the strict
+    # items schema lib/quoted-items.js sends, three-attempt retry. Do not vary
+    # these per suite - the noise numbers in the PR body are only comparable
+    # against review-code's if the judge is identical.
     provider:
-      id: openai:chat:deepseek/deepseek-v4-flash
+      id: openai:chat:google/gemini-3.8-flash
       config:
         response_format:
           type: json_object
         apiBaseUrl: https://openrouter.ai/api/v1
-        max_tokens: 8192
-        max_completion_tokens: 8192
+        temperature: 0
+        max_tokens: 16384
+        max_completion_tokens: 16384
         passthrough:
+          temperature: 0
           reasoning:
-            enabled: false
+            enabled: true
         apiKeyEnvar: OPENROUTER_API_KEY
         showThinking: false
         omitDefaults: true
@@ -61,10 +74,6 @@ defaultTest:
     - type: latency
       threshold: 180000
 
-# No PROMPTFOO_DISABLE_TEMPLATING: the two rubrics interpolate `{{source}}` into
-# their assertion values, which that flag turns off. It is safe only while no
-# fixture contains `{{` - check-case-vars.py is what enforces that.
-#
 # Every scored assertion is per case. The three defect cases and the two
 # controls score opposite properties, and a metric that ran on both would pay
 # an arm for one behaviour and fine it for the other on the same run.

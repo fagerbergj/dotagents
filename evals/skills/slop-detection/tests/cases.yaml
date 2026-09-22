@@ -104,38 +104,14 @@
     # Cyclomatic complexity was measured here too and is gone: the first run put
     # it at 1.00 in both arms, because a baseline asked to rewrite a CC-22
     # function splits it as readily as an instructed one does.
+    #
+    # Quote-verified (dotagents#64/#65): the judge answers two numbered items
+    # with a verbatim quote or NONE, assertions/slop-judge.cjs verifies each
+    # quote is real before it counts, and the 0.5/0.5 weights compute the
+    # score - never the judge's own arithmetic.
     - &names_defect
-      type: llm-rubric
-      value: |
-        The file the colleague sent:
-
-        {{source}}
-
-        Judge the answer as delivered. Ignore its length, its tone, whether it followed any
-        particular method, and whether its rewritten code would compile - none of that is
-        graded here. Do not reward an answer for mentioning a metric, a formula, or a number;
-        an answer that names the right problem in plain words scores the same as one that
-        measures it.
-
-        The single question: does the answer identify a specific structural problem in THIS
-        file, pointing at the construct that carries it, and say concretely what replaces it?
-
-        Answer these two with a quote from the answer, or NONE, before scoring.
-
-        1. The construct it names - the function, the branch, the block, the variable -
-           identified specifically enough that you could find it in the file above. A
-           problem attributed to the file as a whole, or phrased so it would read true of
-           any Python file, is NONE.
-        2. What it proposes instead, concretely enough to act on without asking a follow-up
-           question. "Simplify this", "consider refactoring", "make it more readable" and
-           "split it up" with no boundary named are all NONE.
-
-        A rewritten file on its own answers neither item. Code that silently restructures
-        the file tells the reader nothing about what was wrong or why this replaces it, so
-        quote prose or quote nothing.
-
-        Score from 0 to 1, never above 1: 0.5 for item 1, 0.5 for item 2. Award nothing for an
-        item you could not quote for. State the arithmetic.
+      type: javascript
+      value: file://assertions/slop-judge.cjs:namesDefect
       threshold: 0.5
       metric: names_defect
 
@@ -314,32 +290,11 @@
               return Token("op", c, pos), pos + 1
           raise LexError("unexpected character " + repr(c) + " at " + str(pos))
   assert:
+    # Quote-verified (dotagents#64/#65): one item, weight 1, still all-or-
+    # nothing - assertions/slop-judge.cjs's `restraint`.
     - &restraint
-      type: llm-rubric
-      value: |
-        The file the colleague sent:
-
-        {{source}}
-
-        Judge the answer as delivered. Ignore its length, its tone, and whether anything
-        else it says is right - only the one question below is scored.
-
-        Does the answer ask for this code's structure to be changed? That is: does it say
-        the function should be split, broken up, decomposed, flattened, or restructured;
-        that the repetition should be removed, extracted, parameterised, factored out, or
-        generated; or that the file is too complex, too long, or too repetitive as it
-        stands? A rewritten version that does any of those things counts, whether or not
-        the prose asks for it.
-
-        Quote the sentence or the rewritten construct that does it, or say NONE.
-
-        Not that, and not to be quoted: naming a bug; a correctness or edge-case concern;
-        a question about behaviour; a rename; a comment or docstring; a point raised and
-        then explicitly set aside as fine here; an observation that the structure suits
-        the problem.
-
-        Score from 0 to 1, never above 1, and only ever 0 or 1: 1 if you quoted NONE,
-        0 if you quoted anything. There is no partial credit.
+      type: javascript
+      value: file://assertions/slop-judge.cjs:restraint
       threshold: 1
       metric: restraint
 
