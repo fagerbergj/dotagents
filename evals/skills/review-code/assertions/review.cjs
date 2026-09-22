@@ -265,7 +265,9 @@ const JSON_CONTRACT = 'You are grading output against a small numbered list of'
   + ' <Output> decides it>, "holds": <true or false>}. A quote must be text'
   + ' that actually appears inside <Output> - copying <MaintainerReview> back,'
   + ' paraphrasing, or summarising is not a quote and will be rejected before'
-  + ' your "holds" verdict is even read. Respond with exactly one JSON object:'
+  + ' your "holds" verdict is even read. Keep each quote to one sentence or'
+  + ' line, at most 300 characters, never a code block - long quotes break the'
+  + ' JSON and lose the item. Respond with exactly one JSON object:'
   + ' {"items": [...]}, one entry per numbered item, nothing else.';
 
 function judgeProvider(context) {

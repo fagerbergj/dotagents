@@ -148,7 +148,10 @@ function callJudge(providerCfg, messages) {
 // straight off `context.test.options.provider` by the caller, so the judge
 // model lives in exactly one place in the suite's YAML.
 async function judgeQuotedItems({ providerCfg, messages, texts, score, threshold }) {
-  const raw = await callJudge(providerCfg, messages);
+  let raw = await callJudge(providerCfg, messages);
+  // One retry: a provider-side error or an unparseable answer is transport
+  // noise, and a second call is cheaper than a dead row.
+  if (!parseJudge(raw)) raw = await callJudge(providerCfg, messages);
   return scoreFromJudge(raw, texts, score, { threshold });
 }
 
