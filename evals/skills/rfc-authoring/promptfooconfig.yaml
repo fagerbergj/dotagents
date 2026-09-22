@@ -32,19 +32,31 @@ providers:
 
 defaultTest:
   options:
-    # Every judged assertion is llm-rubric, never g-eval: g-eval extracts its
-    # verdict with /{.+}/, which cannot cross newlines, so a pretty-printed
-    # reply is discarded and the row records 0.00 even where the judge wrote
-    # 10/10. llm-rubric brace-matches instead and is unaffected, so no
-    # rubricPrompt override is needed anywhere in this suite.
+    # dotagents#64/#65 quote-verified judge, same as review-code's and
+    # adr-authoring's: every judged metric in tests/cases.yaml is
+    # `type: javascript` and calls assertions/rfc.cjs, which reads this
+    # provider block itself (rfc.cjs's judgeProvider) rather than going
+    # through promptfoo's own llm-rubric/g-eval. No rubricPrompt override
+    # anywhere in this suite - moving off llm-rubric/g-eval removes both the
+    # g-eval newline-parsing bug (verdict extracted with /{.+}/, which cannot
+    # cross newlines, so a pretty-printed reply was discarded and the row
+    # recorded 0.00) and the risk a custom rubricPrompt drops promptfoo's
+    # system message and kills the row with "Could not extract JSON".
+    #
     # The llm-swap gateway returns reasoning as message content; strip it so the
     # graders see the answer, not the leak. There is no fence to anchor on, so
     # anchor on the document's first heading and only cut a preamble long enough
     # to be reasoning - an answer that declines to write a document has no
     # heading to cut back to and passes through untouched.
     transform: file://../../lib/strip-reasoning.js:stripReasoning
+    # Settings are settled, not suite-tuned (evals/AGENTS.md, "Judge settings
+    # are settled"): google/gemini-3.8-flash, temperature 0, reasoning enabled
+    # under `passthrough` (a bare `reasoning: {enabled}` under `config` is
+    # silently dropped). The suite under test runs deepseek-v4-flash (see
+    # `providers:` above); a judge from the reviewer's own family, or sampling
+    # left at default, measurably raised run-to-run noise on review-code.
     provider:
-      id: openai:chat:deepseek/deepseek-v4-flash
+      id: openai:chat:google/gemini-3.8-flash
       config:
         # Keeps the judge's reply parseable as JSON. json_object, not json_schema:
         # the latter makes promptfoo pre-parse the reply into an object, which the
@@ -52,24 +64,26 @@ defaultTest:
         response_format:
           type: json_object
         apiBaseUrl: https://openrouter.ai/api/v1
-        max_tokens: 8192
-        max_completion_tokens: 8192
+        temperature: 0
+        max_tokens: 16384
+        max_completion_tokens: 16384
         passthrough:
+          temperature: 0
           reasoning:
-            enabled: false
+            enabled: true
         apiKeyEnvar: OPENROUTER_API_KEY
         showThinking: false
         omitDefaults: true
   assert:
-    # The only grader that is right for every case. Judging is per-case: a change
-    # that warrants review and one that does not have opposite right answers, so
-    # the rubric blocks live with the cases in tests/cases.yaml.
+    # Unnamed, so it guards the run shape without being graded as quality -
+    # named, `metric: latency` turned it into a graded column beside the
+    # quality metrics, and a row slow enough to trip it is one the completion
+    # cap already truncated, which those metrics fine on their own.
     # Loading a SKILL.md costs wall-clock time and that overhead is part of what
     # the arms are compared on. No `cost` assertion: this gateway declares no
     # per-token price, so it would read zero and pass trivially.
     - type: latency
       threshold: 180000
-      metric: latency
 
 tests:
   - file://tests/*.yaml
