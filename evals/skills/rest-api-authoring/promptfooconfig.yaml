@@ -33,27 +33,37 @@ providers:
 
 defaultTest:
   options:
-    # Every judged assertion is llm-rubric; no g-eval survives in this suite, so
-    # no rubricPrompt override is needed anywhere.
+    # design_quality and the four control_quality metrics are quote-verified
+    # `javascript` assertions (assertions/quality.cjs), not llm-rubric: the
+    # judge answers narrow numbered items with a verbatim quote or NONE, code
+    # verifies each quote and computes the score - never the judge's own
+    # arithmetic (evals/AGENTS.md, dotagents#64). No rubricPrompt override is
+    # needed anywhere because promptfoo's built-in rubric grading is not used.
     # The llm-swap gateway returns reasoning as message content. This pulls the
     # fenced document out of the leak and normalises it to JSON, so every native
     # assertion below grades the contract rather than the chatter around it.
     # Output that yields no document passes through untouched and fails is-json.
     transform: file://assertions/restapi.cjs:normalizeToJson
+    # Settled judge config (evals/AGENTS.md): google/gemini-3.8-flash via
+    # OpenRouter, temperature 0, reasoning on under passthrough. quality.cjs
+    # reads this block through `context.test.options.provider` to build its own
+    # OpenRouter call - it is not the generating provider (that is
+    # lib/skill-tools.js above) and promptfoo's own rubric grading never runs.
+    # Judging from a different family than the generator (deepseek) avoids
+    # sharing its blind spots.
     provider:
-      id: openai:chat:deepseek/deepseek-v4-flash
+      id: openai:chat:google/gemini-3.8-flash
       config:
-        # Kept deliberately. It was suspected of breaking judge parsing and an
-        # isolated A/B cleared it: llm-rubric brace-matches its verdict and is
-        # unaffected either way. Removing it is a change with no upside.
         response_format:
           type: json_object
         apiBaseUrl: https://openrouter.ai/api/v1
-        max_tokens: 8192
-        max_completion_tokens: 8192
+        temperature: 0
+        max_tokens: 16384
+        max_completion_tokens: 16384
         passthrough:
+          temperature: 0
           reasoning:
-            enabled: false
+            enabled: true
         apiKeyEnvar: OPENROUTER_API_KEY
         showThinking: false
         omitDefaults: true

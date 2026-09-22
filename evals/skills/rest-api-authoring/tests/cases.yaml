@@ -107,57 +107,28 @@
       metric: resource_modeling
     # 4. Shared unchanged across every case that calls for a full or evolved
     #    contract - individually anchored so each case can append it to its own
-    #    distinct deterministic checks below. llm-rubric, not g-eval: g-eval
-    #    scores each criterion in isolation and discards a verdict it cannot
-    #    extract, and its criteria list invited restating the SKILL.md procedure.
-    #    No comparative pick-a-winner assertion here either - the one that used
+    #    distinct deterministic checks below. Quote-verified `javascript`
+    #    (assertions/quality.cjs:designQuality), not llm-rubric or g-eval: the
+    #    judge answers each numbered question with a verbatim quote or NONE,
+    #    code verifies the quote and sums 0.2 per verified holding item -
+    #    never the judge's own arithmetic (evals/AGENTS.md, dotagents#64). No
+    #    comparative pick-a-winner assertion here either - the one that used
     #    to sit beside this restated its criteria one-for-one in comparative
     #    phrasing.
+    #
+    # Consequence questions, not properties. The four g-eval criteria this
+    # replaced were near-verbatim SKILL.md procedure lines, so the skill arm
+    # scored for reciting the vocabulary it had just been handed. A question
+    # like "what does the second call return" cannot be answered by naming a
+    # convention - only by a mechanism the judge can quote back. Question 5 is
+    # the per-case coverage requirement, absorbed from a `semantic_quality`
+    # metric that asked three holistic bullets with no arithmetic and sat at
+    # the ceiling on 15 of 20 rows.
     - &design_quality
-      type: llm-rubric
+      type: javascript
       threshold: 0.7
       metric: design_quality
-      # Consequence questions, not properties. The four g-eval criteria this
-      # replaces were near-verbatim SKILL.md procedure lines, so the skill arm
-      # scored for reciting the vocabulary it had just been handed. A question
-      # like "what does the second call return" cannot be answered by naming a
-      # convention - only by a mechanism the judge can quote back. Question 5 is
-      # the per-case coverage requirement, absorbed from a `semantic_quality`
-      # metric that asked three holistic bullets with no arithmetic and sat at
-      # the ceiling on 15 of 20 rows.
-      value: |
-        You are reading an HTTP API contract written in response to this request:
-        "{{task}}"
-
-        Answer the five questions below from the delivered contract alone. A
-        question counts as answered only if you can quote the part of the
-        document that answers it. Naming a convention, a header, an RFC, or a
-        design principle is not an answer; only a mechanism a client could act
-        on is. If nothing in the document answers a question, the answer is
-        NONE and that question earns nothing.
-
-        1. Take the operation that changes the most state. A client sends it,
-           times out, and sends the identical request again. What does the
-           contract say the second call does? Quote it, or answer NONE.
-        2. Take one failure a real client will hit on that operation. Can the
-           client tell it apart from the other failures the same operation
-           declares, and behave differently? Quote the two responses that
-           differ, or answer NONE.
-        3. Find a concept that appears in more than one place. Does the
-           document say it is one thing, so that changing it changes every
-           place at once? Quote it, or answer NONE.
-        4. Take the operation with the largest request body. Could a client
-           build a valid request from this document alone, without guessing a
-           field name, a format, or whether a field is optional? Quote what
-           makes it unambiguous, or answer NONE.
-        5. Coverage: does the contract express everything this request needs,
-           with nothing contradicting it? Specifically: {{rubric}} - quote what
-           expresses it, or answer NONE.
-
-        Score from 0 to 1, never above 1: award 0.2 for each of the five
-        questions you answered with a quotable mechanism and 0 for each NONE.
-        Judge the contract as delivered; do not reward or penalise which
-        conventions, headers, or authoring style it used.
+      value: file://assertions/quality.cjs:designQuality
     # 5. Does the emitted contract satisfy the requirements this case stated.
     #    One metric across all eleven contract cases, configured per case: the
     #    eight metrics it replaces were carried by one case each, and a metric
@@ -644,46 +615,16 @@
     - *resource_modeling
     - *compatibility
     # design_quality rewards a contract with more mechanism in it, which is the
-    # wrong direction here. Judged on its own terms instead. The
-    # case-sensitivity claim is read out of the parsed parameter description
-    # and judged; the not-regex it replaces failed the correct answer, because
-    # "the code is not case sensitive" matches /[Cc]ase[- ]sensitive/.
-    - type: llm-rubric
+    # wrong direction here. Judged on its own terms instead
+    # (assertions/quality.cjs:docFixQuality): the case-sensitivity claim is
+    # read out of the parsed parameter description and judged. Quote-verified
+    # `javascript`, not llm-rubric - two positively-framed items (correction
+    # made; no scope added) replace the old "start at 1, subtract 0.25 per
+    # addition" arithmetic the judge used to do itself.
+    - type: javascript
       metric: control_quality
       threshold: 0.7
-      value: |
-        Someone asked for this, mid-freeze:
-        "{{task}}"
-
-        The file they attached:
-
-        ```yaml
-        {{contract}}
-        ```
-
-        The reply is below. The correct
-        answer is the existing contract with one incorrect claim corrected and
-        nothing else changed.
-
-        Answer these from the delivered document alone:
-        1. Quote the description of the `code` path parameter on
-           GET /coupons/{code} exactly as delivered. Does it still assert that
-           the code IS case sensitive? A description saying the code is not
-           case sensitive, that lookup is case-insensitive, or that the code is
-           upper-cased on the way in is the correct fix, not a failure.
-        2. List everything present in the reply that was not in the file they
-           sent: operations, schemas, parameters, response codes, security,
-           version changes. Quote each addition, or answer NONE.
-        3. Additional requirement for this case: {{rubric}} - is it met?
-
-        Score from 0 to 1, never above 1. Start at 1. A parameter description
-        that still asserts the code is case sensitive scores 0. Subtract 0.25
-        for each distinct addition listed in question 2, however well designed
-        it is - added scope is the wrong answer here, not thoroughness. A reply
-        that changes only that one description and leaves everything else byte
-        for byte scores 1 and must not be marked down for looking sparse.
-        Judge the document as delivered; do not reward or penalise which
-        conventions or authoring style it used.
+      value: file://assertions/quality.cjs:docFixQuality
 
 - description: negative control - the existing endpoint already does it
   vars:
@@ -755,41 +696,14 @@
     # also hands the file back scored 0 on all four of these; without it, 1.
     transform: 'output'
   assert:
-    - type: llm-rubric
+    # Quote-verified `javascript` (assertions/quality.cjs:alreadyCoveredQuality):
+    # two positively-framed items (identifies the existing operation; adds
+    # nothing) replace the old "start at 1, subtract 0.25 per addition"
+    # arithmetic.
+    - type: javascript
       metric: control_quality
       threshold: 0.7
-      value: |
-        Someone asked for this:
-        "{{task}}"
-
-        The file they attached:
-
-        ```yaml
-        {{contract}}
-        ```
-
-        The reply is below. The operation they asked for already exists: GET /invoices declares a
-        `status` query parameter whose enum includes `unpaid`, so the unpaid
-        page is GET /invoices?status=unpaid. The correct answer is to say so.
-        Nothing in the contract needs to change.
-
-        Answer these from the reply as delivered:
-        1. Does the reply say the existing GET /invoices already returns what
-           was asked for, and name the parameter or the call that does it?
-           Quote it, or answer NONE.
-        2. List everything the reply adds to the contract: paths, operations,
-           parameters, schemas, response codes. Quote each addition, or answer
-           NONE.
-
-        Score from 0 to 1, never above 1. Start at 1. A reply that does not
-        identify the existing operation as already covering the request scores
-        0, whatever else it contains. Subtract 0.25 for each distinct addition
-        listed in question 2, however well designed it is - a second endpoint
-        that duplicates a filter the file already has is the wrong answer here,
-        not thoroughness. A reply that points at the existing parameter and
-        changes nothing scores 1 and must not be marked down for looking
-        sparse. Judge the reply as delivered; do not reward or penalise which
-        conventions or authoring style it used.
+      value: file://assertions/quality.cjs:alreadyCoveredQuality
 
 - description: negative control - nothing in the contract changes
   vars:
@@ -838,41 +752,13 @@
     # also hands the file back scored 0 on all four of these; without it, 1.
     transform: 'output'
   assert:
-    - type: llm-rubric
+    # Quote-verified `javascript` (assertions/quality.cjs:noChangeQuality): two
+    # positively-framed items (says no change needed; proposes no edit)
+    # replace the old "start at 1, subtract 0.25 per edit" arithmetic.
+    - type: javascript
       metric: control_quality
       threshold: 0.7
-      value: |
-        Someone asked for this:
-        "{{task}}"
-
-        The file they attached:
-
-        ```yaml
-        {{contract}}
-        ```
-
-        The reply is below. Nothing they describe is expressed in an API
-        contract: an index, an
-        instance size, and a latency number are implementation, and they said
-        the request and response are unchanged. The correct answer is that the
-        file does not need to change.
-
-        Answer these from the reply as delivered:
-        1. Does the reply say the contract needs no change? Quote it, or answer
-           NONE.
-        2. List every edit the reply makes or proposes to the file: paths,
-           operations, parameters, schemas, response codes, descriptions,
-           version bumps, extensions. Quote each one, or answer NONE.
-
-        Score from 0 to 1, never above 1. Start at 1. A reply that does not say
-        the contract needs no change scores 0, whatever else it contains.
-        Subtract 0.25 for each distinct edit listed in question 2, however well
-        designed it is - a performance change that alters no request and no
-        response has nothing to record here, and a version bump for it is an
-        edit like any other. A reply that says nothing needs to change, and
-        changes nothing, scores 1 and must not be marked down for being short.
-        Judge the reply as delivered; do not reward or penalise which
-        conventions or authoring style it used.
+      value: file://assertions/quality.cjs:noChangeQuality
 
 - description: negative control - the two requirements contradict each other
   vars:
@@ -920,45 +806,14 @@
     # also hands the file back scored 0 on all four of these; without it, 1.
     transform: 'output'
   assert:
-    - type: llm-rubric
+    # Quote-verified `javascript` (assertions/quality.cjs:contradiction204Quality):
+    # three positively-framed items (names the conflict; keeps 204 empty; says
+    # explicitly which side it kept) replace the old "start at 1, subtract 0.5
+    # / 0.25" arithmetic.
+    - type: javascript
       metric: control_quality
       threshold: 0.7
-      value: |
-        Someone asked for this:
-        "{{task}}"
-
-        The file they attached:
-
-        ```yaml
-        {{contract}}
-        ```
-
-        The reply is below. The two things they asked for cannot both hold: a
-        204 response carries no
-        content by definition (RFC 9110 s15.3.5), so a body and a 204 are
-        mutually exclusive. The correct answer names that conflict before
-        writing anything. Having named it, either asking which of the two gives
-        or picking one explicitly and saying what it costs the other is
-        correct; quietly delivering one of the two is not.
-
-        Answer these from the reply as delivered:
-        1. Does the reply say the two requirements conflict, because a 204
-           cannot carry a response body? Quote it, or answer NONE.
-        2. Does any document in the reply declare content, a schema, or a body
-           on a 204 response? Quote it, or answer NONE.
-        3. Does the reply drop one of the two requirements without saying so -
-           a body with no mention that the status has to change, or a 204 with
-           no mention that the invoice cannot come back this way? Quote it, or
-           answer NONE.
-
-        Score from 0 to 1, never above 1. Start at 1. A reply that does not
-        name the conflict scores 0, however well the document it delivers is
-        put together. Subtract 0.5 if question 2 found a body on a 204.
-        Subtract 0.25 if question 3 found a requirement silently dropped. A
-        reply that names the conflict and asks which one gives, changing
-        nothing, scores 1 and must not be marked down for delivering no
-        document. Judge the reply as delivered; do not reward or penalise which
-        conventions or authoring style it used.
+      value: file://assertions/quality.cjs:contradiction204Quality
 
 - description: negative control - the compatibility requirement contradicts the ask
   vars:
@@ -1001,46 +856,12 @@
     # also hands the file back scored 0 on all four of these; without it, 1.
     transform: 'output'
   assert:
-    - type: llm-rubric
+    # Quote-verified `javascript`
+    # (assertions/quality.cjs:contradictionRequiredQuality): three
+    # positively-framed items (names the conflict; keeps the field optional
+    # on the existing operation; says explicitly which side it kept) replace
+    # the old "start at 1, subtract 0.5 / 0.25" arithmetic.
+    - type: javascript
       metric: control_quality
       threshold: 0.7
-      value: |
-        Someone asked for this:
-        "{{task}}"
-
-        The file they attached:
-
-        ```yaml
-        {{contract}}
-        ```
-
-        The reply is below. The two things they asked for cannot both hold on
-        one version of this
-        operation: adding a field to the required list of a request body
-        rejects every client that omits it, and they said the clients in the
-        field omit it and cannot start failing. The correct answer names that
-        before writing anything. Having named it, either asking which gives or
-        proposing a route that keeps both true - leaving it optional and
-        enforcing when the build ships, or a separate versioned operation with
-        a cutover - is correct; quietly marking it required is not.
-
-        Answer these from the reply as delivered:
-        1. Does the reply say that making the field required breaks the clients
-           already in the field, so the two requirements cannot both hold as
-           asked? Quote it, or answer NONE.
-        2. Does any document in the reply add `referralCode` to the `required`
-           list of the request body that today's clients post to? Quote it, or
-           answer NONE.
-        3. Does the reply drop one of the two requirements without saying so -
-           making it required with no mention of the clients, or leaving it
-           optional with no mention that the mandate cannot happen yet? Quote
-           it, or answer NONE.
-
-        Score from 0 to 1, never above 1. Start at 1. A reply that does not name
-        the conflict scores 0, however well the document it delivers is put
-        together. Subtract 0.5 if question 2 found the field made required on
-        the operation today's clients post to. Subtract 0.25 if question 3
-        found a requirement silently dropped. A reply that names the conflict
-        and asks which one gives, changing nothing, scores 1 and must not be
-        marked down for delivering no document. Judge the reply as delivered;
-        do not reward or penalise which conventions or authoring style it used.
+      value: file://assertions/quality.cjs:contradictionRequiredQuality
