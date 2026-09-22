@@ -36,20 +36,28 @@ defaultTest:
     # The llm-swap gateway returns reasoning as message content; strip it so the
     # graders see the commented file, not the leak.
     transform: file://../../lib/strip-reasoning.js:stripReasoning
+    # Judge settings are settled (evals/AGENTS.md): google/gemini-3.8-flash - a
+    # different family than the arm above - temperature 0, reasoning on. This
+    # suite judged with the arm's own family (deepseek grading deepseek) before
+    # this conversion; dotagents#65 measured that pairing's extra run-to-run
+    # noise directly, so it moves onto the same judge as review-code.
     provider:
-      id: openai:chat:deepseek/deepseek-v4-flash
+      id: openai:chat:google/gemini-3.8-flash
       config:
         # Kept from the g-eval era: json_object, never json_schema - the latter makes
         # promptfoo pre-parse the reply into an object, which the graders reject as
-        # 'not a string'.
+        # 'not a string'. Unused by the quote-verified metrics below, which set
+        # their own json_schema on the direct HTTPS call in lib/quoted-items.js.
         response_format:
           type: json_object
         apiBaseUrl: https://openrouter.ai/api/v1
-        max_tokens: 8192
-        max_completion_tokens: 8192
+        temperature: 0
+        max_tokens: 16384
+        max_completion_tokens: 16384
         passthrough:
+          temperature: 0
           reasoning:
-            enabled: false
+            enabled: true
         apiKeyEnvar: OPENROUTER_API_KEY
         showThinking: false
         omitDefaults: true
@@ -78,13 +86,15 @@ defaultTest:
     - type: javascript
       value: file://assertions/comment.cjs:codePreserved
       metric: code_preserved
-    # 3. not_narration and no_false_comments live in tests/cases.yaml, on the nine
-    #    cases that hide something, not here. They are one enumeration of the added
-    #    comments read two ways: K / N, the share that say something a competent
-    #    reader would not already know, and whether any of them is false about the
-    #    code. Both score a reply that adds nothing at 0, which is why neither runs
-    #    on the five negative controls - restraint grades those instead, so the
-    #    metrics partition the suite rather than overlapping on it.
+    # 3. not_narration, no_false_comments, fact_transfer and restraint live in
+    #    tests/cases.yaml - the first three on the nine cases that hide
+    #    something, restraint on the five negative controls, so the metrics
+    #    partition the suite rather than overlapping on it. All four are
+    #    quote-verified (evals/AGENTS.md): the judge answers a small numbered
+    #    list of yes/no items, quoting the comment that decides each one; code
+    #    in assertions/comment.cjs verifies the quote is real before the item
+    #    counts, and computes the score from verified items by a fixed rule -
+    #    never from the judge's own arithmetic. See dotagents#64 and #65.
     # 4. Loading a SKILL.md is not free; the overhead is part of the comparison,
     #    but as a guard on the run's shape, not as a graded column. Named it
     #    scored 1.00/1.00 on all 84 rows of results/comment-authoring@2.0.1.json
