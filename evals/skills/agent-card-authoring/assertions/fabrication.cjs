@@ -4,19 +4,8 @@
 // The judge still reasons in prose, but per item it must quote <Output> or say
 // NONE and say whether the item holds; judgeQuotedItems verifies the quote is
 // real before scoring, and WEIGHTS below - not the judge - compute the number.
-const { judgeQuotedItems } = require('../../../lib/quoted-items.js');
+const { judgeQuotedItems, JSON_CONTRACT } = require('../../../lib/quoted-items.js');
 
-const JSON_CONTRACT = 'You are grading output against a small numbered list of'
-  + ' yes/no questions. For EVERY numbered item, answer with one object:'
-  + ' {"n": <item number>, "quote": <verbatim text copied from inside <Output>'
-  + ' that decides this item, or the literal string "NONE" if nothing in'
-  + ' <Output> decides it>, "holds": <true or false>}. A quote must be text'
-  + ' that actually appears inside <Output> - copying <Brief> back,'
-  + ' paraphrasing, or summarising is not a quote and will be rejected before'
-  + ' your "holds" verdict is even read. Keep each quote to one sentence or'
-  + ' line, at most 300 characters, never a code block - long quotes break the'
-  + ' JSON and lose the item. Respond with exactly one JSON object:'
-  + ' {"items": [...]}, one entry per numbered item, nothing else.';
 
 function judgeProvider(context) {
   const p = (context && context.test && context.test.options && context.test.options.provider) || {};
@@ -91,7 +80,7 @@ function noFabrication(output, context) {
   const { providerCfg, messages } = askItems(output, context, NO_FABRICATION_ITEMS);
   return judgeQuotedItems({
     providerCfg, messages, texts: { default: output },
-    score: weighByItem({ 1: 0.34, 2: 0.33, 3: 0.33 }), threshold: 0.7,
+    score: weighByItem({ 1: 0.34, 2: 0.33, 3: 0.33 }), threshold: 0.7, absence: [1],
   });
 }
 
