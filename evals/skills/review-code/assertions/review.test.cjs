@@ -1,7 +1,30 @@
 // Offline checks on the citation grader's pure parts, plus a fixture-backed
 // pass over the resolution rules. Runs before any tokens are bought.
 const assert = require('node:assert');
-const { diffLines, noInventedCitations, lineCount, citedCode } = require('./review.cjs');
+const { diffLines, noInventedCitations, lineCount, citedCode, judgeProvider, weighByItem, askItems } = require('./review.cjs');
+
+// --- the four quote-verified metrics' pure parts (no network) --------------
+{
+  // Model comes off `test.options.provider.id` ("openai:chat:<model>"), the
+  // exact object llm-rubric already used - no second copy of it in this file.
+  const ctx = { test: { options: { provider: { id: 'openai:chat:deepseek/deepseek-v4-flash', config: { apiBaseUrl: 'https://openrouter.ai/api/v1', apiKeyEnvar: 'OPENROUTER_API_KEY' } } } } };
+  const cfg = judgeProvider(ctx);
+  assert.equal(cfg.model, 'deepseek/deepseek-v4-flash');
+  assert.equal(cfg.apiKeyEnvar, 'OPENROUTER_API_KEY');
+  assert.equal(judgeProvider({}).model, undefined, 'a missing provider block does not throw');
+
+  const w = weighByItem({ 1: 0.6, 2: 0.4 });
+  assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: false }]), 0.6, 'only a holding item earns its weight');
+  assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: true }]), 1, 'both items sum to 1');
+  assert.equal(w([]), 0, 'nothing verified scores 0, not an error');
+  assert.equal(w([{ n: 1, holds: true }, { n: 1, holds: true }, { n: 1, holds: false }]), 0, 'one item per finding: the question fails if any finding fails');
+  assert.equal(w([{ n: 2, holds: true }, { n: 2, holds: true }]), 0.4, 'repeated items earn the weight once, never more than 1 in total');
+
+  const built = askItems('the review text', { vars: { expected: 'maintainer said X', verdict: 'CHANGES_REQUESTED' } }, 'ITEM TEXT');
+  assert.ok(built.messages[1].content.includes('the review text'), '<Output> carries the real review');
+  assert.ok(built.messages[1].content.includes('maintainer said X'), '<MaintainerReview> carries the case var');
+  assert.ok(built.messages[0].content.includes('"items"'), 'the system message states the JSON contract');
+}
 
 // A latency assertion stays UNNAMED. Named, it becomes a graded column beside
 // the quality metrics - and a row slow enough to trip it is a row the
