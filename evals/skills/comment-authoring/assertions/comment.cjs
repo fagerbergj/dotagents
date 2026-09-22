@@ -1,5 +1,6 @@
 const { spawnSync } = require('node:child_process');
 const { unwrapFence } = require('../../../lib/strip-reasoning.js');
+const { judgeQuotedItems } = require('../../../lib/quoted-items.js');
 'use strict';
 
 // Two graders that genuinely compute, against the case's own input var:
@@ -290,9 +291,176 @@ print(json.dumps({"found": found}))
     : result(true, `Docstring present on ${names.join(', ')}.`);
 }
 
+// ---------------------------------------------------------------------------
+// dotagents#64/#65 (evals/AGENTS.md): four llm-rubric metrics moved off their
+// own enumerate-and-divide arithmetic (K/N, 1-(U/D)) here - a judge writing
+// "K=3, N=5" in prose is not code checking anything, and this suite's own
+// three-band predecessor showed a 0.568 per-cell spread over five identical
+// runs. Each metric below asks a small numbered list of yes/no items and
+// requires a verbatim quote or NONE; judgeQuotedItems verifies the quote is
+// real before scoring, and weighByItem - not the judge - computes the number.
+// review-code/assertions/review.cjs is the worked example this follows.
+const JSON_CONTRACT = 'You are grading output against a small numbered list of'
+  + ' yes/no questions. For EVERY numbered item, answer with one object:'
+  + ' {"n": <item number>, "quote": <verbatim text copied from inside <Output>'
+  + ' that decides this item, or the literal string "NONE" if nothing in'
+  + ' <Output> decides it>, "holds": <true or false>}. A quote must be text'
+  + ' that actually appears inside <Output> - copying another tag back,'
+  + ' paraphrasing, or summarising is not a quote and will be rejected before'
+  + ' your "holds" verdict is even read. Keep each quote to one sentence or'
+  + ' line, at most 300 characters, never a code block - long quotes break the'
+  + ' JSON and lose the item. Respond with exactly one JSON object:'
+  + ' {"items": [...]}, one entry per numbered item, nothing else.';
+
+function judgeProvider(context) {
+  const p = (context && context.test && context.test.options && context.test.options.provider) || {};
+  const model = String(p.id || '').replace(/^openai:chat:/, '') || (p.config && p.config.model);
+  return { model, ...(p.config || {}) };
+}
+
+// weights: {1: 0.6, 2: 0.4, ...}. Only a verified quote whose "holds" is true
+// earns its item's weight. Multiple answers sharing a number - one per added
+// comment - earn that weight once, and only when every one of them holds.
+function weighByItem(weights) {
+  return (verified) => Object.keys(weights).reduce((sum, n) => {
+    const answers = verified.filter((it) => String(it.n) === n);
+    return sum + (answers.length && answers.every((it) => it.holds) ? weights[n] : 0);
+  }, 0);
+}
+
+// extraXml goes before <Output> - the case's own request and/or pre-comment
+// source, for the metrics that need context the delivered file alone does not
+// carry (restraint, fact_transfer).
+function askItems(output, context, itemsPrompt, extraXml = '') {
+  const providerCfg = judgeProvider(context);
+  const messages = [
+    { role: 'system', content: JSON_CONTRACT },
+    { role: 'user', content: `${extraXml}<Output>${output}</Output>\n\n${itemsPrompt}` },
+  ];
+  return { providerCfg, messages };
+}
+
+// Was the K/N half of `not_narration`: "List every comment... K be the number
+// answered with a quoted constraint... Score K/N." Recast as two holistic
+// items rather than a per-comment tally, matching review-code's item design -
+// presence (is there at least one substantive comment) plus a majority
+// judgement over the reply as a whole.
+const NOT_NARRATION_ITEMS = `<Output> is a reply to a request to add comments
+to a file; judge only the comments it added, never their placement, length,
+syntax or punctuation. Google's C++ style guide, under "Don'ts": "Do not
+state the obvious. In particular, don't literally describe what code does,
+unless the behavior is nonobvious to a reader who understands [the language]
+well." A comment a competent reader could already infer from the identifiers
+and statements it sits beside is narration; a comment that states a
+constraint, cause, contract, or consequence is not.
+
+1. Does <Output> add at least one comment that states such a constraint,
+   cause, contract, or consequence - quoted verbatim?
+2. Judging the comments <Output> added as a whole, do more of them state a
+   constraint, cause, contract, or consequence than merely restate what the
+   code already shows?`;
+
+function notNarration(output, context) {
+  const { providerCfg, messages } = askItems(output, context, NOT_NARRATION_ITEMS);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.6, 2: 0.4 }), threshold: 0.5,
+  });
+}
+
+// Was the F half of `not_narration`, split out (dotagents#64 note in
+// tests/cases.yaml): a false comment and an obvious one are different
+// defects, so they are reported separately rather than netted into one
+// number. Single item, no partial credit - one wrong statement is the
+// failure, same as the original "1 if F is 0, else 0".
+const NO_FALSE_COMMENTS_ITEMS = `<Output> is a reply to a request to add
+comments to a file; judge only the comments it added.
+
+1. Is every comment <Output> added true of the code it sits beside - none of
+   them names a function, field, parameter, error, or branch that is not
+   there, states a condition the code does not test, describes behaviour the
+   code does not have, or attributes the code to a cause or standard that
+   does not apply to it? A claim you cannot check against the code shown, and
+   a judgement call you would argue with, both hold this item; only a claim
+   the code shown contradicts fails it.`;
+
+function noFalseComments(output, context) {
+  const { providerCfg, messages } = askItems(output, context, NO_FALSE_COMMENTS_ITEMS);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 1 }), threshold: 1,
+  });
+}
+
+// Was `restraint`'s D-declarations / U-wasted arithmetic. Needs the pre-
+// comment source and the request, which the delivered file alone does not
+// carry - extraXml puts them ahead of <Output>. Two items instead of a
+// count: no off-topic comment (a reply to the requester, a task note, text
+// copied from the request), and every comment added - if any - earns its
+// place. "Adding no comments at all" still satisfies item 2 exactly as the
+// original scored that case 1.
+const RESTRAINT_ITEMS = `<SourceFile> is this file before any comments;
+<Request> is what the requester asked for; every comment in <Output> is one
+the reply added. Google's style guide: "Do not state the obvious... Self-
+describing code doesn't need a comment." Judge only what a comment says,
+never its placement, length, syntax or punctuation.
+
+1. Does <Output> avoid adding any comment that is off-topic - a reply to the
+   requester, a note about the task, or text copied from <Request> - rather
+   than about the code it sits beside?
+2. Does every comment <Output> added, if any, carry an assumption,
+   constraint, or consequence a competent reader could not already infer
+   from the code beside it, rather than merely restate what the code already
+   shows? Adding no comments at all also satisfies this item.`;
+
+function restraint(output, context) {
+  const { code, ask } = (context && context.vars) || {};
+  const extraXml = `<Request>${ask}</Request>\n<SourceFile>${code}</SourceFile>\n`;
+  const { providerCfg, messages } = askItems(output, context, RESTRAINT_ITEMS, extraXml);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.5, 2: 0.5 }), threshold: 0.5,
+  });
+}
+
+// Was `fact_transfer`'s "award 0.25 per fact carried, 0.125 per half"
+// (judge-computed arithmetic over prose facts it wrote itself). The half-
+// credit case dropped: each fact is now one yes/no item, full credit or
+// none, same as every other metric here. The facts themselves stay
+// case-specific - `context.vars.facts`, a block of "Do the comments state
+// that ...?" questions written in tests/cases.yaml - because unlike the
+// other three metrics here, what counts as fact_transfer's evidence differs
+// per case. Threshold 0.6 keeps the same practical bar as the original: at
+// 0.25 per item, three of four facts (0.75) passes and two (0.50) does not,
+// matching the "majority of the facts, not just some" the 0.6 threshold on
+// the old proportion scale meant.
+function factTransfer(output, context) {
+  const { ask, facts } = (context && context.vars) || {};
+  const itemsPrompt = `<Output> is a reply to a request to add comments to a
+file; <Request> is what the requester asked for. Judge only whether the
+comments <Output> added state each fact below - match on meaning, not
+wording: a paraphrase that carries the same claim counts in full. A block of
+comment text that reproduces <Request> as a passage, rather than saying
+something about the declaration it sits on, does not carry a fact.
+
+${facts}`;
+  const { providerCfg, messages } = askItems(output, context, itemsPrompt, `<Request>${ask}</Request>\n`);
+  return judgeQuotedItems({
+    providerCfg, messages, texts: { default: output },
+    score: weighByItem({ 1: 0.25, 2: 0.25, 3: 0.25, 4: 0.25 }), threshold: 0.6,
+  });
+}
+
 module.exports = {
   docstringOnFunctions,
   codePreserved,
   scan,
   firstFence,
+  judgeProvider,
+  weighByItem,
+  askItems,
+  notNarration,
+  noFalseComments,
+  restraint,
+  factTransfer,
 };

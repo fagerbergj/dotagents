@@ -130,7 +130,7 @@ assert.equal(checks.firstFence('````\n```go\nx := 1\n```\n````').trim(), '```go\
 assert.equal(checks.firstFence('```go\nx := 1').trim(), 'x := 1', 'an unterminated fence returned nothing');
 assert.equal(checks.firstFence('no fence at all'), '');
 
-// --- the judged rubrics ----------------------------------------------------
+// --- the judged rubrics ------------------------------------------------
 // Parsed, not regexed: cases.yaml is a structured file, and PyYAML is already a
 // dependency of the python gates next door.
 const cases = JSON.parse(
@@ -148,22 +148,43 @@ const carries = (name) => cases.filter((c) => (c.assert || []).some((a) => a.met
 // not_narration's numerator and is its own score.
 assert.equal(carries('not_narration'), 9, 'not_narration runs on the nine cases that hide something');
 assert.equal(carries('no_false_comments'), 9, 'the accuracy half runs on exactly the same cases - it is one judgement split, not a new population');
-assert.equal(carries('restraint'), 5, 'the negative controls carry neither: a reply that correctly adds nothing scores 0 on both, and restraint owns that behaviour');
+assert.equal(carries('fact_transfer'), 9, 'fact_transfer runs on the same nine cases, one per case with its own facts');
+assert.equal(carries('restraint'), 5, 'the negative controls carry neither: a reply that correctly adds nothing scores full credit on restraint alone');
+assert.equal(carries('doc_placement_floor'), 3, 'the placement floor is unrelated to this conversion and stays on its three original cases (the TS case carries two assertions)');
 
-// Line breaks in a block scalar are not part of the criterion.
-const flat = (v) => v.replace(/\s+/g, ' ');
-const nn = flat(rubric('not_narration').value);
-assert.ok(!/\bFALSE\b/.test(nn), 'not_narration must not classify a comment as FALSE - accuracy is no_false_comments');
-assert.ok(!/K - F|\(K-F\)/.test(nn), 'not_narration must not subtract F from its numerator');
-assert.ok(/K \/ N/.test(nn), 'not_narration scores the share of added comments that say something');
-// Without this, a false-but-substantive comment is rewarded by one metric and
-// fined by the other - the same behaviour with two signs.
-assert.ok(/at face value/.test(nn), 'not_narration must judge substance at face value and leave truth to the other metric');
+for (const name of ['not_narration', 'no_false_comments', 'restraint', 'fact_transfer']) {
+  const a = rubric(name);
+  assert.equal(a.type, 'javascript', `${name} is quote-verified now, not llm-rubric/g-eval`);
+  assert.ok(!('value' in a) || !/Score from 0 to 1/.test(String(a.value || '')), `${name} carries no judge-arithmetic prose`);
+}
 
-const nf = flat(rubric('no_false_comments').value);
-assert.ok(/no partial credit/.test(nf), 'one wrong statement about the code is the failure; a fraction would call a file with a lie in it mostly accurate');
-assert.equal(rubric('no_false_comments').threshold, 1, 'a binary metric passes only at 1');
-assert.ok(/If N is 0, score 0/.test(nf) && /If N is 0, score 0/.test(nn), 'both halves score an empty reply 0, so they never point opposite ways on one');
-assert.ok(/worth writing/.test(nf), 'no_false_comments must not re-score whether the comment was worth writing');
+// Every case carrying fact_transfer supplies its own facts var - the items a
+// per-case metric, unlike the other three which share fixed JS constants.
+for (const c of cases) {
+  if ((c.assert || []).some((a) => a.metric === 'fact_transfer')) {
+    assert.ok(c.vars && typeof c.vars.facts === 'string' && /^\s*1\./.test(c.vars.facts.trim()), `${c.description} is missing a numbered facts var`);
+    assert.equal((c.vars.facts.match(/^\s*\d+\./gm) || []).length, 4, `${c.description} must carry exactly four fact items, one per 0.25 weight`);
+  }
+}
+
+// --- the quote-verified metrics' pure parts (no network) -------------------
+{
+  const ctx = { test: { options: { provider: { id: 'openai:chat:google/gemini-3.8-flash', config: { apiBaseUrl: 'https://openrouter.ai/api/v1', apiKeyEnvar: 'OPENROUTER_API_KEY' } } } } };
+  const cfg = checks.judgeProvider(ctx);
+  assert.equal(cfg.model, 'google/gemini-3.8-flash');
+  assert.equal(cfg.apiKeyEnvar, 'OPENROUTER_API_KEY');
+  assert.equal(checks.judgeProvider({}).model, undefined, 'a missing provider block does not throw');
+
+  const w = checks.weighByItem({ 1: 0.6, 2: 0.4 });
+  assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: false }]), 0.6, 'only a holding item earns its weight');
+  assert.equal(w([{ n: 1, holds: true }, { n: 2, holds: true }]), 1, 'both items sum to 1');
+  assert.equal(w([]), 0, 'nothing verified scores 0, not an error');
+
+  const built = checks.askItems('the output text', { vars: {} }, 'ITEM TEXT');
+  assert.ok(built.messages[1].content.includes('the output text'), '<Output> carries the real reply');
+  assert.ok(built.messages[0].content.includes('"items"'), 'the system message states the JSON contract');
+  const withExtra = checks.askItems('out', { vars: {} }, 'ITEMS', '<Request>ask me</Request>\n');
+  assert.ok(withExtra.messages[1].content.startsWith('<Request>ask me</Request>'), 'extraXml precedes <Output>');
+}
 
 console.log('comment assertions: ok');

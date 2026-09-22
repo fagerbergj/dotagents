@@ -125,6 +125,19 @@
       and the part that catches people is that whatever we append here has to be
       stripped back out of If-None-Match before the request goes on upstream, since
       the upstream handler built that ETag without knowing we would touch it.
+    facts: |
+      1. Do the comments state that the status-code guard exists because a status
+         that was never set explicitly must not be invented on the way out - not
+         as a general defensive check?
+      2. Do the comments state that Content-Length is dropped for a known Go
+         issue, and that Accept-Ranges is dropped because byte ranges are not
+         knowable once content is encoded on the fly?
+      3. Do the comments state that the encoding name is appended to a strong
+         ETag because the standard requires a strong ETag to differ per
+         selected representation?
+      4. Do the comments state that the appended suffix must be removed from
+         If-None-Match before the request goes upstream, because the upstream
+         handler produced its ETag without knowing about it?
     code: |
       func (rw *responseWriter) Close() error {
       	if !rw.wroteHeader {
@@ -205,39 +218,10 @@
     # @2.0.1.json F was non-zero exactly once, so this split is a correction to
     # what the number MEANS, not a change anyone should expect to see move.
     - &not_narration
-      type: llm-rubric
+      type: javascript
+      value: file://assertions/comment.cjs:notNarration
       metric: not_narration
-      threshold: 0.6
-      value: |
-        Google's C++ style guide, under "Don'ts", says: "Do not state the obvious. In
-        particular, don't literally describe what code does, unless the behavior is
-        nonobvious to a reader who understands C++ well. Instead, provide higher-level
-        comments that describe why the code does what it does, or make the code
-        self-describing." It adds that "Self-describing code doesn't need a comment."
-        Pascarella and Bacchelli (MSR 2017) hand-classified comments in 2,000 Java files
-        and found summary comments outnumbering rationale comments by roughly twenty to
-        one, which is the failure this scores.
-
-        Judge only the comments the Reply added. Ignore where comments sit, their length,
-        their syntax, and their punctuation. Judge what they say.
-
-        List every comment the Reply added, quoting each verbatim and numbering them. Let N
-        be that count. For each numbered comment answer, in one line:
-          - the constraint, cause, contract, or consequence it states, quoted; or NARRATION
-            if a competent programmer in this language, reading only the identifiers and
-            statements it sits beside, would already know what it says.
-        Answer for every comment before scoring. Do not group them.
-
-        Take each comment's claim at face value. Whether it is TRUE of this code is a
-        separate question with its own score: a comment that states a constraint counts
-        here even if you believe the constraint is wrong, and a comment that states the
-        obvious counts as NARRATION even if it is perfectly accurate.
-
-        Let K be the number answered with a quoted constraint, cause, contract, or
-        consequence.
-
-        Score from 0 to 1, never above 1: K / N. If N is 0, score 0. State N, K and the
-        arithmetic in your reason.
+      threshold: 0.5
     # Split out of not_narration, where a FALSE comment was subtracted from the
     # count of good ones: one false claim and one obvious remark moved the score
     # by the same 1/N, and a reader of the number could not tell which had
@@ -251,66 +235,15 @@
     # not_narration does, so the two never point opposite ways on a reply that
     # added nothing - restraint owns that behaviour, on the controls.
     - &no_false_comments
-      type: llm-rubric
+      type: javascript
+      value: file://assertions/comment.cjs:noFalseComments
       metric: no_false_comments
       threshold: 1
-      value: |
-        Judge only the comments the Reply added. Ignore where comments sit, their length,
-        their syntax, and their punctuation. Ignore whether a comment was worth writing at
-        all - a comment that states the obvious is not a fault here, and is scored
-        separately.
-
-        List every comment the Reply added, quoting each verbatim and numbering them. Let N
-        be that count. For each numbered comment answer, in one line, TRUE or FALSE:
-        answer FALSE only when the code beside it contradicts the comment - it names a
-        function, field, parameter, error, or branch that is not there; it states a
-        condition the code does not test; it describes behaviour this code does not have;
-        or it attributes the code to a cause or standard that does not apply to it. A
-        claim you cannot check against the code shown, and a judgement call you would
-        argue with, are both TRUE. Answer for every comment before scoring. Do not group
-        them.
-
-        Let F be the number answered FALSE.
-
-        Score from 0 to 1, never above 1: 1 if F is 0, and 0 if F is 1 or more. There is
-        no partial credit - one wrong statement about the code is the failure. If N is 0,
-        score 0. State N, F, which comments were FALSE and why, and the arithmetic.
-    - type: llm-rubric
+    - type: javascript
+      value: file://assertions/comment.cjs:factTransfer
       metric: fact_transfer
       threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
 
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the status-code guard is there because a status that was never set explicitly must
-              not be written out, not as a general defensive check.
-          (b) Content-Length is dropped for a known Go issue, and Accept-Ranges is dropped because
-              byte ranges are not knowable for content encoded on the fly.
-          (c) the encoding name is appended to a strong ETag because the standard requires a strong
-              ETag to differ per selected representation.
-          (d) that appended suffix has to be removed from If-None-Match before the request is sent
-              upstream, because upstream handlers produced their ETag without knowing about it.
-
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
-        comment that only says Close "flushes and releases the writer", or that init "sets the
-        encoding headers", carries none of them.
-
-        Ignore comment placement, length and syntax.
 - description: go workaround - a dialer that has to name the address family itself
   vars:
     lang: go
@@ -326,6 +259,20 @@
       every read and write that actually moved bytes. And on Read we account bandwidth
       with the count we actually got back; reserving len(b) up front and returning the
       tokens we did not use would be the better shape and we have not done it.
+    facts: |
+      1. Do the comments state that the family suffix on the network string works
+         around a Go issue in which an unspecified local bind address binds both
+         address families, so the bind option cannot pin one without it?
+      2. Do the comments state that the Windows warning is emitted where there
+         was no error because setting the traffic class on Windows over IPv4
+         silently does nothing and reports success?
+      3. Do the comments state that the deadline is an idle timeout re-armed
+         after each read or write that moved bytes, not a deadline for the
+         whole operation?
+      4. Do the comments state that bandwidth is accounted after the read with
+         the count actually returned, and the better shape - reserving the
+         buffer length up front and returning the unused tokens - is knowingly
+         not done?
     code: |
       func (d *Dialer) Dial(network, address string) (net.Conn, error) {
       	return d.DialContext(context.Background(), network, address)
@@ -404,44 +351,11 @@
   assert:
     - *not_narration
     - *no_false_comments
-    - type: llm-rubric
+    - type: javascript
+      value: file://assertions/comment.cjs:factTransfer
       metric: fact_transfer
       threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
 
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the family suffix on the network string works around a Go issue in which an
-              unspecified local bind address binds both address families, so the bind option
-              cannot pin one without it.
-          (b) the Windows warning is emitted where there was no error because setting the traffic
-              class on Windows over IPv4 silently does nothing and reports success.
-          (c) the deadline is an idle timeout re-armed after each read or write that moved bytes,
-              not a deadline for the whole operation.
-          (d) bandwidth is accounted after the read with the count actually returned, and the
-              better shape - reserving the buffer length up front and returning the unused
-              tokens - is knowingly not done.
-
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
-        comment that only says DialContext "dials with the configured options", or that
-        nudgeDeadline "sets the deadline", carries none of them.
-
-        Ignore comment placement, length and syntax.
 - description: python security - what a redirect is allowed to carry to the next host
   vars:
     lang: python
@@ -458,6 +372,20 @@
       or may need keys an earlier hop stripped. And the method rewrites are browsers,
       not the RFC - 302 and POST-plus-301 become GET because that is what everything
       else does, which is issue 1704; 307 and 308 keep the method and body on purpose.
+    facts: |
+      1. Do the comments state that Authorization is stripped on a cross-host
+         redirect so credentials are not handed to a host they were not issued
+         for, and that the netrc lookup afterwards is a fresh grant for the new
+         host rather than a restore of the old one?
+      2. Do the comments state that Proxy-Authorization is removed every hop
+         and re-attached only for a non-https scheme, because the underlying
+         pool manager supplies proxy auth on the tunnelled path and re-adding
+         it there risks exposing it?
+      3. Do the comments state that proxies are recomputed each hop rather than
+         carried forward, because the new URL may be covered by NO_PROXY or may
+         need keys a previous hop removed?
+      4. Do the comments state that turning 302, and POST with 301, into GET is
+         browser behaviour kept deliberately against the specification?
     code: |
       class SessionRedirectMixin:
           max_redirects: int
@@ -525,44 +453,11 @@
   assert:
     - *not_narration
     - *no_false_comments
-    - type: llm-rubric
+    - type: javascript
+      value: file://assertions/comment.cjs:factTransfer
       metric: fact_transfer
       threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
 
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) Authorization is stripped on a cross-host redirect so credentials are not handed to
-              a host they were not issued for, and the netrc lookup afterwards is a fresh grant
-              for the new host rather than a restore of the old one.
-          (b) Proxy-Authorization is removed every hop and re-attached only for a non-https
-              scheme, because the underlying pool manager supplies proxy auth on the tunnelled
-              path and re-adding it there risks exposing it.
-          (c) proxies are recomputed each hop rather than carried forward, because the new URL may
-              be covered by NO_PROXY or may need keys a previous hop removed.
-          (d) turning 302, and POST with 301, into GET is browser behaviour kept deliberately
-              against the specification.
-
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
-        comment that only says rebuild_auth "updates the authentication headers", or that
-        rebuild_method "adjusts the method for the status code", carries none of them.
-
-        Ignore comment placement, length and syntax.
 - description: python performance - a decode bound that the library's own ceiling does not enforce
   vars:
     lang: python
@@ -577,6 +472,19 @@
       global warnings state is not thread-safe. The 40M cap is deliberately below
       PIL's ~89M default, which still lets a few-KB file decode to something like
       530MB. Can you comment it so nobody simplifies it away?
+    facts: |
+      1. Do the comments state that the library ceiling only raises above twice
+         the cap - between the cap and 2x it warns and decodes fully - so the
+         explicit size check is what actually bounds the decode?
+      2. Do the comments state that the check runs on the header-declared size
+         right after open() and before exif_transpose and convert, because both
+         of those decode the pixels?
+      3. Do the comments state that it is an explicit check rather than a
+         warnings filter because this runs in a thread and the global warnings
+         state is not thread-safe?
+      4. Do the comments state that the cap is deliberately tighter than the
+         library default, which still permits a few-KB file to decode into
+         hundreds of megabytes of RGB?
     code: |
       from __future__ import annotations
 
@@ -635,41 +543,11 @@
   assert:
     - *not_narration
     - *no_false_comments
-    - type: llm-rubric
+    - type: javascript
+      value: file://assertions/comment.cjs:factTransfer
       metric: fact_transfer
       threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
 
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the library ceiling only raises above twice the cap - between the cap and 2x it warns
-              and decodes fully - so the explicit size check is what actually bounds the decode.
-          (b) the check runs on the header-declared size right after open() and before
-              exif_transpose and convert, because both of those decode the pixels.
-          (c) it is an explicit check rather than a warnings filter because this runs in a thread and
-              the global warnings state is not thread-safe.
-          (d) the cap is deliberately tighter than the library default, which still permits a few-KB
-              file to decode into hundreds of megabytes of RGB.
-
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
-        comment saying the function "rejects oversized images" carries none of them.
-
-        Ignore comment placement, length and syntax.
 - description: typescript public API - the SDK base client other packages extend
   vars:
     lang: ts
@@ -685,6 +563,18 @@
       the SSE helper only reports which status it got; and baseUrl has its trailing
       slash stripped in the constructor, so every path they pass needs a leading
       slash. Comment it up for them.
+    facts: |
+      1. Do the comments state that the tls option is documentation only - the
+         SDK never reads those paths - and that a caller needing mTLS must
+         supply a custom fetch configured with their runtime's agent?
+      2. Do the comments state that Content-Type is deliberately omitted when a
+         form body is sent, because the runtime's fetch sets it together with
+         the multipart boundary?
+      3. Do the comments state that a non-2xx response always surfaces as a
+         TurnstoneAPIError carrying the status, and that on the request path
+         the message is taken from error, then detail, then the raw body text?
+      4. Do the comments state that the constructor strips a trailing slash
+         from baseUrl, so paths passed in are expected to start with one?
     code: |
       import { TurnstoneAPIError } from "./errors.js";
       import { parseSSEStream } from "./sse.js";
@@ -817,43 +707,10 @@
   assert:
     - *not_narration
     - *no_false_comments
-    - type: llm-rubric
+    - type: javascript
+      value: file://assertions/comment.cjs:factTransfer
       metric: fact_transfer
       threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
-
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the tls option is documentation only - the SDK never reads those paths, and a caller
-              needing mTLS must supply a custom fetch configured with their runtime's agent.
-          (b) Content-Type is deliberately omitted when a form body is sent, because the runtime's
-              fetch sets it together with the multipart boundary.
-          (c) a non-2xx response always surfaces as a TurnstoneAPIError carrying the status, and on
-              the request path the message is taken from error, then detail, then the raw body text.
-          (d) the constructor strips a trailing slash from baseUrl, so paths passed in are expected to
-              start with one.
-
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
-        comment that restates the TypeScript signature, or says request "throws on error",
-        carries none.
-
-        Ignore comment placement, length and syntax.
-        Ignore whether TSDoc block syntax was used.
     # Placement only, and a conformance floor rather than a discriminator: tsc
     # --declaration and every TSDoc-based generator carry over only the comment
     # immediately above the declaration, so a comment placed elsewhere changes the
@@ -864,6 +721,7 @@
     - type: regex
       value: '(?:^|\n)(?:(?://[^\n]*|\s*\*[^\n]*|/\*\*?)\n)+export interface ClientOptions'
       metric: doc_placement_floor
+
 - description: javascript public API - request accessors whose answers depend on trust proxy
   vars:
     lang: js
@@ -880,6 +738,19 @@
       asking the socket. And is() has three outcomes, not two: the matched type as a
       string, false when the body does not match, null when there is no body at all.
       Comment it before I tag the release.
+    facts: |
+      1. Do the comments state that the forwarded protocol header is honoured
+         only when trust proxy trusts the socket's remote address, and that
+         otherwise the socket's own TLS state decides?
+      2. Do the comments state that ips is ordered with the client first and
+         the socket address deliberately removed, and that it is empty when
+         trust proxy is not configured?
+      3. Do the comments state that secure is exactly protocol === 'https', so
+         it inherits the proxy-trust behaviour rather than reading the socket
+         itself?
+      4. Do the comments state that is() returns the matched type as a string,
+         false when the body does not match, and null when the request carries
+         no body?
     code: |
       defineGetter(req, 'query', function query(){
         var queryparse = this.app.get('query parser fn');
@@ -944,43 +815,11 @@
   assert:
     - *not_narration
     - *no_false_comments
-    - type: llm-rubric
+    - type: javascript
+      value: file://assertions/comment.cjs:factTransfer
       metric: fact_transfer
       threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
 
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the forwarded protocol header is honoured only when trust proxy trusts the socket's
-              remote address, and otherwise the socket's own TLS state decides.
-          (b) ips is ordered with the client first and the socket address deliberately removed, and
-              it is empty when trust proxy is not configured.
-          (c) secure is exactly protocol === 'https', so it inherits the proxy-trust behaviour
-              rather than reading the socket itself.
-          (d) is() returns the matched type as a string, false when the body does not match, and
-              null when the request carries no body.
-
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
-        comment that only restates the getter name, or says protocol "returns http or https",
-        carries none of them.
-
-        Ignore comment placement, length and syntax.
-        Ignore whether JSDoc block syntax was used.
 - description: java public API - the adapter base class every serializer subclasses
   vars:
     lang: java
@@ -997,6 +836,18 @@
       legacy-strict setting, which means it will not complain about several top-level
       values or trailing junk after the first one - anyone who wants that has to build
       their own JsonReader and call read directly. Comment it before I tag the release.
+    facts: |
+      1. Do the comments state that write may be given a null value and read
+         may return null, so an implementation has to handle null itself?
+      2. Do the comments state that toJson(Writer) lets an IOException from
+         write reach the caller, while toJson(T) cannot and rethrows it as the
+         unchecked JsonIOException?
+      3. Do the comments state that toJsonTree returns JsonNull for a null
+         value rather than a Java null, so its result is never null?
+      4. Do the comments state that fromJson(Reader) reads with the default
+         legacy-strict configuration and therefore does not reject several
+         top-level values or trailing data, and that a caller wanting that must
+         configure its own reader and call read?
     code: |
       public abstract class TypeAdapter<T> {
 
@@ -1039,51 +890,15 @@
   assert:
     - *not_narration
     - *no_false_comments
-    - type: llm-rubric
+    - type: javascript
+      value: file://assertions/comment.cjs:factTransfer
       metric: fact_transfer
       threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
-
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) write may be given a null value and read may return null, so an implementation has
-              to handle null itself.
-          (b) toJson(Writer) lets an IOException from write reach the caller, while toJson(T)
-              cannot and rethrows it as the unchecked JsonIOException.
-          (c) toJsonTree returns JsonNull for a null value rather than a Java null, so its result
-              is never null.
-          (d) fromJson(Reader) reads with the default legacy-strict configuration and therefore
-              does not reject several top-level values or trailing data, and a caller wanting that
-              must configure its own reader and call read.
-
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
-        comment that only restates the signature - "converts the value to JSON", "reads one
-        value" - carries none of them.
-
-        Ignore comment placement, length and syntax.
-        Ignore whether Javadoc block syntax was used.
-    # Placement only, and a conformance floor rather than a discriminator: javadoc
-    # carries over only the block immediately above the declaration, so the same
-    # sentence placed anywhere else changes the generated artifact. Nothing here
-    # patterns over the comment's prose.
+    # Placement only, and a conformance floor - see the note on the TypeScript case.
     - type: regex
       value: '(?:^|\n)(?:[ \t]*(?://[^\n]*|\*[^\n]*|/\*\*?)\n)+public abstract class TypeAdapter<T> \{'
       metric: doc_placement_floor
+
 - description: python security plus deferred work - a pager child that must not outlive an error
   vars:
     lang: python
@@ -1100,6 +915,20 @@
       KeyboardInterrupt is deliberate too - less takes ^C for its own search UI rather
       than exiting, so if someone wants ^C to kill the pager they set LESS='-K'; that
       is their call to make, not ours.
+    facts: |
+      1. Do the comments state that the environment is copied so the injected
+         pager variable does not outlive this call in the parent process, and
+         that the command is passed as an argv list without a shell so a
+         user-supplied pager string is never shell-interpreted?
+      2. Do the comments state that the Windows branch is unreachable today
+         because every Windows invocation is routed elsewhere, and that it is
+         kept so the detection stays correct if that routing changes?
+      3. Do the comments state that an exception escaping while the pager runs
+         must terminate the child, or the user never sees the error and the
+         terminal can be left broken?
+      4. Do the comments state that KeyboardInterrupt is swallowed while
+         waiting because the pager takes ^C for its own interface, and that
+         making it exit on ^C is left to the user's own configuration?
     code: |
       @contextlib.contextmanager
       def _pipepager(
@@ -1153,43 +982,11 @@
   assert:
     - *not_narration
     - *no_false_comments
-    - type: llm-rubric
+    - type: javascript
+      value: file://assertions/comment.cjs:factTransfer
       metric: fact_transfer
       threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
 
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the environment is copied so the injected pager variable does not outlive this call
-              in the parent process, and the command is passed as an argv list without a shell so
-              a user-supplied pager string is never shell-interpreted.
-          (b) the Windows branch is unreachable today because every Windows invocation is routed
-              elsewhere, and it is kept so the detection stays correct if that routing changes.
-          (c) an exception escaping while the pager runs must terminate the child, or the user
-              never sees the error and the terminal can be left broken.
-          (d) KeyboardInterrupt is swallowed while waiting because the pager takes ^C for its own
-              interface, and making it exit on ^C is left to the user's own configuration.
-
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
-        comment that only says the function "pipes the text to the pager and waits for it",
-        carries none of them.
-
-        Ignore comment placement, length and syntax.
 - description: python invariant - a boot-only sweep callers must not run late
   vars:
     lang: python
@@ -1205,6 +1002,20 @@
       lands. And refresh_runtime_pems writes the new directory before removing the old
       one on purpose, so a probe that lands mid-renewal always finds at least one
       complete dir. Comment it up.
+    facts: |
+      1. Do the comments state that the sweep removes every runtime PEM
+         directory under the root, so it is safe only before the live
+         directory is written, and that calling it later deletes the cert the
+         healthcheck presents?
+      2. Do the comments state that it assumes one node per PEM root - two
+         processes sharing a root clear each other's live directories - which
+         is why a bare-metal deployment sets the root per node?
+      3. Do the comments state that the symlink and ownership refusal exists
+         because the default root sits in shared /tmp, where a local user
+         could pre-create it and redirect where key material lands?
+      4. Do the comments state that the renewal writes the new directory
+         before removing the old one so a concurrent probe always finds at
+         least one complete directory?
     code: |
       from __future__ import annotations
 
@@ -1254,42 +1065,10 @@
   assert:
     - *not_narration
     - *no_false_comments
-    - type: llm-rubric
+    - type: javascript
+      value: file://assertions/comment.cjs:factTransfer
       metric: fact_transfer
       threshold: 0.6
-      value: |
-        The requester wrote this:
-        "{{ask}}"
-
-        Judge only whether the comments the Reply added carry the facts listed below. Match on
-        meaning, never on wording: a paraphrase that carries the same claim counts in full, and
-        matching phrasing earns nothing extra. Read every comment in the file before answering,
-        including doc comments on helpers, and quote the comment carrying each fact verbatim.
-        Write NONE for a fact only after searching the whole file for it, and when you write
-        NONE, name the declarations you checked.
-
-        A fact stated as a reason plus a consequence is carried only when both halves are
-        present in some comment; if one half is present and the other is not, it is half
-        carried.
-
-        A block of comment text that reproduces the requester's message as a passage, rather
-        than saying something about the declaration it sits on, carries no facts. Facts must be
-        stated as claims about this code.
-
-          (a) the sweep removes every runtime PEM directory under the root, so it is safe only
-              before the live directory is written; calling it later deletes the cert the
-              healthcheck presents.
-          (b) it assumes one node per PEM root - two processes sharing a root clear each other's live
-              directories, which is why a bare-metal deployment sets the root per node.
-          (c) the symlink and ownership refusal exists because the default root sits in shared /tmp,
-              where a local user could pre-create it and redirect where key material lands.
-          (d) the renewal writes the new directory before removing the old one so a concurrent probe
-              always finds at least one complete directory.
-
-        Score from 0 to 1, never above 1: award 0.25 per fact carried and 0.125 per fact half carried. A
-        comment that only says the function "clears stale directories" carries none of them.
-
-        Ignore comment placement, length and syntax.
     # Placement only, and a conformance floor - see the note on the TypeScript case.
     # Decided by Python's own parser: only the first statement string in a def
     # becomes __doc__, so a docstring placed anywhere else is not one.
@@ -1297,6 +1076,7 @@
       value: file://assertions/comment.cjs:docstringOnFunctions
       config: { functions: [prepare_pem_runtime_dir, refresh_runtime_pems] }
       metric: doc_placement_floor
+
 - description: negative control - plain unexported Go list helpers
   vars:
     lang: go
@@ -1357,70 +1137,28 @@
       	})
       }
   assert:
-    # restraint, enumerate-and-divide over a countable property of the input.
-    # comment_budget was merged in here: a javascript ceiling on the number of
-    # added comments and a rubric asking whether they earned their place are the
-    # same question from two directions, and both rode the same two cases. The
-    # three-band version this replaces measured 0.500 per-cell spread over five
-    # identical runs and behaved binomially; it also pinned the Go control at 0 in
-    # both arms across all five, because its "two or more restatements" band
-    # collapsed five narration comments and six to the same score. D is counted
-    # from the delivered file, so it is identical across arms and runs - not a
-    # magic number. Prompt echo is counted as OFF-TOPIC rather than capping the
-    # row: the baseline pasted the requester's own chat message into the source
-    # and scored 1.00 on the rubric this replaces.
-    # llm-rubric's stock user message is <Output>/<Rubric> only, so neither the
-    # request nor the pre-comment source file reached the judge: "text copied from
-    # the request" and "the comments the Reply added" were both unverifiable. The
-    # rubricPrompt puts them in front of it. Object/message-list shape is legal on
-    # an assertion but not under defaultTest.options.
+    # restraint, on a countable property of the input: comment_budget was merged
+    # in here (a javascript ceiling on the number of added comments and a rubric
+    # asking whether they earned their place are the same question from two
+    # directions), and both rode the same two cases. The three-band version this
+    # replaced measured 0.500 per-cell spread over five identical runs and
+    # behaved binomially; it also pinned the Go control at 0 in both arms across
+    # all five, because its "two or more restatements" band collapsed five
+    # narration comments and six to the same score. Prompt echo counts as
+    # off-topic rather than capping the row: the baseline pasted the requester's
+    # own chat message into the source and scored 1.00 on an earlier rubric.
+    #
+    # Quote-verified (assertions/comment.cjs:restraint) needs context the
+    # delivered file alone does not carry - the pre-comment source and the
+    # request - so its item prompt puts <SourceFile> and <Request> ahead of
+    # <Output>, the same problem the old rubricPrompt object solved for
+    # llm-rubric's stock <Output>/<Rubric> message.
     - &restraint
-      type: llm-rubric
+      type: javascript
+      value: file://assertions/comment.cjs:restraint
       metric: restraint
-      threshold: 0.6
-      rubricPrompt:
-      - role: system
-        content: 'You grade a delivered file against a rubric. Reply with one line of JSON and nothing
-          else: {"reason": string, "pass": boolean, "score": number}. Never emit a newline inside the JSON.'
-      - role: user
-        content: "<Request>\n{{ask}}\n</Request>\n<SourceFile>\n{{code}}\n</SourceFile>\n<Output>\n{{output}}\n</Output>\n<Rubric>\n{{rubric}}\n</Rubric>"
-      value: |
-        The SourceFile above is this file as the requester sent it, before any comments; every comment in
-        the Reply is one the Reply added. The Request above is what they asked for.
+      threshold: 0.5
 
-        Google's style guidance sets the default the other way and then names the exception:
-        "Almost every function declaration should have comments immediately preceding it
-        that describe what the function does and how to use it. These comments may be
-        omitted only if the function is simple and obvious (e.g., simple accessors for
-        obvious properties of the class). Private methods and functions declared in .cc
-        files are not exempt." Being unexported or private buys nothing here. What the same
-        guide does rule out is the comment that says nothing: "Do not state the obvious. In
-        particular, don't literally describe what code does", and "Self-describing code
-        doesn't need a comment." Judged against that pair, most of this file is simple and
-        obvious enough to fall under the exception and needs no comment at all - but that is
-        a judgement about these particular declarations, not a rule that private code goes
-        uncommented.
-
-        Count the top-level declarations in the delivered file - functions, methods, types,
-        exported constants. Call that D; state it.
-
-        List every comment the Reply added, quoting each verbatim. For each, answer one of:
-          - CARRIES: quote the assumption, constraint, or consequence it states that the
-            identifiers and statements beside it do not - for example that a timestamp field
-            is sorted as a string and so must be in a lexicographically ordered format.
-          - RESTATES: a competent programmer reading only the code beside it would already
-            know what it says.
-          - OFF-TOPIC: it is not about the code beside it - a reply to the requester, a note
-            about the task, or text copied from the request.
-        Judge only what the comment says - never its placement, length, syntax, or
-        punctuation. A fluent, accurate, well-phrased comment on self-evident code is
-        RESTATES, exactly as a clumsy one is; quality of writing is not a defence for a
-        comment that was not needed.
-
-        Let U be the number answered RESTATES or OFF-TOPIC.
-
-        Score from 0 to 1, never above 1: 1 - (U / D), floored at 0. Adding no comments at
-        all scores 1. State D, U and the arithmetic in your reason.
 - description: negative control - self-evident TypeScript view helpers
   vars:
     lang: ts
