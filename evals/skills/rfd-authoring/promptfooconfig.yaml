@@ -32,32 +32,38 @@ providers:
 
 defaultTest:
   options:
-    # No rubricPrompt here on purpose. The one that used to live here was
-    # written for g-eval; every grader is llm-rubric now, and llm-rubric DOES
-    # honour options.rubricPrompt - it would have replaced the built-in prompt
-    # with one asking for a 0-to-{{maxScore}} integer, so every row would have
-    # come back unscorable or out of range.
-
     # The llm-swap gateway returns reasoning as message content; strip it so the
     # graders see the answer, not the leak. There is no fence to anchor on here,
     # only a preamble talking *about* the request is removed. Bare openers like
     # "Okay," are left alone: a review of a draft legitimately starts that way.
     transform: file://../../lib/strip-reasoning.js:stripReasoning
+    # dotagents#64/#65 quote-verified judge, same as review-code's and
+    # adr-authoring's: every judged metric in tests/cases.yaml is
+    # `type: javascript` and calls assertions/rfd.cjs, which reads this
+    # provider block itself (rfd.cjs's judgeProvider) rather than going
+    # through promptfoo's own llm-rubric/g-eval. json_object here is inert for
+    # those metrics - lib/quoted-items.js sends its own strict ITEMS_SCHEMA on
+    # the actual call - but is kept so this provider still works if anything
+    # else on the suite reaches for llm-rubric later.
+    #
+    # Settings are settled, not suite-tuned (evals/AGENTS.md, "Judge settings
+    # are settled"): google/gemini-3.8-flash, temperature 0, reasoning enabled
+    # under `passthrough` (a bare `reasoning: {enabled}` under `config` is
+    # silently dropped). A judge from the reviewer's own family, or sampling
+    # left at default, measurably raised run-to-run noise on review-code.
     provider:
-      id: openai:chat:deepseek/deepseek-v4-flash
+      id: openai:chat:google/gemini-3.8-flash
       config:
-        # Keeps the judge emitting JSON, which llm-rubric parses for {pass, score,
-        # reason}. json_object, not json_schema - the latter makes promptfoo
-        # pre-parse the reply into an object, which the grader rejects as
-        # 'not a string'.
         response_format:
           type: json_object
         apiBaseUrl: https://openrouter.ai/api/v1
-        max_tokens: 8192
-        max_completion_tokens: 8192
+        temperature: 0
+        max_tokens: 16384
+        max_completion_tokens: 16384
         passthrough:
+          temperature: 0
           reasoning:
-            enabled: false
+            enabled: true
         apiKeyEnvar: OPENROUTER_API_KEY
         showThinking: false
         omitDefaults: true
@@ -70,11 +76,12 @@ defaultTest:
     # get finds_the_decision and their own framing_quality; the five negative
     # controls get control_quality.
     #
-    # Loading a SKILL.md costs tokens and time; that overhead is part of what
-    # the arm comparison is measuring.
+    # Unnamed, so it guards the run shape without being graded as quality
+    # (review-code's review.test.cjs: "latency ... must stay an unnamed
+    # run-shape guard, not a graded column"). Loading a SKILL.md costs tokens
+    # and time; that overhead is part of what the arm comparison is measuring.
     - type: latency
       threshold: 120000
-      metric: latency
 
 tests:
   - file://tests/*.yaml

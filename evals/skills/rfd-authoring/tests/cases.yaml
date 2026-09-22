@@ -11,6 +11,17 @@
 # hide a settled preference, and one that is honestly open. Both control_quality
 # and finds_the_decision used to ride on three cases and one respectively, where
 # run-to-run noise exceeds any delta they could report.
+#
+# dotagents#64/#65 quote-verified pattern (evals/skills/review-code/assertions/
+# review.cjs, evals/skills/adr-authoring/assertions/adr.cjs): every judged
+# metric below is `type: javascript` calling assertions/rfd.cjs, which asks the
+# judge narrow numbered items, requires a verbatim quote from <Output> or NONE,
+# verifies the quote before it counts, and computes the score from the verified
+# items by a rule the .cjs file states - never the judge's own arithmetic. The
+# prose that used to live in each llm-rubric `value:` now lives in rfd.cjs as
+# the item text; `task`/`rubric`/`tells` still reach the judge, through
+# rfd.cjs's askItems building the message content directly rather than through
+# promptfoo's rubricPrompt interpolation.
 
 - description: ill-defined problem - CI slowdown with competing theories
   vars:
@@ -19,103 +30,19 @@
     rubric: |
       The slowdown, the competing theories, and the two uncoordinated investigations are all present and concrete. More than one explanation is still genuinely live at the end of the document - not one cause asserted with the others noted and dropped.
   assert: &exploratory
-    # Both graders are llm-rubric. g-eval scores each criterion in isolation,
-    # which cannot carry the "quote the supporting text or answer NONE"
-    # discipline these need, and its verdict regex silently zeroes a
-    # pretty-printed reply.
-    - type: llm-rubric
-      value: |
-        Judge only what the document says, never how it is laid out or which headings it
-        uses. A document that does these things in flowing prose scores exactly as well as
-        one with sections.
-
-        The Joyent/MNX RFD process (github.com/TritonDataCenter/rfd, "Contents of an RFD")
-        tells an author what an initial RFD should address, and RFC 3 - quoted as the RFD
-        charter by both Joyent and Oxide - holds that "explicit questions without any
-        attempted answers are all acceptable". For each of the five below, quote the
-        supporting text from the document, or answer NONE:
-
-        - The problem stated so that it is not, in Joyent's words, "described in terms of
-          the solution": a reader can restate what is wrong without naming a fix.
-        - The principles and constraints that bound any solution - what must stay true
-          whichever direction is taken.
-        - Who is affected and how they would notice: operators, users, developers, or
-          whoever is currently absorbing the problem.
-        - At least two directions still live at the end, or an explicit statement that the
-          direction is unknown. A direction disposed of in a single clause is not live.
-        - At least one explicit question whose answer would change what happens next,
-          specific enough that a named person could answer it.
-
-        Score from 0 to 1, never above 1: the number of the five genuinely present and
-        supported by the colleague's note, divided by five. Do not credit a document for a
-        section named after a criterion that it leaves empty. Whether the document names
-        anything the colleague's note does not contain is graded by no_invented_specifics
-        and must not move this score in either direction.
-
-        The colleague's note: "{{task}}"
-        Situation-specific facts this document must carry: {{rubric}}
+    - type: javascript
+      value: file://assertions/rfd.cjs:framingQuality
       threshold: 0.7
       metric: framing_quality
-    - type: llm-rubric
-      value: |
-        Oxide Computer's RFD 1 rules that the prediscussion and discussion states
-        "shouldn't be used for ideas that have been committed to, organizationally or
-        otherwise; by the time an idea represents the consensus or direction, it should be
-        in the published state." The colleague's note - "{{task}}" - describes a situation
-        where no direction has been settled. Apply Oxide's rule to the document below.
-
-        Ignore hedging vocabulary entirely. "We might", "one option is", "leaning towards",
-        "nothing is decided yet" and "thoughts?" are not evidence that a document is open;
-        the arrangement of the material is. For each of these five tells, quote the text
-        that shows it, or answer NONE:
-
-        1. Asymmetric evidence: one direction arrives with a benchmark, a spike, a
-           prototype, a cost or a track record, and the others arrive with none.
-        2. Asymmetric weight: one direction gets sustained treatment and the rest get a
-           clause each.
-        3. Disposal rather than assessment: a direction is ruled out by assertion, with no
-           test, measurement or missing fact named that would settle it.
-        4. The next step is implementation work on one direction, rather than work that
-           would tell the reader which direction to take.
-        5. The questions ask for assent rather than for information that could change the
-           outcome.
-
-        A document may legitimately name a direction if the colleague's note gives it
-        grounds to. Score the five tells on whether the material is arranged to foreclose
-        discussion, not on whether a direction appears. A document that names a direction,
-        says what evidence would overturn it, and gives the alternatives a fair test avoids
-        tells 1, 3 and 5.
-
-        Score from 0 to 1, never above 1: 0.2 for each of the five tells the document
-        avoids. A document showing three or more has chosen, whatever it says about itself.
+    - type: javascript
+      value: file://assertions/rfd.cjs:staysOpen
       threshold: 0.6
       metric: stays_open
     # Fabrication on its own axis, across every case where the reply is judged
     # against a source: the seven exploratory documents and the six reviews.
-    # It used to be folded into three separate rubrics at three different rates -
-    # framing_quality cancelled a satisfied criterion per invention,
-    # finds_the_decision subtracted 0.2 on top of a tells/divisor ratio, and the
-    # review rubric subtracted 0.25 from a four-item average - so in each one a
-    # fabrication and a missed criterion produced the same number.
     - &grounded
-      type: llm-rubric
-      value: |
-        A colleague wrote this to you: "{{task}}"
-
-        List every figure, identifier, system name, team name, date or measurement the reply
-        asserts as established fact that appears nowhere in the colleague's message above,
-        quoting each. A specific the reply explicitly marks as an assumption, an example, an
-        open question, or a target still to be agreed is not on the list, and neither is a
-        published standard, specification or process the reply cites as an authority - that
-        is a citation, not a claim about the colleague's own systems. Answer NONE if there
-        are none.
-
-        Score from 0 to 1, never above 1: start at 1.00 and subtract 0.25 for each item on
-        your list, floored at 0. State the list and the arithmetic.
-
-        Do not reward or penalise how well the reply frames the problem, whether it stays
-        open, or what it finds - a reply that is wrong on every other axis but names nothing
-        the colleague did not scores 1.00 here.
+      type: javascript
+      value: file://assertions/rfd.cjs:noInventedSpecifics
       threshold: 1
       metric: no_invented_specifics
 
@@ -177,53 +104,10 @@
     # These three controls are judged on their own terms, not against
     # framing_quality above - that is written for an open document and would
     # penalise a correct decline for having no framing to give. Anchored so the
-    # other two controls reuse the identical wording.
+    # other two controls reuse the identical item text.
     - &control_rubric
-      type: llm-rubric
-      value: |
-        A colleague wrote this to you: "{{task}}"
-
-        What you are grading is what the author would send to the people involved, which
-        need not be a message addressed back to that colleague. A document written for
-        those people IS the reply being graded - never score it as raw material for a
-        reply that is missing.
-
-        Nothing in this situation is actually undecided. The correct answer is the compact
-        thing the note calls for - a record, a decision request, a plan, an explanation -
-        or a plain statement that an open-ended exploratory write-up is not needed here.
-        Either earns the first item; the reply is graded on what it is, not on whether it
-        editorialises about which genre of document to write.
-
-        Oxide Computer's RFD 1 reserves the discussion state for ideas not yet settled: "by
-        the time an idea represents the consensus or direction, it should be in the
-        published state." The Go proposal process gates on a brief issue before any design
-        document: "The proposal author creates a brief issue describing the proposal. Note:
-        There is no need for a design document at this point."
-
-        Neither source says a document should not be written, and neither is quoted here as
-        saying so - RFD 1 in particular assigns a state to a written RFD rather than
-        withholding one. What is being declined on this row is the open-ended exploratory
-        framing, not the act of writing.
-
-        Brevity is correct here and must not be penalised. RFC 3, the charter both Joyent and
-        Oxide adopt, sets the floor at one sentence. An answer that is short because the
-        situation calls for little scores full marks.
-
-        What belongs instead, specific to this case: {{rubric}}
-
-        Score from 0 to 1, never above 1: award 0.34 for the reply being the compact thing
-        the situation calls for, or saying plainly that an exploratory write-up is not
-        needed; 0.33 for it not manufacturing uncertainty - not reopening a settled choice,
-        not inventing open questions the note did not contain, not asking anyone to
-        reconsider what the author has already worked out; and 0.33 for the case-specific
-        requirement above. Quote the reply's own words for each, or answer NONE. Award
-        nothing for an item you could not quote for. A reply that presents background plus
-        live alternative directions plus open questions for others to weigh produces NONE on
-        the first item however well written it is, because nothing here is open. State the
-        arithmetic.
-
-        Judge the reply as delivered; do not reward or penalise how it was built or which
-        authoring convention it followed.
+      type: javascript
+      value: file://assertions/rfd.cjs:controlQuality
       threshold: 0.7
       metric: control_quality
 
@@ -320,41 +204,11 @@
     # This draft is the hard end of the range: it carries all five tells at once.
     # The three that follow carry two or three each, so the metric can report a
     # degree rather than a single all-or-nothing row. The tells are a per-case var
-    # because they differ per draft; the arithmetic divides by however many this
-    # draft actually has.
+    # because they differ per draft; rfd.cjs's findsTheDecision derives the item
+    # count and each item's weight from how many are listed.
     - &finds_decision
-      type: llm-rubric
-      value: |
-        A colleague sent this draft for review: "{{task}}"
-
-        The draft declares itself open but has already chosen. Oxide Computer's RFD 1 rules
-        that the discussion state "shouldn't be used for ideas that have been committed to,
-        organizationally or otherwise; by the time an idea represents the consensus or
-        direction, it should be in the published state." What is wrong here is that the
-        declared openness does not match the actual commitment.
-
-        House reading, not Oxide's - RFD 1 says nothing about RFCs: a draft naming a
-        direction is not itself the fault, because the difference between an RFD and an RFC
-        is which state the document is in, not which artifact it is.
-
-        A review that says only that the draft "reads as decided", or that suggests softer
-        wording, has found nothing: hedging the language would not fix any of the tells
-        below. Identifying a tell means naming the specific text in the draft that shows it,
-        not restating the tell in the abstract.
-
-        The tells this particular draft carries, and no others, are:
-
-        {{tells}}
-
-        For each tell listed above, quote the review's own words identifying it, or answer
-        NONE.
-
-        Score from 0 to 1, never above 1: the number of listed tells you answered with a
-        quote, divided by the number of tells listed. A review confined to wording, tone or
-        structure identifies no tells and scores 0. State the count, the divisor and the
-        arithmetic. Whether the review names anything absent from the draft and the
-        colleague's message is graded by no_invented_specifics and must not move this score
-        in either direction.
+      type: javascript
+      value: file://assertions/rfd.cjs:findsTheDecision
       threshold: 0.6
       metric: finds_the_decision
     - *grounded
@@ -392,36 +246,10 @@
     rubric: |
       The reply should treat this draft as genuinely open and give specific, usable feedback - what is missing, what would sharpen it, what to do about the unanswered legal question. It should not invent a hidden decision, and it should not push the author to commit to a retention rule the draft has no basis to choose yet.
   assert:
-    - type: llm-rubric
-      value: |
-        The draft below is genuinely undecided, and under RFC 3 - the charter both Joyent
-        and Oxide adopt for RFDs - that is legitimate: "explicit questions without any
-        attempted answers are all acceptable. The minimum length for a note is one
-        sentence." A review that pushes this author to pick a retention number, or that
-        claims to detect a decision the draft has not made, is wrong.
-
-        Answer each, quoting the review's words or answering NONE:
-
-        - Does the review avoid asserting that the draft has secretly chosen a direction?
-          (If it claims a hidden decision, quote the claim; this criterion fails.)
-        - Does the review avoid telling the author to commit to a retention rule, a number
-          of days, or a deletion policy that the draft has no basis to pick?
-        - Does it identify at least one concrete gap? Joyent's RFD content list asks for
-          "the principles and constraints on the design of the solution" and for how users
-          and operators would interact with and verify the change; this draft supplies
-          neither, and names no owner for the unanswered legal question.
-        - Is the feedback specific to this draft's own text rather than advice that would
-          apply to any document?
-
-        Score from 0 to 1, never above 1: 0.25 per criterion satisfied. Whether the review
-        introduces a figure, system or team absent from the draft and the colleague's
-        message is graded by no_invented_specifics and must not move this score in either
-        direction.
-
-        The colleague's message: "{{task}}"
-        Additional requirement for this case: {{rubric}}
+    - type: javascript
+      value: file://assertions/rfd.cjs:reviewFraming
       threshold: 0.7
-      # Not framing_quality. This rubric asks a different question of a different
+      # Not framing_quality. This grades a different question of a different
       # artifact - a review of someone else's draft, where framing_quality grades
       # an authored RFD - and report.js averaged the two populations into one n=8
       # cell under one reliability band. This case sits at 1.00 in both arms, so
