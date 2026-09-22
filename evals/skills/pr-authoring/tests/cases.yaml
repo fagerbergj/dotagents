@@ -27,146 +27,19 @@
       metric: proportionality
 
     - &coverage
-      type: llm-rubric
-      # A rubric only ever sees {{output}} and {{rubric}} unless it carries its
-      # own rubricPrompt, and a bare `- role: user` rubricPrompt drops
-      # promptfoo's system message establishing the {reason,pass,score} JSON
-      # contract - the exact "Could not extract JSON" failure that killed
-      # 18/18 rows of this suite's old pr_quality metric. Restating that
-      # system message is required, not decoration (evals/AGENTS.md).
-      rubricPrompt:
-        - role: system
-          content: |
-            You are grading output according to a user-specified rubric. If the
-            statement in the rubric is true, then the output passes the test. You
-            respond with a JSON object with this structure:
-            {reason: string, pass: boolean, score: number}
-        - role: user
-          content: |
-            <AuthorDescription>{{author_description}}</AuthorDescription>
-            <Output>{{output}}</Output>
-            <Rubric>{{rubric}}</Rubric>
-      value: |
-        <AuthorDescription> above is this pull request's own author's real
-        description, withheld from whoever wrote <Output> - the one record of
-        WHY the change was made that exists nowhere in the diff, since only the
-        author had it. Source: Google's eng-practices guide on CL descriptions
-        asks exactly this of a description - "Why are these changes being
-        made? What contexts did you have as an author when making this
-        change? Were there decisions you made that aren't reflected in the
-        source code?"
-        (https://google.github.io/eng-practices/review/developer/cl-descriptions.html).
-
-        <AuthorDescription> is evidence of what a competent author thought
-        worth saying about THIS change, not a template to imitate. Do not
-        reward <Output> for matching its tone, structure, length, or wording,
-        and do not penalise <Output> for saying something true that
-        <AuthorDescription> happened to omit.
-
-        1. List every substantive point <AuthorDescription> makes - each a
-           distinct claim about what changed, why, what it affects, or what
-           the reader should know - one per line, each quoted. Skip
-           boilerplate (a bare issue link with no explanation, a sign-off).
-           Call the count P.
-        2. For each quoted point, mark COVERED if <Output> conveys the same
-           substance somewhere - paraphrase is fine, exact wording is not
-           required - or MISSING if it does not. Call the number marked
-           COVERED C.
-        3. Compute C / P.
-
-        Length is not scored here in any form. It belongs to `proportionality`,
-        which measures the description against a stated per-case word ceiling;
-        charging it again against the author's own word count would fine the
-        same words twice, and would fine covering more of the author's points -
-        which is the only thing this criterion is for.
-
-        Score from 0 to 1, never above 1, equal to C / P.
-      threshold: 0.6
+      # dotagents#64/#65: quote-verified items, not llm-rubric's own
+      # list-P/mark-C/divide arithmetic - see assertions/judged.cjs:coverage
+      # and its COVERAGE_ITEMS for the two items and the sourcing.
+      type: javascript
+      value: file://assertions/judged.cjs:coverage
       metric: coverage
 
     - &restraint
-      type: llm-rubric
-      # The property: a claim a description makes has to be backed by something.
-      # Source, fetched: the kernel's submitting-patches - "If you claim
-      # improvements in performance, memory consumption, stack footprint, or
-      # binary size, include numbers that back them up."
-      # (https://www.kernel.org/doc/html/latest/process/submitting-patches.html)
-      #
-      # Step 2 marks each claim against the diff, the note, or the author's own
-      # description, so the judge needs all three - without them it sees nothing
-      # and every claim collapses to NEITHER. <AuthorDescription> is here for one
-      # reason: `coverage` PAYS for conveying the author's points, and those
-      # points live nowhere in the diff or the one-line note, so without it the
-      # same sentence earned +coverage and -restraint. A claim the real author
-      # independently made is not an invention.
-      rubricPrompt:
-        - role: system
-          content: |
-            You are grading output according to a user-specified rubric. If the
-            statement in the rubric is true, then the output passes the test. You
-            respond with a JSON object with this structure:
-            {reason: string, pass: boolean, score: number}
-        - role: user
-          content: |
-            <AuthorNote>{{note}}</AuthorNote>
-            <Diff>{{diff}}</Diff>
-            <AuthorDescription>{{author_description}}</AuthorDescription>
-            <Output>{{output}}</Output>
-            <Rubric>{{rubric}}</Rubric>
-      value: |
-        The developer's own note is in <AuthorNote> above, the change itself is
-        in <Diff>, and the description this change's real author wrote is in
-        <AuthorDescription>. Judge <Output> as delivered: do not reward or
-        penalise how it was built or which authoring convention it followed.
-
-        Work through these in order, then score.
-
-        1. List every claim <Output> makes that ASSERTS A CHECKABLE FACT, one
-           per line, each quoted. A checkable fact is one a reader could
-           confirm or refute against the code or the world: what the change
-           does, what it affects, what was run and what came back, a
-           measurement, or a named file, symbol, or flag. Framing, restatement,
-           and a reading of the diff that the diff itself bears out are not
-           separate claims - they assert nothing beyond what is already in
-           front of the reviewer. Skip the issue-reference slot in the title
-           line - "(closes #<n>)", "#???", "Fixes #NNN" - a placeholder for a
-           number the author fills in against the tracker is a template slot,
-           not an assertion about the change. That exemption is this suite's
-           own house position, not conformance to any published standard;
-           Google's eng-practices asks only that a description "include
-           background information such as bug numbers" where relevant, and
-           says nothing about an unfilled one
-           (https://google.github.io/eng-practices/review/developer/cl-descriptions.html).
-        2. Against each quoted claim write exactly one of:
-             DIFF    - the diff shows it, or it follows directly from what the
-                       diff shows
-             NOTE    - the developer's note says it
-             AUTHOR  - <AuthorDescription> says it
-             NEITHER - none of those three supports it. An invented risk, a
-                       design rationale this change does not have, a test
-                       command, a test result, or a measurement the author
-                       cannot have run, or a file, symbol, or identifier absent
-                       from the change all count as NEITHER.
-        3. Write the number of claims marked NEITHER as U.
-
-        Score from 0 to 1, never above 1: max(0, 1 - U / 4). Each unsupported
-        claim costs a fixed 0.25 regardless of how many claims the description
-        makes in total. A ratio score - supported claims over total claims -
-        lets padding dilute an invention's cost by inflating the denominator,
-        which rewards verbosity; this fixed cost is this suite's own house
-        calibration, chosen so one slip is tolerated and two are not, not
-        conformance to any published standard:
-        no widely cited guidance on change descriptions specifies a tolerance
-        for unsupported claims. What keeps the fixed cost from fining breadth
-        is step 1: a true statement about the change lands DIFF, NOTE, or
-        AUTHOR and adds nothing to U, so only inventions accumulate.
-
-        Headings, sections, and formatting are not scored. Length is not scored
-        here at all - that is `proportionality`'s job, against a stated word
-        ceiling - so a two-sentence answer and a five-paragraph answer face
-        exactly the same arithmetic for this criterion alone, and neither
-        brevity nor breadth is itself a deduction.
-      threshold: 0.7
+      # dotagents#64/#65: quote-verified items, not llm-rubric's own
+      # list-claims/mark-NEITHER/fixed-cost arithmetic - see
+      # assertions/judged.cjs:restraint and its RESTRAINT_ITEMS.
+      type: javascript
+      value: file://assertions/judged.cjs:restraint
       metric: restraint
 
 - description: cloudflared-591
