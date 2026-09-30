@@ -26,6 +26,25 @@
 #
 #   docker build -f Dockerfile -t quack-eval:a19807d /path/to/quack
 #
+# prepare-workspace.sh runs exactly that line, so rebuilding is rerunning it.
+# Cold it takes ~13 min and the image is 3.6 GB on disk; with the base image and
+# the module download already cached, ~5 min.
+#
+# WHAT GOES STALE, and what to do:
+#   * the quack SHA - retag. The tag, the `image:` in promptfooconfig.yaml and
+#     REPO_SHA in prepare-workspace.sh must move together, and tests/cases.yaml
+#     describes the tree at that SHA.
+#   * go.mod - GOMODCACHE is baked, so a dependency bump needs a rebuild or the
+#     row builds against the old one. There is no network at run time to notice.
+#   * go.mod's `go` directive - the golang: tag two lines below is pinned and
+#     GOTOOLCHAIN=local, so a toolchain bump fails the build loudly. Bump both.
+#   * .agents/vendor/plugins.yaml pins - the mirrors are cloned fresh by
+#     prepare-workspace.sh every time, so those follow the workspace, not this.
+#
+# The build context is the WORKING TREE, not `git archive` of the tag: whatever
+# is untracked in the checkout rides along. Only the caches survive `rm -rf /src`
+# below, so this is harmless, but it does mean the tag is a label rather than a
+# guarantee. Build from a clean checkout at the pinned SHA if that matters.
 FROM debian:bookworm-slim
 
 # The Go toolchain, copied rather than apt-installed: Debian's Go trails quack's
@@ -56,10 +75,21 @@ RUN make plugins && go mod download
 
 # The build cache, warmed against the real workload rather than one package:
 # `go test` compiles test binaries that `go build` never touches, and `make test`
-# is what the cases actually run. -count=1 defeats the test-result cache so the
-# compile work genuinely happens.
+# is what the cases actually run.
+#
+# `-run '^$'` COMPILES AND LINKS every test binary and runs no test. That is the
+# whole of what the cache needs, and it is deliberately not a full `go test`:
+# gating the image on quack's test RESULTS made the build fail, measured, in
+# `internal/vetting`. deriveChecks() calls toolchainPresent() -> LookPath("npm"),
+# so five of its tests assert `npm run build` is derived and get [] wherever npm
+# is absent - they pass on a dev box and fail in any clean container. Installing
+# node to satisfy them is worse, also measured: the mermaid tests then stop
+# skipping on "node not on PATH" and reach EnsureMermaidValidatorDeps, whose
+# `npm ci` under --network=none did not return inside 600s. The image therefore
+# stays node-free and `make test` inside a row fails those five vetting tests on
+# top of the planted internal/dag one. See tests/cases.yaml.
 RUN GOCACHE=/opt/gocache-seed go build ./... \
- && GOCACHE=/opt/gocache-seed go test -count=1 ./... >/dev/null
+ && GOCACHE=/opt/gocache-seed go test -count=1 -run '^$' ./...
 
 # The `quack` binary, for the L7 probe: `quack sandbox check` has to be runnable
 # without the row spending minutes on a build first. `go build ./cmd/quack`
@@ -67,7 +97,15 @@ RUN GOCACHE=/opt/gocache-seed go build ./... \
 # internal/serve/web/dist/.gitkeep placeholder, and building the SPA would need
 # a registry. The probe measures whether the model RUNS the command; the check
 # then reports bwrap missing, which is a true answer about this container.
-RUN mkdir -p /opt/quack-bin && go build -o /opt/quack-bin/quack ./cmd/quack
+#
+# GOCACHE is named and thrown away rather than left to default: unset, it lands
+# in /root/.cache/go-build and put 759 MB of dead build cache in the image
+# (measured). Pointing it at /opt/gocache-seed instead would be free here but
+# would grow the seed by this link's output - and the seed is copied to the
+# workspace tmpfs, where bytes are charged to --memory.
+RUN mkdir -p /opt/quack-bin \
+ && GOCACHE=/tmp/qb-cache go build -o /opt/quack-bin/quack ./cmd/quack \
+ && rm -rf /tmp/qb-cache
 
 # The source copy goes. It is build scaffolding, and leaving it would put a
 # readable AGENTS.md inside the image - which is the treatment, and would hand it

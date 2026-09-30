@@ -93,28 +93,60 @@ providers:
         # concurrency is 1 on a 12-core host, so 4 costs nothing and leaves 8
         # for the harness. 180 s is 2.4x the measured 74 s.
         cpus: '4.0'
+        # `make test` in this container: 106.6 s cold, 56.2 s on the second
+        # cycle after a source edit. 180 s is 1.7x the cold number, not the 2.4x
+        # the pre-build estimate assumed - the estimate was 74 s on the host.
         commandTimeoutMs: 180000
         # The debug case runs the suite at least twice - once to see the failure,
         # once to confirm the fix - so the row's ceiling is several `make test`s
-        # plus exploration, not one.
+        # plus exploration, not one. Measured end to end for that shape:
+        # plugins + test + edit + test + build = 176 s.
         wallClockMs: 900000
         maxOutputBytes: 8192
-        # Workspace holds the tracked tree (40 MB by `git archive`, NOT the
-        # 224 MB working tree), the plugin mirrors (~3 MB) and the warm GOCACHE
-        # (757 MB). The build cache cannot go in the image: the rootfs is
-        # --read-only and a read-only GOCACHE fails on the first miss, measured -
-        # "permission denied" on a cache write - and every row misses, because
-        # the debug case edits source and `make test` compiles test binaries.
-        # GOMODCACHE (1.5 GB) IS read-only-safe, verified, so it stays in the
-        # image and costs no container memory at all.
-        workspaceMB: 1280
-        tmpMB: 256
-        # Workspace tmpfs is charged here, plus the Go linker's own working set.
-        memoryMB: 2560
+        # ALL THREE NUMBERS BELOW ARE MEASURED, not estimated, against the built
+        # image and the prepared workspace. The estimates they replace were low
+        # on every one, and each failed silently as a wrong test result rather
+        # than as an error:
+        #
+        #                        estimated   MEASURED PEAK   set here
+        #   /workspace             ~900 MB       1499 MB       1792
+        #   /tmp                    (none)        436 MB        768
+        #   container memory       ~2560 MB       2360 MB       3584
+        #
+        # /workspace starts at 1146 MB before a row runs anything: tracked tree
+        # 39 MB, warm GOCACHE 987 MB (not 757 - that figure was `go build ./...`
+        # only; the seed also carries the test binaries), the prebuilt quack
+        # 92 MB, .git 23 MB, plugin mirrors 5 MB. `make test` grows the cache to
+        # 1339 MB. At 1280 the tmpfs hit 100% mid-run and sqlite reported
+        # "database or disk is full"; packages then failed for want of space,
+        # which reads exactly like a broken repo.
+        #
+        # /tmp is where the Go toolchain puts $WORK. Four concurrent links of
+        # ~100 MB test binaries peaked at 436 MB; at 256 the run died with
+        # "link: mapping output file failed: no space left on device" on up to
+        # 20 packages, and RAISING --pids-limit made it worse by letting more
+        # links run at once. This was the single most misleading failure here.
+        #
+        # memoryMB must EXCEED workspaceMB + tmpMB (2560) or a row that fills
+        # both tmpfs is OOM-killed before either size cap can bite. 3584 leaves
+        # ~1 GB for the toolchain itself, against ~560 MB of observed RSS.
+        #
+        # The build cache cannot go in the image: the rootfs is --read-only and
+        # a read-only GOCACHE fails on the first miss, measured - "permission
+        # denied" on a cache write - and every row misses, because the debug
+        # case edits source and `make test` compiles test binaries. GOMODCACHE
+        # (1.2 GB) IS read-only-safe, verified, so it stays in the image and
+        # costs no container memory at all.
+        workspaceMB: 1792
+        tmpMB: 768
+        memoryMB: 3584
 
 # RUN THIS AT --max-concurrency 1.
+#   EVAL_SUITES_DIR=repo EVAL_SUBJECT=<quack>/AGENTS.md \
 #   EVAL_WORKSPACE_DIR=<ws> ./run.sh agents-md --max-concurrency 1
-# ~2.6 GB per container against 7 GB of host memory. The text suites run at 24;
+# EVAL_SUITES_DIR and EVAL_SUBJECT are not optional: run.sh defaults to
+# evals/skills/<suite> and ../skills/<suite>/SKILL.md, and this suite is neither.
+# ~3.5 GB per container against 7 GB of host memory. The text suites run at 24;
 # this one must not. Build the image and the workspace first with
 # ./prepare-workspace.sh <quack-checkout> <workspace-dir>.
 #
