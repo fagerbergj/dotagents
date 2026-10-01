@@ -6,6 +6,8 @@ const MODELS: Record<string, { ctx: number; vision?: boolean; reasoning?: boolea
   "qwen3.8-27b": { ctx: 262144, vision: true, reasoning: true }, // vLLM, so ctx is its MAXLEN env
   "qwen3.8-flash-next": { ctx: 131072, vision: true, reasoning: true },
   "muse-glimmer-30b": { ctx: 131072, vision: true, reasoning: true },
+  "glm-5.3-flash": { ctx: 262144, reasoning: true }, // -c 1M split over 4 slots; mmproj off by default
+  "mimo-v2.6-flash": { ctx: 131072, vision: true, reasoning: true }, // -c 512k split over 4 slots
   "qwen3-omni-30b": { ctx: 32768, vision: true, reasoning: true },
   "qwen3.5-9b": { ctx: 65536 }, // the only one with thinking off in its chat template
 };
