@@ -2,7 +2,7 @@
 
 ## Overview
 
-The authoritative source is the OAI/OpenAPI-Specification, currently at version **3.1.1** [swagger.io/specification](https://swagger.io/specification/). Maintained by the OpenAPI Initiative under SmartBear with OAS Working Group contributions.
+The authoritative source is the OAI/OpenAPI-Specification, whose latest 3.1 release is **3.1.2** (September 2025; 3.2 also exists) [spec.openapis.org/oas/v3.1.2](https://spec.openapis.org/oas/v3.1.2.html). Maintained by the OpenAPI Initiative under SmartBear with OAS Working Group contributions.
 
 Key root-level sections:
 - **`openapi`**: Required version field; `major.minor` designates feature set, `.patch` addresses errors only [swagger.io/specification/#versions](https://swagger.io/specification/).
@@ -26,7 +26,7 @@ OpenAPI 3.1 (released February 2021) achieves full compatibility with **JSON Sch
 | **$defs / $schema** | Not natively supported | Full JSON Schema 2020-12 support; default dialect is `https://spec.openapis.org/oas/3.1/dialect/base` [specway.com/blog/openapi-3-1-vs-3-0](https://specway.com/blog/openapi-3-1-vs-3-0) |
 | **Type as array** | Always a string | Union types allowed: `type: ["string", "integer"]` [learn.openapis.org/upgrading/v3.0-to-v3.1](https://learn.openapis.org/upgrading/v3.0-to-v3.1.html) |
 
-> **Critical warning:** The removal of `nullable` is the most common migration issue — every schema using `nullable: true` needs rewriting to type arrays [specway.com/blog/openapi-3-1-vs-3-0](https://specway.com/blog/openapi-3-1-vs-3-0). The `exclusiveMinimum` boolean→numeric change generates the highest error count across 7,000+ analyzed specs [apinotes.io/blog/common-openapi-spec-errors](https://apinotes.io/blog/common-openapi-spec-errors-and-how-to-fix-them).
+> **Critical warning:** The removal of `nullable` is the most common migration issue — every schema using `nullable: true` needs rewriting to type arrays [specway.com/blog/openapi-3-1-vs-3-0](https://specway.com/blog/openapi-3-1-vs-3-0). In one third-party survey of 7,000+ specs, the `exclusiveMinimum` boolean→numeric change generated the most errors [apinotes.io/blog/common-openapi-spec-errors](https://apinotes.io/blog/common-openapi-spec-errors-and-how-to-fix-them).
 
 ## Schema Composition Patterns
 

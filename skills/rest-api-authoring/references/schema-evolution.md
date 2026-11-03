@@ -5,7 +5,8 @@ The fundamental rule: **a breaking change is any modification that can make an e
 ## Backward-Compatible (Additive) Changes
 
 - Adding optional fields/properties to request or response objects (oasdiff classifies as *Info*: `new-optional-request-property`, `response-optional-property-added`).
-- Widening types — e.g., changing a single-type field to an array, or adding enum values without removing existing ones (`list-of-types-widened`).
+- Adding enum values to a **request-only** enum. Adding values to a **response** enum is compatible only when the enum is documented as extensible, so clients already handle unknown values (see `payloads-and-collections.md`).
+- Loosening input validation (a longer accepted input, a newly optional field).
 - Adding new endpoints or operations entirely.
 - Making a nullable property non-null in *responses* is acceptable since clients that read the field remain compatible.
 
@@ -16,6 +17,13 @@ The fundamental rule: **a breaking change is any modification that can make an e
 - **Remove paths or operations entirely** (`api-path-removed-without-deprecation`).
 - **Add required request parameters or properties** — existing clients that don't send the new value will fail validation.
 - **Change security schemes** (remove a required auth method, modify its parameters).
+- **Change a field's type, even when the wire format still parses** — for example a single value to an array. Generated clients change in a breaking way. oasdiff reports `list-of-types-widened` as non-breaking, so treat this as stricter than the tool ([AIP-180](https://google.aip.dev/180)).
+- **Change a default value, or how a defaulted field is serialized** (present versus omitted when it equals the default) ([AIP-180](https://google.aip.dev/180)).
+- **Change a value's format or construction**, such as an `ip_address` field that starts returning IPv6 ([AIP-180](https://google.aip.dev/180)).
+- **Raise the documented upper bound of a string's size.** Clients store values in fixed-size columns and URLs; AIP-180 treats an expected increase as incompatible ([AIP-180](https://google.aip.dev/180)).
+- **Rename a resource.** This breaks clients even across major versions ([AIP-180](https://google.aip.dev/180)).
+- **Add pagination to a list that returned everything.** Old clients read one page and miss the rest ([Azure REST API Guidelines](https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md)).
+- **Change what a field means** while keeping its name and type. No diff tool catches this, so review semantics by hand (Zalando rule 107).
 
 ## Input vs Output Schema Rule
 
