@@ -6,6 +6,7 @@
     "npm:@dietrichgebert/ponytail",
     "npm:pi-markdown-preview",
     "npm:pi-ask-user",
+    "npm:pi-better-background-tasks",
     "npm:pi-lsp"
   ]
 }
