@@ -22,7 +22,9 @@ Renders cache by content hash, so checks 1 and 4 share one mermaid-cli call per 
 
 ## Resource loading
 
-The skill arm gets a `load_resource(path)` tool over `skills/mermaid-authoring/` itself, served by `lib/skill-tools.js`. Without it, `SKILL.md` step 3 - "read `references/<diagramId>/README.md` for the type you picked, before writing" - was an instruction the model could not follow, so it wrote specialised syntax from memory and `mermaid_renders` came out *below* the baseline: six skill-arm diagrams failed to parse and every one was a long-tail type (`requirementDiagram`, `block`, `packet`, `venn-beta`, `cynefin-beta`, `railroad-ebnf-beta`) that the baseline had dodged by answering with a flowchart. That negative was a harness artifact.
+The skill arm gets a `load_resource(path)` tool over `skills/mermaid-authoring/` itself, served by `lib/skill-tools.js`. Without it, `SKILL.md` step 3 - "read `references/<diagramId>/README.md` for the type you picked, before writing" - was an instruction the model could not follow, so it wrote specialised syntax from memory.
+
+`mermaid_renders` came out *below* the baseline: six skill-arm diagrams failed to parse and every one was a long-tail type (`requirementDiagram`, `block`, `packet`, `venn-beta`, `cynefin-beta`, `railroad-ebnf-beta`) that the baseline had dodged by answering with a flowchart. That negative was a harness artifact.
 
 - **Only the skill arm has the tool.** `prompts/arms.js` returns `{prompt, config: {skillDir}}` for the skill arm and a bare message list for the baseline; the provider offers the tool only when a `skillDir` arrives. The baseline has no skill and no resources, so the arms still differ by the skill and nothing else.
 - **Scoped.** Paths resolve under the skill root and are checked against the real path of the deepest existing ancestor, so absolute paths, `..`, and symlinks out are refused - as a tool result the model can read, not a crash.
@@ -31,7 +33,11 @@ The skill arm gets a `load_resource(path)` tool over `skills/mermaid-authoring/`
 - **Caching.** Each round-trip is cached on its whole request body. The tool results live in `messages`, so editing a reference file changes the second call's key by itself; the first call carries no file content and is safe to reuse. `--no-cache` is honoured.
 - **Token accounting** sums prompt/completion/total over every round-trip, so `tokens (avg)` and cost stay true.
 
-Measured, one run each at concurrency 4, same cases and graders: `mermaid_renders` went **no-skill 0.97 / skill 0.81 (delta -0.16)** to **no-skill 0.93 / skill 0.97 (delta +0.04)**. Five of the six diagrams that had failed to parse now render, each after loading its own `references/` entry; the sixth row lost its verdict to a Chromium crash. `diagram_choice` also moved +0.08 to +0.21 and `semantic_quality` +0.08 to +0.11. It is not free: 27 of 31 skill rows loaded something, 50 files in all, and the skill arm's average row went 5,369 tokens to 15,713. Nothing came near the 8-round or 64 KB caps - the deepest row took 3 rounds.
+Measured, one run each at concurrency 4, same cases and graders: `mermaid_renders` went **no-skill 0.97 / skill 0.81 (delta -0.16)** to **no-skill 0.93 / skill 0.97 (delta +0.04)**. Five of the six diagrams that had failed to parse now render, each after loading its own `references/` entry; the sixth row lost its verdict to a Chromium crash.
+
+`diagram_choice` also moved +0.08 to +0.21 and `semantic_quality` +0.08 to +0.11.
+
+It is not free: 27 of 31 skill rows loaded something, 50 files in all, and the skill arm's average row went 5,369 tokens to 15,713. Nothing came near the 8-round or 64 KB caps - the deepest row took 3 rounds.
 
 Eight of the ten suites now use this provider. `commit-authoring` and `format-markdown` stay on `openai:chat:*`: neither skill ships `references/` or `assets/`, so there is nothing for the tool to serve.
 
