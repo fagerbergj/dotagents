@@ -26,13 +26,19 @@ Existing real files are backed up to `<path>.bak` before linking; existing symli
 
 `install-as-plugin.sh` installs dotagents itself as a plugin (see [Install as a plugin](#install-as-a-plugin) - this is how the skills and MCPs reach Claude Code); `install-plugins.sh` installs the third-party plugins listed in `plugins.json`, currently just ponytail.
 
+<!-- lintdec:ignore md-para-long --><!-- single 40-word sentence; 27B miscounts sentence/word thresholds on borderline runs -->
+
 `install-pi-packages.sh` merges the package list in `pi-packages.json` into `~/.pi/agent/settings.json`'s `packages` array - a union, so packages added outside this repo and other settings keys (`theme`, `defaultModel`, ...) are left alone.
 
 ## Install as a plugin
 
 The symlink flow above is still the intended way to use this as `~/.agents`. These are the alternate, per-harness install paths for pulling just the skills into a project or another machine without cloning to `~/.agents`.
 
-Claude Code and pi get a real plugin install below. opencode doesn't - it auto-discovers the skills instead, so there's nothing to install. None of the three can ship `AGENTS.md` from inside an installed package: pi and opencode both read instructions from the project/global filesystem, never from package contents, and the Agent Plugins spec has no instructions field at all. The `~/.claude/CLAUDE.md` and `~/.pi/agent/AGENTS.md` symlinks from `setup-symlinks.sh` are the only way `AGENTS.md` reaches any of them (opencode rides the `~/.claude/CLAUDE.md` fallback) - not a legacy leftover, the actual mechanism.
+Claude Code and pi get a real plugin install below. opencode doesn't - it auto-discovers the skills instead, so there's nothing to install.
+
+None of the three can ship `AGENTS.md` from inside an installed package: pi and opencode both read instructions from the project/global filesystem, never from package contents, and the Agent Plugins spec has no instructions field at all.
+
+The `~/.claude/CLAUDE.md` and `~/.pi/agent/AGENTS.md` symlinks from `setup-symlinks.sh` are the only way `AGENTS.md` reaches any of them (opencode rides the `~/.claude/CLAUDE.md` fallback) - not a legacy leftover, the actual mechanism.
 
 ### Agent Plugins standard
 

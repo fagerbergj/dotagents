@@ -42,7 +42,13 @@ Entity alias: `p[Person] { string firstName }` shows "Person" instead of the int
 
 Direction: `direction LR` (also `TB`, `BT`, `RL`).
 
-Subgraphs group entities (v11.17.0+): `subgraph title ... end`, and they nest. A single-word title is used as both id and title; a multi-word title must be quoted (`subgraph "Customer Domain"`) and is still used as both; or give an explicit id with `subgraph id1 [title 1]`. Subgraphs are always referenced by id in relationships, never by title text, and an id containing spaces must be quoted there. A `direction` statement inside a subgraph sets its own layout direction:
+Subgraphs group entities (v11.17.0+): `subgraph title ... end`, and they nest.
+
+A single-word title is used as both id and title; a multi-word title must be quoted (`subgraph "Customer Domain"`) and is still used as both; or give an explicit id with `subgraph id1 [title 1]`.
+
+Subgraphs are always referenced by id in relationships, never by title text, and an id containing spaces must be quoted there.
+
+A `direction` statement inside a subgraph sets its own layout direction:
 
 ```mermaid
 erDiagram
