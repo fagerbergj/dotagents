@@ -81,7 +81,12 @@ function treeNames(dir) {
       else out.push(next);
     }
   };
-  try { walk(dir, ''); } catch { return ''; }
+  // ENOENT alone is the documented degrade-to-diff case (a run before fetch-fixtures);
+  // a real fs error must surface, not shrink the haystack.
+  try { walk(dir, ''); } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+    return '';
+  }
   return out.join('\n');
 }
 
@@ -139,4 +144,4 @@ function noFabricatedIdentifiers(output, context) {
     : { pass: true, score: 1, reason: 'Every file, path, and identifier named in the description appears in the change or the tree it lands in.' };
 }
 
-module.exports = { noFabricatedIdentifiers, proportionateLength, fixtureTree };
+module.exports = { noFabricatedIdentifiers, proportionateLength, fixtureTree, treeNames };

@@ -103,4 +103,15 @@ if (checks.fixtureTree('caddy-7872')) {
   console.log('pr assertions: tree haystack unchecked - run lib/fetch-fixtures.js');
 }
 
+// A file in place of a directory is a real fs error (ENOTDIR), not a missing
+// cache: it must surface, not silently shrink the haystack.
+const tmpFile = path.join(__dirname, 'pr.test.tmp');
+fs.writeFileSync(tmpFile, '');
+try {
+  assert.throws(() => checks.treeNames(tmpFile), /ENOTDIR/, 'a real fs error surfaces instead of shrinking the haystack');
+  assert.equal(checks.treeNames(path.join(__dirname, 'no-such-dir', 'x')), '');
+} finally {
+  fs.unlinkSync(tmpFile);
+}
+
 console.log('pr assertions: ok');
