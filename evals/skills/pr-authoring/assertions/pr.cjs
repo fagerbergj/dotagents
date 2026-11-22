@@ -81,7 +81,7 @@ function treeNames(dir) {
       else out.push(next);
     }
   };
-  try { walk(dir, ''); } catch { return ''; }
+  try { walk(dir, ''); } catch (e) { if (e.code !== 'ENOENT') throw e; return ''; }
   return out.join('\n');
 }
 
