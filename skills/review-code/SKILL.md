@@ -61,8 +61,8 @@ Weight your scrutiny by impact on code health, top-down:
 Tests are not self-validating - a human must confirm they check for meaningful failure.
 
 - Walk the new tests alongside the new logic: **would they actually fail if the code were broken?** A test that passes no matter what is worse than none.
-- Do they cover the new branches, the edge cases, and the failure modes - or only the happy path?
-- The behaviour the change exists to deliver shipping with no test is a `blocking:` gap, not a nit. An untested edge case beside a tested main path is a `suggestion:` - see `references/severity.md`.
+- Check whether the tests cover the new branches, edge cases, and failure modes - not just the happy path.
+- Flag a delivered behaviour shipping with no test as `blocking:`, not a nit, and an untested edge case beside a tested main path as `suggestion:` - see `references/severity.md`.
 
 ### 6. Categorize every finding by severity
 
@@ -92,13 +92,19 @@ Absent a stated policy, hold to the same line: say what wrote the review, and le
 
 **Never submit on your own initiative.** Draft the inline comments - that draft is also your durable memory against context compaction - and then hand the review to the user. Submit only when they have asked you to: it publishes to a third party under their name, and the disclosure and the human read both have to happen first.
 
-Where the review surface can hold a review as a single unit, deliver it that way rather than as scattered comments: attach each ACTIONABLE finding (never praise) to its path and line as you spot it, reply inside an existing thread rather than opening a second one beside it, and submit once - carrying the summary, the AI-usage disclosure, and the verdict - when the user asks for it to go out. Where it cannot, write the whole review as one message with each finding cited by `path:line`.
+Where the review surface can hold a review as a single unit, deliver it that way rather than as scattered comments:
+
+- Attach each ACTIONABLE finding (never praise) to its path and line as you spot it.
+- Reply inside an existing thread rather than opening a second one beside it.
+- Submit once - carrying the summary, the AI-usage disclosure, and the verdict - when the user asks for it to go out.
+
+Where the surface cannot hold a single-unit review, write the whole review as one message with each finding cited by `path:line`.
 
 **Close loops with a reaction, not a comment.** To acknowledge a point, signal agreement, or say "seen / handled", add an emoji reaction (👍 / 👀 / 🚀) where the platform has them, instead of writing another comment. It closes the loop with near-zero words and low reader load. Reserve comment text for substantive findings.
 
 ## Why this order
 
-You can't judge a change you don't grasp, so understanding comes first. Verification comes before critique for the same reason: a review that trusts the author's claims is a rubber stamp, not a review. And severity outranks structure because the author's time is finite - block on what's genuinely wrong, and let the rest be suggestions.
+You can't judge a change you don't grasp, so understanding comes first. Verification comes before critique for the same reason: taking the author's claims on trust produces a rubber stamp, not a review. And severity outranks structure because the author's time is finite - block on what's genuinely wrong, and let the rest be suggestions.
 
 ## When this is lighter
 

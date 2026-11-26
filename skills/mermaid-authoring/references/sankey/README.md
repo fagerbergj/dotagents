@@ -19,7 +19,7 @@ Bio-conversion,Losses,26.862
 
 The diagram body is raw CSV: `source,target,value` — exactly 3 columns, no header row.
 
-- Start with the `sankey` keyword alone, then a blank line, then CSV rows.
+- The diagram starts with the `sankey` keyword alone, followed by a blank line and CSV rows.
 - One row = one link, `source,target,value`. Repeated source/target names automatically become the same node.
 - Empty lines between rows are allowed (for readability) even though standard CSV doesn't permit them.
 - A value containing a comma must be double-quoted: `Pumped heat,"Heating and cooling, homes",193.026`.

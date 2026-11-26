@@ -45,7 +45,7 @@ Read `references/metrics.md` before quoting any of these numbers, comparing agai
 
 - **Duplication high** - extract the repeated run. If the copies differ in one value, that value is the parameter.
 - **CC over 10 on a function you touched** - early return for the guard cases, extract the branch body, replace an if/else ladder with a table or a map.
-- **Concentration high** - the new logic wants its own function. Adding to the biggest function is what the number is objecting to.
+- **Concentration high** - extract the new logic into its own function. Adding branches to the biggest function is what drove the number up.
 - **Lines added high, other three fine** - often correct. Say what the lines buy, and move on.
 
 ## Three ways these numbers mislead

@@ -119,7 +119,7 @@ allowed-tools: [Bash, Read, Write]   # Optional/experimental; a YAML list, not a
 - Provide one default per decision point; mention alternatives briefly.
 - Favor procedures over declarations. Teach how to approach a class of problems, not what to produce for one instance.
 - Keep detailed schemas, API docs, and multi-page runbooks in `references/` - not inline.
-- Scripts belong in `scripts/` so the agent can run them without loading source into context.
+- Put scripts in `scripts/` so the agent can run them without loading source into context.
 
 ---
 

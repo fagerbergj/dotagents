@@ -46,8 +46,8 @@ Uses d3-time-format (`%`-style), independent of `dateFormat`. Common ones: `%Y-%
 
 ## `excludes`
 
-- Accepts: specific dates (`YYYY-MM-DD`), a weekday name (`sunday`), or the literal `weekends`.
-- Does NOT accept `weekdays`.
+- `excludes` accepts specific dates (`YYYY-MM-DD`), a weekday name (`sunday`), or the literal `weekends`.
+- `excludes` does NOT accept `weekdays`.
 - Excluded dates extend the task to the right (no visual gap inside a task); a gap only appears between two back-to-back tasks when the excluded range falls between them.
 - Multiple `excludes` lines concatenate — use this to group long exclusion lists with comments.
 - `weekend friday` (v11.0.0+) redefines the weekend to Friday+Saturday instead of the Saturday+Sunday default.

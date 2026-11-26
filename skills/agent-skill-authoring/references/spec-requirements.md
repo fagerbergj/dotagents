@@ -71,8 +71,8 @@ name: pdf--processing
 ## 4. File References
 
 - Use relative paths from the skill root.
-- One level deep maximum.
-- Every reference must include a **trigger condition** - when to load it, not just that it exists.
+- Keep references one level deep maximum.
+- Include a **trigger condition** on every reference - when to load it, not just that it exists.
 
 ```markdown
 # Good

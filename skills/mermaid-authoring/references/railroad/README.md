@@ -16,7 +16,13 @@ digit = "0" | "1" | "2" ;
 
 Pick the keyword matching the notation your grammar is already written in — don't transliterate, each notation has its own operators.
 
-All four share: diagram-type keyword on the first line, optional `title "text"`, optional `accTitle:`/`accDescr:`, one rule per statement, statements end with `;`.
+All four notations share:
+
+- Diagram-type keyword on the first line
+- Optional `title "text"`
+- Optional `accTitle:` / `accDescr:`
+- One rule per statement
+- Statements ending with `;`
 
 ### EBNF (`railroad-ebnf-beta`)
 

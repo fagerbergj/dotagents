@@ -43,7 +43,12 @@ Do not use the full workflow for a documentation-only edit or a narrow implement
 
 ## Validation Loop
 
-Before delivery, confirm that the resource model, operation-level security rules, API version/deprecation decision, and compatibility result are documented. Resolve lint errors, explain intentional warnings, run the compatibility gate for published APIs, and test the implementation against the same resolved specification. Repeat after any contract change.
+Before delivery, complete each check and repeat after any contract change:
+
+- Confirm that the resource model, operation-level security rules, API version/deprecation decision, and compatibility result are documented.
+- Resolve lint errors and explain intentional warnings.
+- Run the compatibility gate for published APIs.
+- Test the implementation against the same resolved specification.
 
 ## Resources
 

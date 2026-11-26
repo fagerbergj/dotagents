@@ -21,6 +21,6 @@ The fundamental rule: **a breaking change is any modification that can make an e
 
 The Zalando RESTful API Guidelines emphasize: never change the semantic of fields during evolution, and treat input vs. output schemas differently — additive changes are generally safe in responses but may break clients if they appear in request objects without defaults [github.com/zalando/restful-api-guidelines/blob/main/chapters/compatibility.adoc](https://github.com/zalando/restful-api-guidelines/blob/main/chapters/compatibility.adoc).
 
-## Full Classification Catalog
+## External Classification Reference
 
 oasdiff tracks **509 distinct API changes** across 10 OpenAPI areas (paths, components, schema, parameters, request bodies, responses, headers, security, tags, info), each classified as breaking/warning/informational [oasdiff.com/docs/breaking-changes](https://www.oasdiff.com/docs/breaking-changes) → [github.com/oasdiff/oasdiff/blob/main/docs/BREAKING-CHANGES.md](https://github.com/oasdiff/oasdiff/blob/main/docs/BREAKING-CHANGES.md).

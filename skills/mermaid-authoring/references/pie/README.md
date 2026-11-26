@@ -17,8 +17,8 @@ pie title Pets adopted by volunteers
 ## Core syntax
 
 - `pie` starts the diagram; optional `showData` right after it prints each value next to its legend label.
-- Optional `title <text>` on the next line.
-- Then one `"label" : value` line per slice. Values must be positive numbers greater than zero (up to 2 decimal places) — negative or zero values error out.
+- `title <text>` sets an optional title on the next line.
+- `"label" : value` defines one slice per line. Values must be positive numbers greater than zero (up to 2 decimal places) — negative or zero values error out.
 - Slices render clockwise in the order the labels are written.
 
 ```mermaid

@@ -20,7 +20,7 @@ Researching a repository through web_fetch of github.com pages is the wrong tool
 1. Clone the repo shallowly (shallow is the default - history costs nothing to skip when you're reading code). Clone once; every later step is local.
 2. Move your working directory into the clone. Every later path is then repo-relative - `README.md`, not `<repo>/README.md` - and the repo's own context comes with it: the nearest AGENTS.md/CLAUDE.md (the project's instructions - read and FOLLOW them) and any project-level skills that repo defines, which you can load. Then orient: read the README and list the tree two levels deep for the layout.
 3. Find by shape, then read: match filename patterns (`**/*.test.ts`, `**/Dockerfile`), search the contents for symbols, registrations, or phrases - and open only the hits. Grep-then-read is the token discipline: never page through files hunting.
-4. Conventions live in examples: to learn "how do X here", find ONE existing X (the newest, or the one the README names) and read it end to end - its imports, its tests, how it registers itself.
+4. Learn conventions from examples: to see "how do X here", find ONE existing X (the newest, or the one the README names) and read it end to end - its imports, its tests, how it registers itself.
 5. Cite what you read as `<repo>@<path>` (e.g. `games@app/games.ts`) - file paths from the clone are your sources; you retrieved them.
 
 ## When the web is still right

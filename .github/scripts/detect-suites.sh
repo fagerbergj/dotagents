@@ -72,11 +72,8 @@ for suite_dir in "$root"/evals/"$suites_dir"/*/; do
     if "$suite_in_filename"; then
       skill_paths="$(printf '%s\n' "$changed_files" | grep -Fx "$subject_path" || true)"
     else
-      # Original behaviour matched the whole skill directory (skills/<name>/**),
-      # not just the one subject file - a plain prefix of the substituted
-      # subject path reproduces that for any per-suite layout. awk's
-      # index(), not grep -E, because subject_prefix is user input and a `.`
-      # or other regex metacharacter in it must not become a wildcard.
+      # Match the whole per-suite directory so reference/asset edits also trigger the suite.
+      # Use awk index() (not grep -E) so regex metacharacters in subject_prefix stay literal.
       subject_prefix="$(dirname "$subject_path")/"
       skill_paths="$(printf '%s\n' "$changed_files" | awk -v p="$subject_prefix" 'index($0, p) == 1')"
     fi

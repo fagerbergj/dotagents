@@ -49,7 +49,7 @@ Two raw counters move with it and are cheaper to compute: the number of function
 - **Not established:** any link to correctness. Halving erosion and cutting verbosity by a third left every pass-rate measure statistically unchanged (paired Wilcoxon). Across nine threshold and size-term variants, erosion's correlation with the next round's pass rate stays near zero; its correlation with the next round's *cost* is positive. These measure what code costs to keep, not whether it works.
 - **Warned against by the article rather than the paper:** asking a model to score code quality. It describes 1-10 rating as close to a random number generator and cites work showing pairwise A/B judging flips its preference when the two solutions are renamed. Compute the number; do not ask for an opinion of it.
 - **Established, and awkward for anyone ranking these metrics:** in the threshold sweep, plain LOC is by far the strongest predictor of the next round's cost (0.534), ahead of max CC (0.323) and well ahead of erosion itself (0.127). The concentration measures say more about *where* the cost sits than about how much of it there is.
-- **Named but unmeasured:** coupling between functions, code churn, cohesion. The article lists these as directions it wants to explore. Do not cite them as if they carried numbers.
+- **Named but unmeasured:** coupling between functions, code churn, cohesion. The article lists these as directions for future exploration. Do not cite them as if they carried numbers.
 
 ## Sources
 
