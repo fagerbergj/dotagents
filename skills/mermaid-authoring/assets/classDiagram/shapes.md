@@ -25,7 +25,20 @@ Add a label after a colon: `classA <|-- classB : implements`. Arrowheads can poi
 [Relation Type][Link][Relation Type]
 ```
 
-Relation type: `<|` inheritance, `*` composition, `o` aggregation, `>`/`<` association, `|>` realization. Link: `--` solid, `..` dashed. Example: `Animal <|--|> Zebra`.
+Relation types:
+
+- `<|` - inheritance
+- `*` - composition
+- `o` - aggregation
+- `>` / `<` - association
+- `|>` - realization
+
+Links:
+
+- `--` - solid
+- `..` - dashed
+
+Example: `Animal <|--|> Zebra`.
 
 ## Lollipop interfaces
 

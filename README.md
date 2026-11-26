@@ -36,10 +36,6 @@ The symlink flow above is still the intended way to use this as `~/.agents`. The
 
 Claude Code and pi get a real plugin install below. opencode doesn't - it auto-discovers the skills instead, so there's nothing to install.
 
-None of the three can ship `AGENTS.md` from inside an installed package: pi and opencode both read instructions from the project/global filesystem, never from package contents, and the Agent Plugins spec has no instructions field at all.
-
-The `~/.claude/CLAUDE.md` and `~/.pi/agent/AGENTS.md` symlinks from `setup-symlinks.sh` are the only way `AGENTS.md` reaches any of them (opencode rides the `~/.claude/CLAUDE.md` fallback) - not a legacy leftover, the actual mechanism.
-
 ### Agent Plugins standard
 
 Root `plugin.json` follows the [Agent Plugins](https://agent-plugins.org) spec. The spec has no manifest field for skills - it declares identity, not contents - so any compliant host discovers `skills/` at the repo root by convention, the same way this repo already lays it out. The spec also has no field for an always-on instructions file, so `AGENTS.md` isn't part of this path; use the symlink flow above for that.
@@ -64,6 +60,12 @@ pi install git:github.com/fagerbergj/dotagents
 ```
 
 `package.json`'s `pi.skills` field declares `skills/` for pi's package installer - no extension code needed, just the manifest.
+
+### Why AGENTS.md requires symlinks
+
+None of the three can ship `AGENTS.md` from inside an installed package: pi and opencode both read instructions from the project/global filesystem, never from package contents, and the Agent Plugins spec has no instructions field at all.
+
+The `~/.claude/CLAUDE.md` and `~/.pi/agent/AGENTS.md` symlinks from `setup-symlinks.sh` are the only way `AGENTS.md` reaches any of them (opencode rides the `~/.claude/CLAUDE.md` fallback) - not a legacy leftover, the actual mechanism.
 
 ## Layout
 

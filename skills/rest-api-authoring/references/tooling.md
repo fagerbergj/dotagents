@@ -15,7 +15,7 @@ A flexible JSON/YAML linter with baked-in support for OpenAPI v3.1, v3.0, v2.0, 
 A command-line tool and Go library for comparing OpenAPI 3.x specs and detecting breaking changes — a *diff engine* focused on schema evolution [specdrift.dev/guides/openapi-breaking-changes](https://specdrift.dev/guides/openapi-breaking-changes).
 
 - Detects **509 distinct API changes** across 10 OpenAPI areas (paths, components, schema, parameters, request bodies, responses, headers, security, tags, info), each classified as breaking/warning/informational [oasdiff.com/docs/breaking-changes](https://www.oasdiff.com/docs/breaking-changes).
-- Three commands: `diff` (full machine-readable diff), `changelog` (human-readable), and `breaking` (breaking-only, ideal for CI gates).
+- Provides three commands: `diff` (full machine-readable diff), `changelog` (human-readable), and `breaking` (breaking-only, ideal for CI gates).
 
 **CI gate**: `oasdiff breaking old.yaml new.yaml --exit-code 1` — fails the build on any accidental breaking change.
 - GitHub Action: [oasdiff/oasdiff-action](https://github.com/oasdiff/oasdiff-action)

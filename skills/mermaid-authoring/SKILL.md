@@ -108,7 +108,13 @@ flowchart LR
     Validate -->|invalid| Rejected:::failure
 ```
 
-Green for success, red for error, blue for informational, amber for pending, grey for inactive. Hold the palette to three or four meanings — colour stops signalling once everything is coloured.
+Semantic colour conventions (hold the palette to three or four meanings — colour stops signalling once everything is coloured):
+
+- **Green** — success
+- **Red** — error
+- **Blue** — informational
+- **Amber** — pending
+- **Grey** — inactive
 
 **Always set `fill`, `stroke`, and `color` together.** Setting `fill` alone inherits the platform's text colour, which is how a node ends up dark-on-dark for every reader using the other theme. GitHub renders both; check both.
 

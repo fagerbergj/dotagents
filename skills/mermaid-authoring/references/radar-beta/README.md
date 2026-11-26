@@ -19,7 +19,16 @@ radar-beta
 - `axis id1["Label1"], id2["Label2"], ...` — defines the spokes. Label is optional (falls back to the id); multiple axes per line, comma-separated; multiple `axis` lines are additive.
 - `curve id1["Label1"]{v1, v2, v3}` — one curve's values, positional (matches axis declaration order) unless you use key:value pairs: `curve id4{ axis3: 30, axis1: 20, axis2: 10 }`. Multiple curves per line, comma-separated.
 - `title <text>` — optional, or set via frontmatter `title:`.
-- Options (bare keyword + value, own line each): `showLegend true|false` (default shown), `max <n>`, `min <n>` (default `0`, auto-computed from data if `max` omitted), `graticule circle|polygon` (default `circle`), `ticks <n>` (default `5` concentric rings).
+
+Options (bare keyword + value, one per line):
+
+| Option | Values | Default |
+|---|---|---|
+| `showLegend` | `true` \| `false` | `true` (shown) |
+| `max` | `<n>` | auto-computed from data |
+| `min` | `<n>` | `0` |
+| `graticule` | `circle` \| `polygon` | `circle` |
+| `ticks` | `<n>` (concentric rings) | `5` |
 
 ```mermaid
 ---

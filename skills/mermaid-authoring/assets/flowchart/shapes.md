@@ -108,7 +108,13 @@ flowchart TD
     A@{ icon: "fa:user", form: "square", label: "User Icon", pos: "t", h: 60 }
 ```
 
-Params: `icon` (registered pack name), `form` (`square`/`circle`/`rounded`, no background if omitted), `label`, `pos` (`t`/`b`, default bottom), `h` (height, min/default 48).
+Params:
+
+- `icon` - registered pack name
+- `form` - `square`, `circle`, or `rounded` (no background if omitted)
+- `label` - text label
+- `pos` - `t` or `b` (default bottom)
+- `h` - height (min/default `48`)
 
 Image:
 
@@ -117,4 +123,10 @@ flowchart TD
     A@{ img: "https://example.com/image.png", label: "Image Label", pos: "t", w: 60, h: 60, constraint: "off" }
 ```
 
-Params: `img` (URL), `label`, `pos` (`t`/`b`), `w`/`h` (default to natural size), `constraint` (`on`/`off` - `on` locks aspect ratio when resizing via `h`).
+Params:
+
+- `img` - URL
+- `label` - text label
+- `pos` - `t` or `b`
+- `w` / `h` - dimensions (default to natural size)
+- `constraint` - `on` or `off` (`on` locks aspect ratio when resizing via `h`)

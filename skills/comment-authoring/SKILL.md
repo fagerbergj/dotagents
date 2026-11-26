@@ -72,7 +72,10 @@ A bug or ticket link belongs in source only when it identifies a live workaround
 
 Document contracts, not signatures. Follow the repository's language and tooling convention; public does not mean every declaration needs prose when the project deliberately relies on generated or self-describing APIs.
 
-For Go, attach `// Name ...` directly above the declaration. For Python, use a PEP 257 docstring. For Rust use rustdoc, and for Java, C++, JavaScript, or TypeScript use the project's Javadoc, Doxygen, JSDoc, or TSDoc convention.
+- **Go:** attach `// Name ...` directly above the declaration.
+- **Python:** use a PEP 257 docstring.
+- **Rust:** use rustdoc.
+- **Java, C++, JavaScript, or TypeScript:** use the project's Javadoc, Doxygen, JSDoc, or TSDoc convention.
 
 ## TODOs
 

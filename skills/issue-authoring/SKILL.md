@@ -43,7 +43,7 @@ Use this skill to create or revise a bug report, feature request, engineering ta
 
 ## Default Shape
 
-A section is filled from the report or it is left out. Never supply a product area, endpoint, error code, version, severity, customer, or reproduction step the report did not contain in order to complete a section - a plausible invention is worse than a gap, because the reader cannot tell it from a fact. If the report does not identify a product, a behaviour, or a failure, the answer is not an issue at all: say the report is insufficient and ask the specific questions that would unblock it.
+A section is filled from the report or it is left out. Never supply a product area, endpoint, error code, version, severity, customer, or reproduction step the report did not contain to complete a section - a plausible invention is worse than a gap, because the reader cannot tell it from a fact. If the report does not identify a product, a behaviour, or a failure, the answer is not an issue at all: say the report is insufficient and ask the specific questions that would unblock it.
 
 When no house template exists, keep the issue compact:
 

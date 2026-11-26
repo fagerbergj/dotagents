@@ -41,7 +41,14 @@ Extending a proven seam beats a parallel new mechanism almost every time. A new 
 
 ### 3. Prefer a proven library over hand-rolled code
 
-Walk the ladder, stop at the first rung that holds: **does this need to exist at all → stdlib → native platform/framework feature → an already-installed dependency → a well-maintained library → only then, the minimum code you write yourself.**
+Walk the ladder and stop at the first rung that holds:
+
+1. Does this need to exist at all?
+2. Stdlib
+3. Native platform or framework feature
+4. Already-installed dependency
+5. Well-maintained library
+6. Only then, the minimum code you write yourself
 
 - If a standard or OSS library gets you most of the way, use it. Don't reimplement crypto, parsing, retries, date math, HTTP plumbing.
 - If a library gets you *most* of the way but is missing a piece, **ask the user whether the missing bit can be negotiated away** - a scoped-down requirement that keeps you on the maintainable library path is usually the better trade than a bespoke implementation you now own forever. Surface that trade explicitly; let them choose.

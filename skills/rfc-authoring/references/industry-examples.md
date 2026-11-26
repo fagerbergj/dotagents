@@ -47,7 +47,15 @@ Sources: [Rust RFC process](https://rust-lang.github.io/rfcs/0002-rfc-process.ht
 
 **Fits:** A change that may be cheap to triage before anyone writes a full design.
 
-**Published approach:** Start with a proposal issue. The proposal review may accept it, decline it, or request a design document. When requested, the design document explains the problem, goals, design, rationale, compatibility, implementation implications, and alternatives at the level the proposal requires.
+**Published approach:** Start with a proposal issue. The proposal review may accept it, decline it, or request a design document. When requested, the design document covers the sections the proposal requires:
+
+- Problem
+- Goals
+- Design
+- Rationale
+- Compatibility
+- Implementation implications
+- Alternatives
 
 **Process:** A weekly proposal review tracks decisions publicly. The two-stage gate prevents unnecessary design work.
 

@@ -27,7 +27,7 @@ metadata:
 
 ## When NOT to Use
 
-<Explicit misfire prevention - scenarios where this skill should not be invoked.>
+<Explicit misfire prevention - adjacent requests, overlapping skills or tools, and out-of-scope outputs that should route elsewhere.>
 
 - Example: "Do not use when the user wants to generate a new PDF; this skill only reads and extracts."
 

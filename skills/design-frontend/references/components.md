@@ -143,7 +143,7 @@ Error messages are `role="alert"` with `text-sm text-accent-ink`. For an error b
 - **Block:** `m-0 overflow-x-auto rounded-2xl border border-line bg-surface p-5 font-mono text-[12.5px] leading-relaxed text-ink-2`.
 - **Toolbar above it:** a compact segmented control for format, with a small secondary Copy button pushed right that reads "Copied" for 1.5s.
 
-## Empty, loading, and list states
+## Empty and loading states
 
 - **Empty (dashed):** `rounded-2xl border border-dashed border-line bg-surface px-6 py-14 text-center` with `role="status"`. It holds a title in `text-base font-semibold` and a hint in `mt-1.5 text-sm text-muted` that says how to fill it.
 - **Empty (in a pane):** `grid h-full place-items-center`, with a `max-w-[44ch] text-center` block.

@@ -49,8 +49,8 @@ Use an RFC when the proposal is substantial, affects multiple teams or public in
 
 - “RFC” is not one universal lifecycle. IETF, Rust, Mozilla, Go, Apache projects, and other communities use different artifacts, gates, and meanings.
 - A design document is not automatically an RFC. The distinguishing feature here is a prospective proposal with an explicit review and decision path.
-- Do not hide unresolved disagreement in a polished Decision section. Mark it as unresolved and identify who decides.
-- Avoid invented certainty. Label estimates, dependencies, and assumptions so reviewers know what to challenge.
+- A polished Decision section can hide unresolved disagreement. Mark open disagreements as unresolved and identify who decides.
+- Unlabeled estimates, dependencies, and assumptions read as invented certainty. Label them so reviewers know what to challenge.
 
 ## Validation Loop
 
