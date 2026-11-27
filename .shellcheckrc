@@ -1,0 +1,4 @@
+external-sources=true
+source-path=SCRIPTDIR
+# Runtime environment scripts and user dotfiles are resolved outside this repo.
+disable=SC1091
