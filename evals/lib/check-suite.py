@@ -3,7 +3,13 @@
 assert block, every file://...:fn resolves to a real export - in providers and
 prompts as well as assertions - and every rubric carries the 0-to-1 clause.
 `validate config` reports valid on a case with no assertions."""
-import sys, os, re, glob, yaml
+import glob
+import os
+import re
+import sys
+
+import yaml
+
 
 def load(path):
     with open(path) as f:
@@ -14,13 +20,14 @@ def exports(js_path):
     re-export a factory call - `module.exports = require('../lib/arms.js')(...)`
     - and the names only exist at runtime; asserting on them would fail every
     one of those suites. Callers treat None as "existence checked, names not"."""
-    src = open(js_path).read()
+    with open(js_path) as fh:
+        src = fh.read()
     m = re.search(r'module\.exports\s*=\s*(\S)', src)
     if m and m.group(1) != '{':
         return None
-    names = set(re.findall(r'^\s*(?:async\s+)?function\s+(\w+)', src, re.M))
+    names = set(re.findall(r'^\s*(?:async\s+)?function\s+(\w+)', src, re.MULTILINE))
     names |= set(re.findall(r'exports\.(\w+)\s*=', src))
-    m = re.search(r'module\.exports\s*=\s*\{([^}]*)\}', src, re.S)
+    m = re.search(r'module\.exports\s*=\s*\{([^}]*)\}', src, re.DOTALL)
     if m:
         for part in m.group(1).split(','):
             part = part.strip()
@@ -57,7 +64,7 @@ def walk_file_refs(where, node, suite, errs):
             walk_file_refs(f'{where}.{k}', v, suite, errs)
 
 def check(suite):
-    errs = []
+    errs: list[str] = []
     cfg = load(os.path.join(suite, 'promptfooconfig.yaml'))
     # `tests:` is excluded: those refs are globs, resolved below. defaultTest's
     # assert block is walked by walk_asserts, so only its options are taken here.
@@ -117,7 +124,7 @@ def check(suite):
     if 'assert' in dt:
         # defaultTest assertions run against every case, so resolve their vars
         # per case rather than once with none.
-        for f, c in cases or [(None, {})]:
+        for _f, c in cases or [("", {})]:
             walk_asserts(f"defaultTest on {c.get('description','?')}", dt.get('assert'), (c.get('vars') or {}))
     default_metrics = {a.get('metric') for a in (dt.get('assert') or []) if isinstance(a, dict)}
     for f, c in cases:

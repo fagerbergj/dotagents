@@ -69,6 +69,8 @@ render_readme() {
       | while IFS=, read -r _when suite source src_sha mrg_sha; do
           stale=""
           [ "$src_sha" != "$mrg_sha" ] && stale=' :warning:'
+          # Backticks are literal Markdown code spans, not command substitution.
+          # shellcheck disable=SC2016
           printf '| `%s` | [%s.md](results/%s.md) | `%s`%s | `%s` | %s |\n' \
             "$suite" "$suite" "$suite" "${src_sha:0:7}" "$stale" "${mrg_sha:0:7}" "$source"
         done

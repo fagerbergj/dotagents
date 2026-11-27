@@ -38,6 +38,8 @@ OVERRIDE_TITLES = {
 
 def title_from_ref(ref):
     m = re.match(r"^(?:lf\.a2a\.v1\.)?(.+)\.jsonschema\.json$", ref)
+    if m is None:
+        raise ValueError(f"unexpected $ref format: {ref}")
     name = m.group(1)
     if name in OVERRIDE_TITLES:
         return OVERRIDE_TITLES[name]
@@ -114,7 +116,7 @@ def inline(node, defs, key_map, seen=()):
             name = key_map[title]
             if name in seen:
                 raise ValueError(f"cycle inlining {name}: {seen}")
-            target = inline(defs[name], defs, key_map, seen + (name,))
+            target = inline(defs[name], defs, key_map, (*seen, name))
             # A $ref sibling (e.g. a per-field "description" override) wins
             # over the target's own, matching normal JSON Schema $ref merge.
             merged = {**target, **{k: v for k, v in node.items() if k != "$ref"}}
