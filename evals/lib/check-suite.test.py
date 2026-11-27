@@ -4,7 +4,11 @@ names a module that is not there. A gate that passes everything is the defect it
 exists to catch, and running it over the real suites only ever proves the green
 half - so there is one case per walked path, each of which fails if its walk is
 deleted."""
-import os, subprocess, sys, tempfile, textwrap
+import os
+import subprocess
+import sys
+import tempfile
+import textwrap
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -29,12 +33,16 @@ CASES = """
 
 def run(provider, fn, extra=''):
     with tempfile.TemporaryDirectory() as d:
-        os.makedirs(f'{d}/prompts'); os.makedirs(f'{d}/tests')
-        open(f'{d}/prompts/arms.js', 'w').write('module.exports = { noSkill: () => "" };\n')
-        open(f'{d}/real-provider.js', 'w').write('module.exports = { callApi: () => ({}) };\n')
-        open(f'{d}/tests/cases.yaml', 'w').write(textwrap.dedent(CASES))
-        open(f'{d}/promptfooconfig.yaml', 'w').write(
-            CONFIG.format(provider=provider, fn=fn) + extra)
+        os.makedirs(f'{d}/prompts')
+        os.makedirs(f'{d}/tests')
+        with open(f'{d}/prompts/arms.js', 'w') as fh:
+            fh.write('module.exports = { noSkill: () => "" };\n')
+        with open(f'{d}/real-provider.js', 'w') as fh:
+            fh.write('module.exports = { callApi: () => ({}) };\n')
+        with open(f'{d}/tests/cases.yaml', 'w') as fh:
+            fh.write(textwrap.dedent(CASES))
+        with open(f'{d}/promptfooconfig.yaml', 'w') as fh:
+            fh.write(CONFIG.format(provider=provider, fn=fn) + extra)
         p = subprocess.run([sys.executable, f'{HERE}/check-suite.py', d],
                            capture_output=True, text=True)
         return p.returncode, p.stdout

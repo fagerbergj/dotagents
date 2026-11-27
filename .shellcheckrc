@@ -1,2 +1,3 @@
+# Enforce strict source-following when scripts source sibling files.
 external-sources=true
 source-path=SCRIPTDIR

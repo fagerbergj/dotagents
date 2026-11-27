@@ -10,7 +10,11 @@ The case is gone from the results and nothing says so.
 Only `vars` are checked. Assertion values and rubric prompts use {{output}},
 {{criteria}} and {{rubric}} on purpose.
 """
-import os, sys, glob, yaml
+import glob
+import os
+import sys
+
+import yaml
 
 BAD = ('{{', '{%')
 
@@ -52,7 +56,7 @@ def main(argv):
             for where, text in strings(case.get('vars') or {}, 'vars'):
                 for marker in BAD:
                     if marker in text:
-                        line = next(l for l in text.splitlines() if marker in l)
+                        line = next(ln for ln in text.splitlines() if marker in ln)
                         bad.append(f'{path}: {name}: {where} contains {marker} -> {line.strip()[:90]}')
     if bad:
         print('Template syntax in case vars - promptfoo would render these and the case would', file=sys.stderr)

@@ -88,3 +88,14 @@ This machine's setup:
 - `.pi/` - personal pi config that isn't a skill (`extensions/llm-swap.ts`, my custom-provider extension), symlinked into place by `setup-symlinks.sh`.
 
 [ponytail](https://github.com/DietrichGebert/ponytail) is deliberately NOT vendored here - install it as a Claude Code plugin (`install-plugins.sh` does this) so it updates through the plugin system. Projects that need its skills on disk for other harnesses (e.g. quack's opencode agents) vendor it themselves.
+
+## Linting
+
+CI runs pinned deterministic linters on code changes (`.github/workflows/lint.yml`):
+
+```sh
+node .github/scripts/oxlint-diff.js origin/main
+uvx ruff@0.17.6 check .
+uvx mypy@2.4.1 evals/
+uvx --from shellcheck-py==0.11.0.1 shellcheck $(git ls-files '*.sh')
+```

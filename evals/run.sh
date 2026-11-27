@@ -5,7 +5,12 @@ set -euo pipefail
 suite="${1:?usage: run.sh <suite> [extra promptfoo args...]}"; shift || true
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Gateway key lives beside the results, gitignored
-[ -f "$here/.env" ] && { set -a; . "$here/.env"; set +a; }
+if [ -f "$here/.env" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "$here/.env"
+  set +a
+fi
 # Assertion-level providers ignore apiKeyEnvar and fall back to OPENAI_API_KEY, so
 # both must point at the same key or judges 401 while generations succeed. Which
 # variable holds it is configurable: a repo on another gateway should not have to

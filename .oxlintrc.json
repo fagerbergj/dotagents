@@ -1,14 +1,12 @@
 {
   "plugins": ["typescript", "unicorn", "import"],
   "categories": {
-    "correctness": "error",
-    "suspicious": "error"
+    "correctness": "error"
   },
   "rules": {
     "no-unused-vars": "error"
   },
   "ignorePatterns": [
-    "**/node_modules/**",
-    "evals/**/fixtures/**"
+    "**/node_modules/**"
   ]
 }

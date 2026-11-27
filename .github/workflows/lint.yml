@@ -3,6 +3,20 @@ name: lint
 on:
   pull_request:
     branches: ["main"]
+    paths:
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.py"
+      - "**/*.sh"
+      - ".oxlintrc.json"
+      - "ruff.toml"
+      - "mypy.ini"
+      - ".shellcheckrc"
+      - ".github/workflows/lint.yml"
   workflow_dispatch:
 
 permissions:
@@ -20,19 +34,21 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Lint JS/TS files with Oxlint
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Lint touched JS/TS lines with Oxlint
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
         run: |
+          set -euo pipefail
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            mapfile -t -d '' files < <(git diff -z --name-only --diff-filter=ACMR "origin/${BASE_REF}...HEAD" -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs')
+            base="origin/${BASE_REF}"
           else
-            mapfile -t -d '' files < <(git ls-files -z -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs')
+            base="HEAD~1"
           fi
-          if [ "${#files[@]}" -gt 0 ]; then
-            npx --yes oxlint@1.95.0 --config .oxlintrc.json --max-warnings 0 "${files[@]}"
-          fi
+          node .github/scripts/oxlint-diff.js "$base"
 
   python:
     runs-on: ubuntu-latest
@@ -42,16 +58,24 @@ jobs:
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
       - name: Lint and typecheck Python files
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
         run: |
+          set -euo pipefail
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            mapfile -t -d '' files < <(git diff -z --name-only --diff-filter=ACMR "origin/${BASE_REF}...HEAD" -- '*.py')
+            base="origin/${BASE_REF}"
+            git rev-parse --verify -q "$base" >/dev/null \
+              || { echo "::error::cannot resolve $base; refusing to pass on an empty file list" >&2; exit 1; }
+            git diff -z --name-only --diff-filter=ACMR "$base...HEAD" -- '*.py' > /tmp/lint-py.z
           else
-            mapfile -t -d '' files < <(git ls-files -z -- '*.py')
+            git ls-files -z -- '*.py' > /tmp/lint-py.z
           fi
+          mapfile -t -d '' files < /tmp/lint-py.z
+          echo "linting ${#files[@]} Python file(s)"
           if [ "${#files[@]}" -gt 0 ]; then
             uvx ruff@0.17.6 check "${files[@]}"
             uvx mypy@2.4.1 "${files[@]}"
@@ -64,16 +88,25 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
       - name: Lint shell scripts with ShellCheck
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
         run: |
+          set -euo pipefail
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            mapfile -t -d '' files < <(git diff -z --name-only --diff-filter=ACMR "origin/${BASE_REF}...HEAD" -- '*.sh')
+            base="origin/${BASE_REF}"
+            git rev-parse --verify -q "$base" >/dev/null \
+              || { echo "::error::cannot resolve $base; refusing to pass on an empty file list" >&2; exit 1; }
+            git diff -z --name-only --diff-filter=ACMR "$base...HEAD" -- '*.sh' > /tmp/lint-sh.z
           else
-            mapfile -t -d '' files < <(git ls-files -z -- '*.sh')
+            git ls-files -z -- '*.sh' > /tmp/lint-sh.z
           fi
+          mapfile -t -d '' files < /tmp/lint-sh.z
+          echo "linting ${#files[@]} shell script(s)"
           if [ "${#files[@]}" -gt 0 ]; then
-            shellcheck -S warning "${files[@]}"
+            uvx --from shellcheck-py==0.11.0.1 shellcheck "${files[@]}"
           fi
